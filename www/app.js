@@ -16,7 +16,7 @@
 
   // Only for opening the app in a plain browser while building it.
   // Match WEBAPP_DEV_KEY in .env — and empty it again before sharing.
-  const DEV_KEY = "";
+  const DEV_KEY = "aarti-dev-9182";
 
   // Inside Telegram this stays empty and relative paths work, because
   // the page and the API come from the same server. In the Android
