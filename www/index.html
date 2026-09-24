@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Aarti Music</title>
+<meta name="theme-color" content="#0A0908">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<header class="top">
+  <div class="brand"><span class="dot"></span> Aarti Music</div>
+  <form class="searchbar" id="searchForm" autocomplete="off">
+    <input id="q" type="search" placeholder="Songs, artists…" enterkeyhint="search">
+    <button type="submit" aria-label="Search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    </button>
+  </form>
+</header>
+
+<main id="main">
+  <section id="hint" class="hint">
+    <div class="hint-art">🎧</div>
+    <h2>Search any song</h2>
+    <p>Type a name above. Everything the bot can find, it can play here.</p>
+  </section>
+
+  <section id="list" class="list" hidden></section>
+
+  <div id="loading" class="loading" hidden>
+    <span></span><span></span><span></span>
+  </div>
+</main>
+
+<!-- ============ MINI PLAYER ============ -->
+<footer class="mini" id="mini" hidden>
+  <div class="bar" id="miniBar"><i id="miniFill"></i></div>
+  <div class="mini-in">
+    <img id="mArt" alt="">
+    <div class="meta" id="miniOpen">
+      <div class="t" id="mTitle"></div>
+      <div class="a" id="mArtist"></div>
+    </div>
+    <div class="ctrls">
+      <button id="mPlay" class="play" aria-label="Play">
+        <svg class="ic-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
+        <svg class="ic-pause" viewBox="0 0 24 24" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+        <span class="spin"></span>
+      </button>
+      <button id="mNext" aria-label="Next">
+        <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7zM16 5h2v14h-2z"/></svg>
+      </button>
+    </div>
+  </div>
+</footer>
+
+<!-- ============ FULL SCREEN ============ -->
+<section class="now" id="now" aria-hidden="true">
+  <div class="now-bg" id="nowBg"></div>
+
+  <div class="now-in">
+    <header class="now-top">
+      <button id="nowClose" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <span class="from">Playing from search</span>
+      <span class="spacer"></span>
+    </header>
+
+    <div class="cover"><img id="nArt" alt=""></div>
+
+    <div class="now-meta">
+      <h1 id="nTitle"></h1>
+      <p id="nArtist"></p>
+    </div>
+
+    <div class="seek" id="seek">
+      <div class="seek-rail"><i id="seekFill"></i><b id="seekKnob"></b></div>
+      <div class="times"><span id="nCur">0:00</span><span id="nDur">0:00</span></div>
+    </div>
+
+    <div class="now-ctrls">
+      <button id="nPrev" aria-label="Previous">
+        <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12zM6 5h2v14H6z"/></svg>
+      </button>
+      <button id="nPlay" class="play" aria-label="Play">
+        <svg class="ic-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
+        <svg class="ic-pause" viewBox="0 0 24 24" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+        <span class="spin"></span>
+      </button>
+      <button id="nNext" aria-label="Next">
+        <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7zM16 5h2v14h-2z"/></svg>
+      </button>
+    </div>
+
+    <div class="up-next" id="upNext"></div>
+  </div>
+</section>
+
+<audio id="audio" preload="none"></audio>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
