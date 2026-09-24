@@ -1,0 +1,68 @@
+# ============================================================
+#  Builds the Android APK on GitHub's machines.
+#
+#  Android Studio won't run on a phone, so nothing is built here —
+#  push a change, GitHub does the work, and the finished APK comes
+#  back as a downloadable file.
+#
+#  Run it from the repo: Actions → Build APK → Run workflow.
+# ============================================================
+name: Build APK
+
+on:
+  workflow_dispatch:          # the "Run workflow" button
+  push:
+    branches: [main]
+    paths:
+      - "www/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      # Java is what actually compiles the Android project.
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # No setup-android step on purpose. The runner already ships with
+      # the Android SDK — that action's only job is to fetch a newer
+      # command-line tools package, and that download is what killed
+      # the first build. The licences are accepted below instead.
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      # The android/ folder is generated rather than committed, so the
+      # repo stays small and there is no build output to keep in sync.
+      # --yes stops npx pausing to ask whether it may fetch the CLI,
+      # which a machine with nobody watching can never answer.
+      - name: Create the Android project
+        run: |
+          npx --yes cap add android || true
+          npx --yes cap sync android
+
+      - name: Build the APK
+        working-directory: android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Hand back the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarti-music-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
