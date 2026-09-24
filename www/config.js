@@ -2,19 +2,17 @@
    WHERE THE SERVER IS
    ============================================================ */
 
-// The address the app talks to. Left empty inside Telegram, where the
-// app is served by the same server and relative paths already work.
-//
-// In the Android build there is no such server — the files live on the
-// phone — so the address has to be spelled out.
+// Address to use if the lookup below can't be reached. Usually left
+// empty — the lookup is the real answer.
 window.AARTI_SERVER = "";
 
-// A tunnel address changes every time the tunnel restarts, and an app
-// already on someone's phone can't be edited. So the app asks this
-// file where the server is today, and only falls back to the address
-// above if it can't reach it.
-//
-// Point this at a small JSON file you can edit without rebuilding —
-// the GitHub Pages site works well:   { "server": "https://..." }
+// The free tunnel hands out a new address every time it restarts, and
+// an app already on someone's phone can't be edited. So the app asks
+// this file where the server is today. The server keeps the file
+// current by itself, so nobody has to notice the address moved.
 window.AARTI_DISCOVERY =
   "https://makwanaj789-sys.github.io/aartimusic-site/server.json";
+
+// The Android build has no Telegram behind it to sign requests, so it
+// carries a key instead. Must match WEBAPP_DEV_KEY in the bot's .env.
+window.AARTI_KEY = "aarti-dev-9182";
