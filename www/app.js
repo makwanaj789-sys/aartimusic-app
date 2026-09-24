@@ -14,9 +14,10 @@
   // Telegram signs this; the server checks it before serving any audio.
   const INIT = (tg && tg.initData) || "";
 
-  // Only for opening the app in a plain browser while building it.
-  // Match WEBAPP_DEV_KEY in .env — and empty it again before sharing.
-  const DEV_KEY = "aarti-dev-9182";
+  // In Telegram this stays empty and the signed blob above is the
+  // proof. The Android build has no Telegram behind it, so it carries
+  // a key from config.js instead.
+  const DEV_KEY = window.AARTI_KEY || "";
 
   // Inside Telegram this stays empty and relative paths work, because
   // the page and the API come from the same server. In the Android
@@ -24,15 +25,20 @@
   // address — looked up at startup, so a moved server doesn't mean a
   // new APK for everyone.
   let SERVER = window.AARTI_SERVER || "";
+  let found = false;
 
-  async function findServer() {
+  async function findServer(force) {
     if (!window.AARTI_DISCOVERY) return;
+    if (found && !force) return;
     try {
       const r = await fetch(window.AARTI_DISCOVERY + "?t=" + Date.now(),
                             { cache: "no-store" });
       if (!r.ok) return;
       const j = await r.json();
-      if (j && j.server) SERVER = j.server.replace(/\/$/, "");
+      if (j && j.server) {
+        SERVER = j.server.replace(/\/$/, "");
+        found = true;
+      }
     } catch (e) {
       // no connection, or the file isn't there — carry on with what
       // was built in rather than refusing to start
@@ -83,13 +89,23 @@
 
     try {
       await ready;
-      const r = await fetch(SERVER + "/api/search?q=" + encodeURIComponent(term), { headers: headers() });
-      if (r.status === 401) return say("Locked", "Open this from the bot to play music.");
+
+      let r;
+      try {
+        r = await fetch(SERVER + "/api/search?q=" + encodeURIComponent(term), { headers: headers() });
+      } catch (first) {
+        // The server has most likely moved since the app opened. Ask
+        // where it is now and try once more before giving up.
+        await findServer(true);
+        r = await fetch(SERVER + "/api/search?q=" + encodeURIComponent(term), { headers: headers() });
+      }
+
+      if (r.status === 401) return say("Locked", "This copy can't reach the server.");
       if (!r.ok) return say("Hmm", "Search failed. Try again.");
       queue = (await r.json()).results || [];
       render();
     } catch (err) {
-      say("Offline", "No connection right now.");
+      say("Offline", "Can't reach the server right now.");
     } finally {
       $("loading").hidden = true;
     }
