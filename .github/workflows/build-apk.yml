@@ -1,0 +1,62 @@
+# ============================================================
+#  Builds the Android APK on GitHub's machines.
+#
+#  Android Studio won't run on a phone, so nothing is built here —
+#  push a change, GitHub does the work, and the finished APK comes
+#  back as a downloadable file.
+#
+#  Run it from the repo: Actions → Build APK → Run workflow.
+# ============================================================
+name: Build APK
+
+on:
+  workflow_dispatch:          # the "Run workflow" button
+  push:
+    branches: [main]
+    paths:
+      - "www/**"
+      - "capacitor.config.json"
+      - "package.json"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Java is what actually compiles the Android project.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Capacitor
+        run: npm install
+
+      # The android/ folder is generated rather than committed, so the
+      # repo stays small and there is no build output to keep in sync.
+      - name: Create the Android project
+        run: |
+          npx cap add android || npx cap sync android
+          npx cap sync android
+
+      - name: Build the APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Hand back the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarti-music-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
