@@ -43,9 +43,16 @@ every size Android wants.
 `android/` is generated on each run rather than kept here, so anything
 that has to be in the native project is written by the workflow:
 
-  - `scripts/android-permissions.py` adds the two permissions the
-    playing notification needs. Without them Android 14 refuses to
-    start the media service and Android 13 hides the notification.
+  - `scripts/android-manifest.py` adds the two permissions the playing
+    notification needs, and the category that says this is a music
+    app. Without the permissions Android 14 refuses to start the media
+    service and Android 13 hides the notification.
+  - `scripts/media-session-patch.py` adds two lines the media session
+    plugin leaves out: somewhere for a tap on the capsule to go, and
+    that the notification is ongoing.
+  - `scripts/android-media-app.py` writes the browser service that
+    declares this a music player. It does nothing; it exists to be
+    found in the manifest.
   - Plugins come from `package.json` and Capacitor wires them in.
 
 Nothing in `www/` needs a build step; these run before Gradle does.
