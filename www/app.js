@@ -1130,7 +1130,11 @@
     try { tg.BackButton.hide(); } catch (e) {}
     closed(now);
   };
-  $("miniOpen").addEventListener("click", openNow);
+  $("miniOpen").addEventListener("click", () => {
+    // A swipe that ended on this element still fires a click.
+    if (Date.now() - swipedAt < 400) return;
+    openNow();
+  });
   $("mArt").addEventListener("click", openNow);
   $("nowClose").addEventListener("click", closeNow);
   try { tg.BackButton.onClick(closeNow); } catch (e) {}
@@ -1233,58 +1237,64 @@
      instead of being ignored: the edge should be felt rather
      than just not happening.                                  */
 
-  (function coverSwipe() {
-    const el = $("coverSwipe");
-    if (!el) return;
-    /* The listeners go on the frame, not on the thing that moves.
-       Mid-flight the cover is off the side of the screen, and a
-       second swipe has to land where the first one started rather
-       than on empty space. */
-    const hit = el.parentElement;
+  /* ---------- swiping to change song ------------------------
+     Left for the next one, right for the one before. The surface
+     follows the finger, and on release either flies out and the
+     new one comes in from the other side, or springs back.
 
+     Used twice: the cover on the full screen, and the strip along
+     the bottom. Both want the same gesture, and the strip is where
+     the hand already is most of the time.
+
+     `hit` is what listens and `surface` is what moves: mid-flight
+     the surface is off the side of the screen, and a second swipe
+     has to land where the first one started rather than on empty
+     space.                                                      */
+
+  function swipeToChange(hit, surface, opts) {
+    if (!hit || !surface) return;
+    const o = opts || {};
     const OUT = 120;                    // per cent of its own width
     let id = null, x0 = 0, y0 = 0, t0 = 0, dx = 0, mine = false, busy = false;
-
-    const canGo = (dir) =>
-      dir < 0 ? nextIndex() >= 0 : index > 0;
-
-    const setX = (v) => { el.style.transform = "translateX(" + v.toFixed(1) + "px)"; };
-    const loose = () => { el.style.transition = ""; };
     let settling = 0;
 
+    const canGo = (dir) => (dir < 0 ? nextIndex() >= 0 : index > 0);
+    const setX = (v) => { surface.style.transform = "translateX(" + v.toFixed(1) + "px)"; };
+    const loose = () => { surface.style.transition = ""; };
+
     function settle() {
-      el.style.transition = "transform 320ms var(--spring, cubic-bezier(.22,1,.36,1))";
+      surface.style.transition = "transform 320ms var(--spring, cubic-bezier(.22,1,.36,1))";
       setX(0);
-      // Left as a bare translateX(0) the cover would keep a
-      // will-change layer and an inline style it no longer needs.
+      // Left as a bare translateX(0) it would keep a compositor
+      // layer and an inline style it no longer needs.
       clearTimeout(settling);
-      settling = setTimeout(() => { loose(); el.style.transform = ""; }, 340);
+      settling = setTimeout(() => { loose(); surface.style.transform = ""; }, 340);
     }
 
-    /* Out one way, in from the other. The track change happens at
-       the far end of the first half, so the cover that comes back
-       is already the new one. */
+    /* Out one way, in from the other. The track changes at the far
+       end of the first half, so what comes back is already the new
+       one. */
     function commit(dir) {
       const go = () => { if (dir < 0) next(); else playAt(index - 1); };
-      if (REDUCED) { el.style.transform = ""; go(); return; }
+      if (REDUCED) { surface.style.transform = ""; go(); return; }
 
       busy = true;
-      el.style.transition = "transform 190ms ease-out, opacity 190ms ease-out";
-      el.style.transform = "translateX(" + (dir < 0 ? -OUT : OUT) + "%)";
-      el.style.opacity = "0";
+      surface.style.transition = "transform 190ms ease-out, opacity 190ms ease-out";
+      surface.style.transform = "translateX(" + (dir < 0 ? -OUT : OUT) + "%)";
+      surface.style.opacity = "0";
 
       setTimeout(() => {
         go();
-        el.style.transition = "none";
-        el.style.transform = "translateX(" + (dir < 0 ? OUT : -OUT) + "%)";
-        // Read something back so the jump is a separate frame from
-        // the animation that follows it.
-        void el.offsetWidth;
-        el.style.transition = "transform 300ms var(--spring, cubic-bezier(.22,1,.36,1)), opacity 200ms ease";
-        el.style.transform = "";
-        el.style.opacity = "1";
+        surface.style.transition = "none";
+        surface.style.transform = "translateX(" + (dir < 0 ? OUT : -OUT) + "%)";
+        // Read something back so the jump is its own frame.
+        void surface.offsetWidth;
+        surface.style.transition =
+          "transform 300ms var(--spring, cubic-bezier(.22,1,.36,1)), opacity 200ms ease";
+        surface.style.transform = "";
+        surface.style.opacity = "1";
         setTimeout(() => {
-          loose(); el.style.transform = ""; el.style.opacity = ""; busy = false;
+          loose(); surface.style.transform = ""; surface.style.opacity = ""; busy = false;
         }, 320);
       }, 190);
     }
@@ -1292,17 +1302,14 @@
     hit.addEventListener("dragstart", (e) => e.preventDefault());
 
     hit.addEventListener("pointerdown", (e) => {
-      if (!now.classList.contains("open")) return;
+      if (o.when && !o.when()) return;
+      if (o.skip && e.target.closest && e.target.closest(o.skip)) return;
       // A swipe landing mid-flight wins: stop the old one rather
       // than making anyone wait for it.
-      if (busy) { busy = false; loose(); el.style.opacity = ""; }
+      if (busy) { busy = false; loose(); surface.style.opacity = ""; }
       clearTimeout(settling);
       id = e.pointerId; x0 = e.clientX; y0 = e.clientY; t0 = e.timeStamp;
       dx = 0; mine = false;
-      // Without this a finger that leaves the cover — which a swipe
-      // to the edge of the screen always does — stops being heard,
-      // and the gesture ends half-finished with the cover off-centre.
-      try { hit.setPointerCapture(e.pointerId); } catch (err) {}
     }, { passive: true });
 
     hit.addEventListener("pointermove", (e) => {
@@ -1316,6 +1323,13 @@
         mine = true;
         gesture = "x";
         loose();
+        /* Taken only now, not on the way down. A swipe to the edge
+           of the screen carries the finger off the surface, and
+           without capture the gesture ends half-finished. But a
+           captured pointer also delivers its click to the capturing
+           element, which would stop a plain tap on the strip from
+           reaching the thing that opens the full screen. */
+        try { hit.setPointerCapture(e.pointerId); } catch (err) {}
       }
       setX(canGo(dx) ? dx : dx / 4);
     }, { passive: true });
@@ -1329,8 +1343,12 @@
 
       const dt = Math.max(1, e.timeStamp - t0);
       const speed = Math.abs(dx) / dt;
-      const far = Math.abs(dx) > 70;
+      const far = Math.abs(dx) > (o.threshold || 70);
       const flung = speed > 0.5 && Math.abs(dx) > 24;
+
+      // A swipe is not a tap, and the strip underneath opens the
+      // full screen when tapped.
+      if (o.onTaken) o.onTaken();
 
       if ((far || flung) && canGo(dx)) { buzzPick(); commit(dx); return; }
       settle();
@@ -1344,7 +1362,21 @@
       mine = false;
       settle();
     }, { passive: true });
-  })();
+  }
+
+  // The cover on the full screen.
+  swipeToChange($("coverSwipe") && $("coverSwipe").parentElement, $("coverSwipe"),
+                { when: () => now.classList.contains("open") });
+
+  /* The strip along the bottom. Its buttons are left alone — a
+     finger that starts on play or the heart means that button —
+     and a swipe there must not also count as the tap that opens
+     the full screen. */
+  let swipedAt = 0;
+  swipeToChange($("mini"), $("miniIn"), {
+    skip: "button",
+    onTaken: () => { swipedAt = Date.now(); },
+  });
 
   /* The sheets drag on their own panel rather than the whole
      overlay, and the backdrop thins as the panel goes down — the
@@ -1562,8 +1594,24 @@
   paintModes();
   accState();
   // One attempt at startup. It fails quietly on a server that has
-  // never heard of these routes, which is every server today.
+  // never heard of these routes.
   pull().catch(() => {});
+
+  /* Coming back to the app is the other moment worth asking. A
+     favourite added in the chat, on another phone, or from the
+     notification while this was in the background, is only news
+     once someone looks — and a pull at startup alone means waiting
+     for a cold start to see it.
+
+     Held to once every few seconds so flicking between two apps
+     does not turn into a stream of requests. */
+  let lastPull = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (Date.now() - lastPull < 4000) return;
+    lastPull = Date.now();
+    pull().catch(() => {});
+  });
   tab("Home");
 
   /* ---------- putting the lamp away -------------------------
