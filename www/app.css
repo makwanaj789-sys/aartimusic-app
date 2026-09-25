@@ -230,11 +230,19 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 /* ============================================================
    NAV + MINI
    ============================================================ */
+/* The bar and the strip are one sheet of glass over the page rather
+   than two panels sitting on it: the list runs underneath and is
+   blurred by it, which is what makes the screen feel deep instead of
+   stacked. */
 .nav{
   position:fixed; left:0; right:0; bottom:0; z-index:40;
   display:grid; grid-template-columns:repeat(3,1fr);
-  background:color-mix(in srgb, var(--bg-2) 96%, transparent);
-  backdrop-filter:blur(20px); border-top:1px solid var(--line);
+  background:linear-gradient(180deg,
+    color-mix(in srgb,var(--bg) 34%,transparent),
+    color-mix(in srgb,var(--bg) 76%,transparent));
+  backdrop-filter:blur(24px) saturate(1.25);
+  -webkit-backdrop-filter:blur(24px) saturate(1.25);
+  border-top:1px solid color-mix(in srgb,var(--line) 50%,transparent);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 .nav button{
@@ -247,10 +255,14 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .mini{
   position:fixed; left:0; right:0; z-index:39;
   bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
-  background:var(--bg-3); border-top:1px solid var(--line);
-  /* The strip swipes sideways to change song, so it keeps the
-     horizontal axis and hands the vertical one back to the page. */
-  touch-action:pan-y; overflow:hidden;
+  background:color-mix(in srgb,var(--bg-3) 58%,transparent);
+  backdrop-filter:blur(24px) saturate(1.25);
+  -webkit-backdrop-filter:blur(24px) saturate(1.25);
+  border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent);
+  /* Sideways changes the song and up opens the full screen, so the
+     strip keeps both axes of its own gestures and hands plain
+     scrolling back to the page. */
+  touch-action:none; overflow:hidden;
 }
 .bar{ position:relative; height:2px; background:var(--line); overflow:hidden; }
 .mini-in{ display:grid; grid-template-columns:40px 1fr auto auto; gap:10px;
@@ -322,7 +334,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
                 letter-spacing:.2em; text-transform:uppercase; color:var(--mist); }
 
 .cover{ flex:1; display:grid; place-items:center; padding:18px 0; min-height:0;
-        touch-action:pan-y; }
+        touch-action:none; }
 /* Holds the artwork and gives the grid something of its own size to
    centre. Nothing transforms it — a swipe changes the track, it does
    not drag the cover about. */
@@ -402,6 +414,30 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 .now-ctrls .small{ width:40px; height:40px; padding:9px; color:var(--mist); }
 .now-ctrls .small svg{ fill:none; stroke:currentColor; }
 .now-ctrls .small.on{ color:var(--flame); }
+/* ---------- finding something in the library --------------- */
+
+.find{
+  display:flex; align-items:center; gap:9px;
+  margin:0 0 12px; padding:0 12px; height:40px;
+  border-radius:12px; border:1px solid var(--line);
+  background:color-mix(in srgb,var(--bg-2) 70%,transparent);
+}
+.find[hidden]{ display:none; }
+.find svg{ width:16px; height:16px; flex:none; color:var(--mist);
+           fill:none; stroke:currentColor; stroke-width:1.9;
+           stroke-linecap:round; }
+.find input{
+  flex:1; min-width:0; background:none; border:0; outline:none;
+  color:var(--ink); font:inherit; font-size:13.5px;
+}
+.find input::placeholder{ color:color-mix(in srgb,var(--mist) 75%,transparent); }
+/* Safari and Chrome both draw their own clear button on a search
+   field, and it is not the one below. */
+.find input::-webkit-search-cancel-button{ display:none; }
+.find-x{ width:26px; height:26px; padding:5px; border-radius:50%; color:var(--mist); }
+.find-x[hidden]{ display:none; }
+.find:focus-within{ border-color:color-mix(in srgb,var(--flame) 55%,transparent); }
+
 /* ==========================================================
    WHOSE APP THIS IS
 
@@ -521,7 +557,14 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   background:var(--bg-2); border-radius:18px 18px 0 0;
   padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 16px);
   transform:translateY(100%); transition:transform .36s var(--snap);
-  will-change:transform; touch-action:pan-y;
+  will-change:transform;
+  /* The full screen is dragged down to close and the cover is swiped
+     sideways, so it keeps every gesture that lands on it. Left as
+     pan-y the browser treated a downward drag as a scroll it might
+     want, cancelled the pointer part-way, and the sheet never
+     closed — on a finger, though never on a mouse. Nothing in here
+     scrolls; the sheets that do are their own elements. */
+  touch-action:none;
 }
 .sheet.dragging .sheet-in{ transition:none; }
 .sheet.dragging{ transition:opacity .28s var(--ease), visibility .28s; }
@@ -718,6 +761,14 @@ body.playing .row.on .eq i{ animation:eq .9s ease-in-out infinite; }
 /* Hidden without a transition, shown with one: the old cover goes at
    once, the new one arrives. */
 .cover img.swapping, .mini-in img.swapping{ opacity:0; transition:none; }
+
+/* The swipe landed: the new cover comes in from the side the old one
+   went. Eighteen pixels and a fifth of a second — an acknowledgement,
+   not the card slide this replaced. */
+@keyframes cameNext{ from{ transform:translateX(20px); } to{ transform:none; } }
+@keyframes camePrev{ from{ transform:translateX(-20px); } to{ transform:none; } }
+.came-next{ animation:cameNext .22s var(--out) both; }
+.came-prev{ animation:camePrev .22s var(--out) both; }
 body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 @keyframes breathe{
   0%,100%{ transform:scale(1); }

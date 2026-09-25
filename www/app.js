@@ -439,15 +439,39 @@
     })
   );
 
+  /* Finding something without scrolling for it. Title and artist,
+     because half of what anyone remembers is who sang it. */
+  let libFind = "";
+
   function drawLib() {
     accState();
-    const list = libView === "favs" ? store.favs : store.recents;
+    const all = libView === "favs" ? store.favs : store.recents;
+    const q = libFind.trim().toLowerCase();
+    const list = q
+      ? all.filter((s) =>
+          (s.title || "").toLowerCase().includes(q) ||
+          (s.artist || "").toLowerCase().includes(q))
+      : all;
+
+    $("libFindClear").hidden = !libFind;
     $("libEmpty").hidden = list.length > 0;
-    $("libEmpty").querySelector("h3").textContent =
-      libView === "favs" ? "Nothing saved" : "Nothing played yet";
-    $("libEmpty").querySelector("p").textContent =
-      libView === "favs" ? "Tap the heart on any song to keep it here."
-                         : "Songs you play show up here.";
+
+    if (q && !list.length) {
+      $("libEmpty").querySelector("h3").textContent = "Nothing matches";
+      $("libEmpty").querySelector("p").textContent = "Try a different word.";
+    } else {
+      $("libEmpty").querySelector("h3").textContent =
+        libView === "favs" ? "Nothing saved" : "Nothing played yet";
+      $("libEmpty").querySelector("p").textContent =
+        libView === "favs" ? "Tap the heart on any song to keep it here."
+                           : "Songs you play show up here.";
+    }
+
+    // The field is only worth showing once there is enough to look
+    // through — on an empty library it is one more thing in the way.
+    const find = document.querySelector("#pLib .find");
+    if (find) find.hidden = all.length < 6 && !libFind;
+
     fill($("libRows"), list);
   }
 
@@ -1349,6 +1373,25 @@
      instead of being ignored: the edge should be felt rather
      than just not happening.                                  */
 
+  /* The swipe is acknowledged rather than animated: the new cover
+     comes in from the side the old one went, over a fifth of a
+     second and eighteen pixels. Enough to say the gesture landed;
+     not the card slide that made this feel slow. */
+  function arrived(way) {
+    if (REDUCED) return;
+    ["coverSwipe", "mArt"].forEach((id) => {
+      const el = $(id);
+      if (!el) return;
+      el.classList.remove("came-next", "came-prev");
+      void el.offsetWidth;                 // so a second swipe replays it
+      el.classList.add("came-" + way);
+      el.addEventListener("animationend", function off() {
+        el.classList.remove("came-next", "came-prev");
+        el.removeEventListener("animationend", off);
+      }, { once: true });
+    });
+  }
+
   /* ---------- swiping to change song ------------------------
      Left for the next one, right for the one before.
 
@@ -1375,6 +1418,7 @@
       buzzPick();
       if (o.onTaken) o.onTaken();
       if (dx < 0) next(); else playAt(index - 1);
+      arrived(dx < 0 ? "next" : "prev");
     }
 
     hit.addEventListener("pointerdown", (e) => {
@@ -1394,6 +1438,16 @@
         // pixels. A gesture that is mostly vertical is theirs, and
         // must stay theirs — sideways has to be clearly sideways.
         if (gesture === "y") { id = null; return; }
+
+        // Up is a way in. The strip is a handle for the screen
+        // underneath it, so a clear upward swipe lifts it.
+        if (o.onUp && dy < -26 && Math.abs(dy) > Math.abs(dx) * 1.4) {
+          spent = true;
+          buzz();
+          o.onUp();
+          return;
+        }
+
         if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
         mine = true;
         gesture = "x";
@@ -1435,10 +1489,18 @@
       mine = false;
     }, { passive: true });
 
-    // Belt and braces: whatever ends the capture also ends the
-    // gesture, so nothing can be left holding it.
+    /* Belt and braces: whatever ends the capture also ends the
+       gesture, so nothing can be left holding it.
+
+       Only when it is this element losing it, though. A touch
+       pointer is implicitly captured by whatever it landed on the
+       moment it lands, so taking the capture here makes *that*
+       element lose it — and the event bubbles up through this one.
+       Treating that as the end of the gesture killed every swipe on
+       the second frame of movement, on every phone, while a mouse
+       (which has no implicit capture) went on working. */
     hit.addEventListener("lostpointercapture", (e) => {
-      if (e.pointerId !== id && id !== null) return;
+      if (e.target !== hit || e.pointerId !== id) return;
       id = null;
       if (gesture === "x") gesture = null;
       mine = false;
@@ -1457,6 +1519,7 @@
   swipeToSkip($("mini"), {
     skip: "button",
     onTaken: () => { swipedAt = Date.now(); },
+    onUp: () => { swipedAt = Date.now(); openNow(); },
   });
 
   /* The sheets drag on their own panel rather than the whole
@@ -1669,6 +1732,17 @@
   audio.addEventListener("pause", () => { told.state("paused"); told.position(true); });
   audio.addEventListener("seeked", () => told.position(true));
   audio.addEventListener("ratechange", () => told.position(true));
+
+  $("libFind").addEventListener("input", (e) => {
+    libFind = e.target.value;
+    drawLib();
+  });
+  $("libFindClear").addEventListener("click", () => {
+    libFind = "";
+    $("libFind").value = "";
+    $("libFind").focus();
+    drawLib();
+  });
 
   /* ---------- whose app this is -----------------------------
      A line at the end of the library rather than a screen of its
