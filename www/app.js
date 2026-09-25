@@ -522,21 +522,48 @@
     return h;
   }
 
+  /* Two different kinds of "no", and telling them apart is the
+     difference between a message that helps and one that does not.
+
+       unreachable   nothing answered — the phone is offline, or the
+                     address the app was handed has moved. Temporary,
+                     so sync stays on and the next change tries again.
+
+       syncOff       something answered, and it has never heard of
+                     these routes. Permanent for this session; asking
+                     again on every favourite would be pointless.   */
+  let unreachable = false;
+
   async function sync(path, opts) {
     if (syncOff) return null;
     await ready;
-    const res = await fetch(SERVER + path, Object.assign({
-      headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
-    }, opts || {}));
+
+    let res;
+    try {
+      res = await fetch(SERVER + path, Object.assign({
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+      }, opts || {}));
+      unreachable = false;
+    } catch (e) {
+      unreachable = true;
+      return null;
+    }
+
     /* A server that has not learned these routes yet answers 404,
        and one built before accounts existed may answer 501. Either
        way, stop asking for the rest of the session rather than
        retrying on every favourite. */
-    if (res.status === 404 || res.status === 501) { syncOff = true; return null; }
+    if (res.status === 404 || res.status === 501) { syncOff = true; accState(); return null; }
     if (res.status === 401) { unlink(true); return null; }
     if (!res.ok) return null;
-    return res.json();
+    try { return await res.json(); } catch (e) { return null; }
   }
+
+  // What went wrong, in words that say what to do about it.
+  const whyNot = () =>
+    unreachable ? "Can't reach the server — check your connection"
+    : syncOff   ? "This server doesn't do accounts yet"
+                : "Couldn't start — try again";
 
   /* ---------- merging ---------------------------------------
      Last write wins, per song. Each side brings its favourites
@@ -677,7 +704,8 @@
   async function startLink() {
     const r = await sync("/api/link/start", { method: "POST" });
     if (!r || !r.nonce) {
-      toast(syncOff ? "The server can't do this yet" : "Couldn't start — try again");
+      toast(whyNot());
+      accState();
       sheet($("linkSheet"), false);
       return;
     }
@@ -736,6 +764,16 @@
       $("accBtn").hidden = true;
       return;
     }
+    if (syncOff && !store.link) {
+      // Answered, and it has no idea what an account is. Saying so
+      // beats a Connect button that can only ever fail.
+      box.classList.remove("linked");
+      $("accState").textContent = "Saved on this phone";
+      $("accSub").textContent = "This server doesn't do accounts yet — favourites stay here";
+      $("accBtn").hidden = true;
+      return;
+    }
+
     $("accBtn").hidden = false;
     if (store.link) {
       box.classList.add("linked");
