@@ -1289,13 +1289,28 @@
      Same five actions either way. The rest of the file calls `told`
      and does not have to know which one answered.               */
 
-  const nativeMS = (function () {
+  /* Capacitor does not hand the page its plugins. Capacitor.Plugins
+     is filled in by registerPlugin(), which is normally called by the
+     plugin's own JavaScript — and importing that needs a bundler,
+     which this app deliberately does not have. So reading
+     Capacitor.Plugins.MediaSession finds nothing, for ever, in
+     silence. The global registerPlugin is the same function and asks
+     the native side for the method signatures, which is what makes a
+     callback method like setActionHandler work at all.
+
+     isPluginAvailable checks the headers the native bridge injects,
+     so this is a real answer about this build rather than a guess. */
+  function nativePlugin(name) {
     try {
       const c = window.Capacitor;
-      return c && c.isNativePlatform && c.isNativePlatform() &&
-             c.Plugins && c.Plugins.MediaSession ? c.Plugins.MediaSession : null;
+      if (!c || !c.isNativePlatform || !c.isNativePlatform()) return null;
+      if (c.Plugins && c.Plugins[name]) return c.Plugins[name];
+      if (!c.isPluginAvailable || !c.isPluginAvailable(name)) return null;
+      return c.registerPlugin ? c.registerPlugin(name) : null;
     } catch (e) { return null; }
-  })();
+  }
+
+  const nativeMS = nativePlugin("MediaSession");
   const webMS = "mediaSession" in navigator ? navigator.mediaSession : null;
 
   const told = {
@@ -1377,7 +1392,7 @@
     if (askedToNotify || !nativeMS) return;
     askedToNotify = true;
     try {
-      const ln = window.Capacitor.Plugins.LocalNotifications;
+      const ln = nativePlugin("LocalNotifications");
       if (!ln) return;
       const now = await ln.checkPermissions();
       if (now && /^prompt/.test(now.display || "")) await ln.requestPermissions();
