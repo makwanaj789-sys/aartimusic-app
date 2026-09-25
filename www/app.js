@@ -429,6 +429,7 @@
     paint(song);
     addRecent(song);
 
+    setProgress(0);
     audio.src = streamUrl(song.id);
     audio.load();
 
@@ -494,8 +495,14 @@
     playAt(index - 1);
   });
 
-  audio.addEventListener("playing", () => { waiting(false); icons(true); });
-  audio.addEventListener("pause", () => icons(false));
+  audio.addEventListener("playing", () => {
+    waiting(false); icons(true);
+    document.body.classList.add("playing");
+  });
+  audio.addEventListener("pause", () => {
+    icons(false);
+    document.body.classList.remove("playing");
+  });
   audio.addEventListener("waiting", () => waiting(true));
 
   audio.addEventListener("ended", () => {
@@ -511,6 +518,14 @@
     setTimeout(next, 800);
   });
 
+  function setProgress(p) {
+    p = p < 0 ? 0 : p > 1 ? 1 : p;
+    const v = p.toFixed(5);
+    $("miniFill").style.setProperty("--p", v);
+    $("seekFill").style.setProperty("--p", v);
+    $("seekRail").style.setProperty("--p", v);
+  }
+
   function icons(playing) {
     document.querySelectorAll(".ic-play").forEach((s) => (s.hidden = playing));
     document.querySelectorAll(".ic-pause").forEach((s) => (s.hidden = !playing));
@@ -519,10 +534,9 @@
   audio.addEventListener("timeupdate", () => {
     const d = audio.duration;
     if (!d || !isFinite(d)) return;
-    const pct = (audio.currentTime / d) * 100;
-    $("miniFill").style.width = pct + "%";
-    $("seekFill").style.width = pct + "%";
-    $("seekKnob").style.left = pct + "%";
+    // --p is a plain 0..1 number the stylesheet turns into a
+    // transform; nothing here touches width or left.
+    setProgress(audio.currentTime / d);
     $("nCur").textContent = time(audio.currentTime);
     $("nDur").textContent = time(d);
 
@@ -578,13 +592,25 @@
     const d = audio.duration;
     if (!d || !isFinite(d)) return;
     const box = rail.getBoundingClientRect();
-    audio.currentTime = Math.min(1, Math.max(0, (x - box.left) / box.width)) * d;
+    const p = Math.min(1, Math.max(0, (x - box.left) / box.width));
+    setProgress(p);                      // move with the finger
+    audio.currentTime = p * d;
   };
   rail.addEventListener("click", (e) => seekTo(e.clientX));
   let dragging = false;
-  rail.addEventListener("touchstart", () => (dragging = true), { passive: true });
+  rail.addEventListener("touchstart", () => {
+    dragging = true;
+    document.body.classList.add("seeking");
+  }, { passive: true });
   rail.addEventListener("touchmove", (e) => dragging && seekTo(e.touches[0].clientX), { passive: true });
-  rail.addEventListener("touchend", () => (dragging = false));
+  rail.addEventListener("touchend", () => {
+    dragging = false;
+    document.body.classList.remove("seeking");
+  });
+  rail.addEventListener("touchcancel", () => {
+    dragging = false;
+    document.body.classList.remove("seeking");
+  });
 
   /* ---------- sheets ---------------------------------------- */
 
