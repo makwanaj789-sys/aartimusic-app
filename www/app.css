@@ -318,7 +318,12 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .now-top .from{ flex:1; text-align:center; font-size:10px;
                 letter-spacing:.2em; text-transform:uppercase; color:var(--mist); }
 
-.cover{ flex:1; display:grid; place-items:center; padding:18px 0; min-height:0; }
+.cover{ flex:1; display:grid; place-items:center; padding:18px 0; min-height:0;
+        touch-action:pan-y; }
+/* The wrapper is what the swipe moves; the img underneath keeps
+   breathing. Sized by its content so the grid still centres it. */
+.cover-swipe{ display:grid; place-items:center; min-height:0; max-height:100%;
+              will-change:transform; }
 .cover img{
   width:min(76vw,44vh); aspect-ratio:1; object-fit:cover; border-radius:14px;
   box-shadow:0 30px 60px -20px rgba(0,0,0,.8);
