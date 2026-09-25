@@ -230,11 +230,19 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 /* ============================================================
    NAV + MINI
    ============================================================ */
+/* The bar and the strip are one sheet of glass over the page rather
+   than two panels sitting on it: the list runs underneath and is
+   blurred by it, which is what makes the screen feel deep instead of
+   stacked. */
 .nav{
   position:fixed; left:0; right:0; bottom:0; z-index:40;
   display:grid; grid-template-columns:repeat(3,1fr);
-  background:color-mix(in srgb, var(--bg-2) 96%, transparent);
-  backdrop-filter:blur(20px); border-top:1px solid var(--line);
+  background:linear-gradient(180deg,
+    color-mix(in srgb,var(--bg) 34%,transparent),
+    color-mix(in srgb,var(--bg) 76%,transparent));
+  backdrop-filter:blur(24px) saturate(1.25);
+  -webkit-backdrop-filter:blur(24px) saturate(1.25);
+  border-top:1px solid color-mix(in srgb,var(--line) 50%,transparent);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 .nav button{
@@ -247,7 +255,10 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .mini{
   position:fixed; left:0; right:0; z-index:39;
   bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
-  background:var(--bg-3); border-top:1px solid var(--line);
+  background:color-mix(in srgb,var(--bg-3) 58%,transparent);
+  backdrop-filter:blur(24px) saturate(1.25);
+  -webkit-backdrop-filter:blur(24px) saturate(1.25);
+  border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent);
   /* Sideways changes the song and up opens the full screen, so the
      strip keeps both axes of its own gestures and hands plain
      scrolling back to the page. */
