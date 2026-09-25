@@ -13,6 +13,8 @@
   --nav-h:60px; --mini-h:60px;
   --ease:cubic-bezier(.22,.61,.36,1);
   --out:cubic-bezier(.16,1,.3,1);
+  --spring:cubic-bezier(.34,1.56,.64,1);   /* overshoots, then settles */
+  --snap:cubic-bezier(.2,.9,.3,1);
 }
 
 html,body{ height:100%; }
@@ -26,6 +28,10 @@ body.locked{ overflow:hidden; }
 
 svg{ width:100%; height:100%; fill:none; stroke:currentColor;
      stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+/* A native image drag swallows every pointermove after the first,
+   which silently kills any gesture that starts on artwork — and
+   almost every gesture in this app starts on artwork. */
+img{ -webkit-user-drag:none; user-select:none; }
 button{ font:inherit; border:0; background:transparent; color:inherit; cursor:pointer; }
 
 /* ============================================================
@@ -65,6 +71,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
    ============================================================ */
 .rows{ display:flex; flex-direction:column; }
 .row{
+  position:relative;
   display:grid; grid-template-columns:50px 1fr auto auto;
   gap:12px; align-items:center; padding:8px 4px; border-radius:11px;
   transition:background-color .2s var(--ease);
@@ -102,12 +109,50 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .empty h3{ margin:0 0 6px; font-size:17px; font-weight:600; color:var(--ink); }
 .empty p{ margin:0; font-size:13.5px; line-height:1.6; }
 
-.loading{ display:flex; justify-content:center; gap:7px; padding:40px 0; }
-.loading span{ width:9px; height:9px; border-radius:50%; background:var(--flame);
-               animation:bounce 1.1s ease-in-out infinite; }
-.loading span:nth-child(2){ animation-delay:.15s; }
-.loading span:nth-child(3){ animation-delay:.3s; }
-@keyframes bounce{ 0%,100%{transform:translateY(0);opacity:.35} 50%{transform:translateY(-9px);opacity:1} }
+/* ============================================================
+   LOADING
+   Three bouncing dots said "something is happening". Skeleton rows
+   say what is coming and roughly how much of it, and the list
+   arrives into a shape the eye has already settled on rather than
+   replacing an unrelated thing.
+
+   An author display: value beats the UA's [hidden]{display:none},
+   so the hidden rule has to be spelled out — otherwise the
+   skeleton sits under every search result for ever.
+   ============================================================ */
+.loading{ display:flex; flex-direction:column; padding:2px 0; }
+.loading[hidden]{ display:none; }
+.sk-row{
+  display:grid; grid-template-columns:50px 1fr; gap:12px;
+  align-items:center; padding:8px 4px;
+}
+.sk-lines{ display:flex; flex-direction:column; gap:7px; }
+.sk{
+  position:relative; overflow:hidden;
+  background:var(--bg-2); border-radius:6px;
+}
+.sk-art{ width:50px; height:50px; border-radius:8px; }
+.sk-t{ height:11px; width:62%; }
+.sk-s{ height:9px; width:38%; }
+/* A highlight travelling across, on transform — an animated
+   background-position would repaint the row every frame. */
+.sk::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg,transparent,
+    color-mix(in srgb,var(--ink) 9%,transparent),transparent);
+  transform:translateX(-100%);
+  animation:sheen 1.35s linear infinite;
+}
+.sk-row:nth-child(2) .sk::after{ animation-delay:.08s; }
+.sk-row:nth-child(3) .sk::after{ animation-delay:.16s; }
+.sk-row:nth-child(4) .sk::after{ animation-delay:.24s; }
+.sk-row:nth-child(5) .sk::after{ animation-delay:.32s; }
+.sk-row:nth-child(6) .sk::after{ animation-delay:.40s; }
+@keyframes sheen{ to{ transform:translateX(100%); } }
+
+@media (prefers-reduced-motion: reduce){
+  .sk::after{ animation:none; }
+}
 
 /* ============================================================
    SEARCH BAR
@@ -148,10 +193,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
   background:var(--bg-3); border-top:1px solid var(--line);
 }
-.bar{ position:relative; height:2px; background:var(--line); }
-.bar i{ position:absolute; left:0; top:0; height:2px; width:0;
-        background:linear-gradient(90deg,var(--ember),var(--flame),var(--hot));
-        transition:width .15s linear; }
+.bar{ position:relative; height:2px; background:var(--line); overflow:hidden; }
 .mini-in{ display:grid; grid-template-columns:40px 1fr auto auto; gap:10px;
           align-items:center; padding:8px 12px; }
 .mini-in img{ width:40px; height:40px; border-radius:7px; object-fit:cover; background:var(--bg); }
@@ -167,6 +209,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 
 .play{ position:relative; width:40px; height:40px; padding:11px; border-radius:50%; }
 .play svg{ fill:currentColor; stroke:none; }
+.play .mp{ transition:d .3s var(--out); }
 .play .spin{
   position:absolute; inset:-4px; border:2px solid transparent;
   border-top-color:currentColor; border-radius:50%; opacity:0;
@@ -182,9 +225,17 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
    ============================================================ */
 .now{
   position:fixed; inset:0; z-index:50; visibility:hidden;
-  transform:translateY(100%); transition:transform .42s var(--out), visibility .42s;
+  transform:translateY(100%);
+  /* A touch of overshoot on the way up, so it arrives rather than
+     just stopping. */
+  transition:transform .46s var(--snap), visibility .46s;
   overflow:hidden;
+  will-change:transform;
+  touch-action:pan-y;
 }
+/* While a finger is on it the transform is written per-frame, so
+   any easing here would fight the finger. */
+.now.dragging{ transition:none; }
 .now.open{ transform:translateY(0); visibility:visible; }
 
 /* the cover, blown up and blurred — the screen takes its colour from
@@ -202,6 +253,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 
 .now-in{
   position:relative; height:100%; display:flex; flex-direction:column;
+  user-select:none;
   padding:calc(env(safe-area-inset-top,0px) + 10px) 24px
           calc(env(safe-area-inset-bottom,0px) + 16px);
 }
@@ -228,9 +280,10 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   background:color-mix(in srgb,var(--ink) 16%,transparent);
   padding-block:14px; margin-block:-14px; background-clip:content-box;  /* thumb-sized hit area */
 }
-.seek-rail i{ position:absolute; left:0; top:14px; height:4px; width:0; border-radius:2px;
-  background:linear-gradient(90deg,var(--ember),var(--flame),var(--hot)); }
-.seek-rail b{ position:absolute; top:11px; left:0; width:10px; height:10px; margin-left:-5px;
+.seek-rail i{ position:absolute; left:0; top:14px; height:4px; width:100%; border-radius:2px; }
+.knob-track{ position:absolute; left:0; top:11px; width:100%; height:10px;
+  pointer-events:none; transform:translateX(calc(var(--p,0) * 100%)); }
+.seek-rail b{ position:absolute; left:0; top:0; width:10px; height:10px; margin-left:-5px;
   border-radius:50%; background:var(--hot); box-shadow:0 0 10px var(--flame); }
 .times{ display:flex; justify-content:space-between; margin-top:11px;
         font-size:11px; color:var(--mist); font-variant-numeric:tabular-nums; }
@@ -266,8 +319,11 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
    ============================================================ */
 .sheet{
   position:fixed; inset:0; z-index:60; visibility:hidden;
-  background:rgba(0,0,0,.55); opacity:0;
-  transition:opacity .28s var(--ease), visibility .28s;
+  /* --veil lets a drag thin the backdrop without touching the
+     overlay's own open/closed opacity. */
+  background:rgba(0,0,0,calc(.55 * var(--veil,1)));
+  opacity:0;
+  transition:opacity .28s var(--ease), visibility .28s, background-color .18s linear;
 }
 .sheet.open{ visibility:visible; opacity:1; }
 .sheet-in{
@@ -275,8 +331,14 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   max-height:78%; overflow-y:auto;
   background:var(--bg-2); border-radius:18px 18px 0 0;
   padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 16px);
-  transform:translateY(100%); transition:transform .32s var(--out);
+  transform:translateY(100%); transition:transform .36s var(--snap);
+  will-change:transform; touch-action:pan-y;
 }
+.sheet.dragging .sheet-in{ transition:none; }
+.sheet.dragging{ transition:opacity .28s var(--ease), visibility .28s; }
+/* The handle is the obvious place to grab, so make it look it. */
+.grab{ cursor:grab; }
+.sheet.dragging .grab{ cursor:grabbing; }
 .sheet.open .sheet-in{ transform:translateY(0); }
 .grab{ width:38px; height:4px; border-radius:2px; background:var(--line);
        margin:4px auto 14px; }
@@ -288,6 +350,8 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
       font-size:14.5px; border-bottom:1px solid var(--line); }
 .act:last-child{ border-bottom:0; }
 .act.ghost{ color:var(--mist); }
+/* .act sets display:block, which outranks the UA's [hidden] rule. */
+.act[hidden]{ display:none; }
 
 /* ============================================================
    TOAST
@@ -304,4 +368,282 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}
+
+
+/* ============================================================
+   TOUCH
+   Every tappable thing answers the finger: it sinks on press,
+   springs back on release, and an amber ripple leaves from the
+   point that was actually touched.
+
+   None of it can block a tap. The ripple layer is pointer-events
+   none and is a child of the target, so it never sits over the
+   thing it decorates, and the press class is applied on
+   pointerdown — after the browser has already decided where the
+   tap is going.
+   ============================================================ */
+.pressable{ position:relative; transition:transform .26s var(--spring); }
+.pressable.pressing{ transform:scale(.955); transition-duration:.08s; }
+/* Round controls sink a little further — there is less of them to
+   read the movement on. */
+.icon.pressing,.play.pressing,.nav button.pressing{ transform:scale(.88); }
+.row.pressing,.card.pressing{ transform:scale(.982); }
+
+/* A layer of its own, rather than overflow:hidden on the target —
+   .play has a spinner at inset:-4px that clipping would cut off. */
+.rip-layer{
+  position:absolute; inset:0; border-radius:inherit;
+  overflow:hidden; pointer-events:none; z-index:0;
+}
+.play .rip-layer,.icon .rip-layer,.nav button .rip-layer{ border-radius:50%; }
+.rip{
+  position:absolute; width:var(--r); height:var(--r);
+  left:var(--x); top:var(--y); margin:calc(var(--r) / -2);
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    color-mix(in srgb,var(--flame) 55%,transparent) 0%,
+    color-mix(in srgb,var(--flame) 18%,transparent) 45%,
+    transparent 70%);
+  transform:scale(0); opacity:.9;
+  animation:rip .52s var(--out) forwards;
+}
+@keyframes rip{ to{ transform:scale(1); opacity:0; } }
+
+/* Keep button content above its own ripple. */
+.pressable > svg,.pressable > span,.pressable > b,
+.row > *,.card > *{ position:relative; z-index:1; }
+
+@media (prefers-reduced-motion: reduce){
+  .pressable,.pressable.pressing{ transform:none; }
+  .rip{ display:none; }
+}
+
+
+/* ============================================================
+   PROGRESS
+   Both bars used to be driven by writing width, and the seek knob
+   by writing left, on every timeupdate — the one thing the brief
+   rules out for anything that moves per frame. Both now carry a
+   --p between 0 and 1 and move on transform alone.
+
+   The fill is two nested elements rather than a single scaled
+   one. The outer is scaled to --p and clips; the inner is scaled
+   by 1/--p, which restores it to full width inside that clip. So
+   the gradient keeps its true proportions and the shimmer travels
+   at a constant speed, instead of both being squashed along with
+   the bar. Scaling a gradient is what makes a scaled progress bar
+   look wrong, and it is the reason width is usually reached for.
+   ============================================================ */
+.bar i,.seek-rail i{
+  position:absolute; left:0; top:0; height:100%;
+  transform-origin:left; transform:scaleX(var(--p,0));
+  overflow:hidden;
+  transition:transform .2s linear;
+  will-change:transform;
+}
+.seek-rail i{ top:14px; height:4px; }
+/* Dragging the knob has to track the finger, not lag .2s behind it. */
+.seeking .bar i,.seeking .seek-rail i,.seeking .knob-track{ transition:none; }
+.knob-track{ transition:transform .2s linear; }
+
+.fill-in{
+  position:absolute; inset:0;
+  transform-origin:left;
+  transform:scaleX(calc(1 / max(var(--p,1),.001)));
+  background:linear-gradient(90deg,var(--ember),var(--flame),var(--hot));
+}
+/* The liquid part: a soft highlight running along what has played.
+   Clipped by the fill, so it never travels past the playhead. */
+.shimmer{
+  position:absolute; top:0; bottom:0; left:0; width:38%;
+  background:linear-gradient(90deg,transparent,
+    color-mix(in srgb,var(--hot) 85%,transparent),transparent);
+  transform:translateX(-110%);
+  opacity:0;
+  transition:opacity .4s var(--ease);
+}
+body.playing .shimmer{ opacity:.75; animation:shimmer 2.4s linear infinite; }
+@keyframes shimmer{ to{ transform:translateX(330%); } }
+
+@media (prefers-reduced-motion: reduce){
+  body.playing .shimmer{ animation:none; opacity:0; }
+  .bar i,.seek-rail i,.knob-track{ transition:none; }
+}
+
+
+/* ============================================================
+   PLAY / PAUSE
+   One icon that changes shape, not two that swap. The triangle is
+   built from two quadrilaterals — the left half and the right
+   half — so each can travel to one bar of the pause icon. Both
+   paths are four line segments in the same order, which is what
+   lets the browser interpolate between them at all.
+   ============================================================ */
+.play[data-state="playing"] .mp.l{ d:path("M6 4L10 4L10 20L6 20Z"); }
+.play[data-state="playing"] .mp.r{ d:path("M14 4L18 4L18 20L14 20Z"); }
+
+@media (prefers-reduced-motion: reduce){
+  .play .mp{ transition:none; }
+}
+
+
+/* ============================================================
+   WHAT IS PLAYING
+   Two signals, both scale-only so neither costs a layout:
+   an equaliser over the artwork of the live row, and a cover that
+   breathes on the full screen.
+   ============================================================ */
+.row .eq{
+  position:absolute; left:4px; top:50%;
+  width:50px; height:50px; margin-top:-25px;
+  border-radius:8px; background:rgba(10,9,8,.55);
+  display:none; align-items:center; justify-content:center; gap:3px;
+  pointer-events:none; z-index:2;
+}
+.row.on .eq{ display:flex; }
+.row .eq i{
+  width:3px; height:18px; border-radius:2px;
+  background:var(--flame); transform-origin:center bottom;
+  transform:scaleY(.22);
+  transition:transform .3s var(--ease);
+}
+/* The bars move only while audio is playing; pausing leaves them
+   standing where they are, which is the honest reading of the
+   state. Height is fixed and scaleY does the work — animating
+   height here would lay out four elements every frame. */
+body.playing .row.on .eq i{ animation:eq .9s ease-in-out infinite; }
+.row .eq i:nth-child(2){ animation-delay:-.62s; }
+.row .eq i:nth-child(3){ animation-delay:-.31s; }
+.row .eq i:nth-child(4){ animation-delay:-.83s; }
+@keyframes eq{
+  0%,100%{ transform:scaleY(.22); }
+  50%    { transform:scaleY(1); }
+}
+
+/* The cover swells very slightly, on a cycle slow enough to read
+   as breathing rather than as a pulse. */
+.cover img{ transition:transform .7s var(--out); will-change:transform; }
+body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
+@keyframes breathe{
+  0%,100%{ transform:scale(1); }
+  50%    { transform:scale(1.035); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  body.playing .row.on .eq i{ animation:none; transform:scaleY(.6); }
+  body.playing .cover img{ animation:none; }
+}
+
+
+/* ============================================================
+   THE HEART
+   ============================================================ */
+.icon{ position:relative; }
+.icon.popping svg{ animation:heartPop .46s var(--spring); }
+@keyframes heartPop{
+  0%  { transform:scale(1); }
+  30% { transform:scale(.82); }
+  62% { transform:scale(1.28); }
+  100%{ transform:scale(1); }
+}
+
+/* The burst needs to leave the button, so this layer is not
+   clipped — unlike the ripple layer, which is. */
+.spark-layer{ position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:2; }
+.spark{
+  position:absolute; left:50%; top:50%;
+  width:5px; height:5px; border-radius:50%;
+  background:var(--flame);
+  /* rotate first, then push outward — the rotation decides the
+     direction and the translate decides how far */
+  transform:translate(-50%,-50%) rotate(var(--a)) translateY(0) scale(1);
+  animation:spark .58s var(--out) forwards;
+}
+.spark:nth-child(even){ background:var(--hot); width:4px; height:4px; }
+@keyframes spark{
+  to{
+    transform:translate(-50%,-50%) rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(0);
+    opacity:0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .icon.popping svg{ animation:none; }
+  .spark{ display:none; }
+}
+
+
+/* ============================================================
+   ARRIVING
+   ============================================================ */
+.stagger{
+  animation:rowIn .44s var(--out) both;
+  animation-delay:calc(var(--i,0) * 30ms);
+}
+@keyframes rowIn{
+  from{ opacity:0; transform:translateY(12px); }
+  to  { opacity:1; transform:none; }
+}
+
+/* Tabs cross-fade with a short slide, so switching reads as
+   movement between two places rather than a repaint. [hidden] is
+   display:none, and leaving it restarts the animation on its own —
+   no class juggling needed. */
+.page{ animation:pageIn .34s var(--out) both; }
+@keyframes pageIn{
+  from{ opacity:0; transform:translateY(10px); }
+  to  { opacity:1; transform:none; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .stagger,.page{ animation:none; }
+}
+
+
+/* ============================================================
+   ACCOUNT
+   One strip at the top of the library saying where favourites
+   live, and what connecting would change. It is not a wall:
+   everything below it works whether or not anyone ever taps it.
+   ============================================================ */
+.account{
+  display:grid; grid-template-columns:auto 1fr auto; gap:11px; align-items:center;
+  padding:12px 13px; margin-bottom:18px;
+  background:var(--bg-2); border:1px solid var(--line); border-radius:12px;
+}
+.acc-dot{
+  width:8px; height:8px; border-radius:50%;
+  background:var(--mist); flex:none;
+  transition:background-color .3s var(--ease), box-shadow .3s var(--ease);
+}
+.account.linked .acc-dot{ background:var(--flame); box-shadow:0 0 10px var(--flame); }
+.account.syncing .acc-dot{ animation:pulse 1.1s ease-in-out infinite; }
+@keyframes pulse{ 0%,100%{ transform:scale(1); opacity:1 } 50%{ transform:scale(.6); opacity:.45 } }
+.acc-text{ min-width:0; }
+.acc-state{ font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.acc-sub{ font-size:11px; color:var(--mist); margin-top:2px;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.acc-btn{
+  flex:none; padding:8px 14px; border-radius:999px; font-size:12px;
+  background:linear-gradient(135deg,var(--flame),var(--ember)); color:#0A0908; font-weight:600;
+}
+.account.linked .acc-btn{
+  background:transparent; border:1px solid var(--line-lit, var(--line));
+  color:var(--mist); font-weight:400;
+}
+
+.link-copy{ margin:0 4px 14px; font-size:13px; line-height:1.65; color:var(--mist); }
+.link-wait{ display:flex; justify-content:center; gap:7px; padding:6px 0 16px; }
+.link-wait[hidden]{ display:none; }
+.link-wait span{
+  width:7px; height:7px; border-radius:50%; background:var(--flame);
+  animation:waitdot 1.1s ease-in-out infinite;
+}
+.link-wait span:nth-child(2){ animation-delay:.15s; }
+.link-wait span:nth-child(3){ animation-delay:.3s; }
+@keyframes waitdot{ 0%,100%{ transform:scale(.5); opacity:.35 } 50%{ transform:scale(1); opacity:1 } }
+
+@media (prefers-reduced-motion: reduce){
+  .account.syncing .acc-dot,.link-wait span{ animation:none; }
 }

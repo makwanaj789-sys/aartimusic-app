@@ -62,7 +62,7 @@
 
   <div class="rows" id="results"></div>
 
-  <div class="loading" id="loading" hidden><span></span><span></span><span></span></div>
+  <div class="loading" id="loading" hidden aria-hidden="true"><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div></div>
   <div class="empty" id="searchEmpty">
     <div class="art">🔍</div>
     <h3>Search any song</h3>
@@ -73,6 +73,15 @@
 <!-- ============ LIBRARY ============ -->
 <section class="page" id="pLib" hidden>
   <header class="head"><h1>Your library</h1></header>
+
+  <div class="account" id="account">
+    <span class="acc-dot" id="accDot" aria-hidden="true"></span>
+    <div class="acc-text">
+      <div class="acc-state" id="accState">Saved on this phone</div>
+      <div class="acc-sub" id="accSub">Connect Telegram to keep these if you change phones</div>
+    </div>
+    <button class="acc-btn" id="accBtn">Connect</button>
+  </div>
 
   <div class="seg">
     <button class="on" data-lib="favs">Favourites</button>
@@ -89,7 +98,7 @@
 
 <!-- ============ MINI PLAYER ============ -->
 <div class="mini" id="mini" hidden>
-  <div class="bar"><i id="miniFill"></i></div>
+  <div class="bar"><i id="miniFill"><span class="fill-in"><span class="shimmer"></span></span></i></div>
   <div class="mini-in">
     <img id="mArt" alt="">
     <div class="meta" id="miniOpen">
@@ -100,8 +109,10 @@
       <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/></svg>
     </button>
     <button id="mPlay" class="play" aria-label="Play">
-      <svg class="ic-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
-      <svg class="ic-pause" viewBox="0 0 24 24" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+      <svg class="morph" viewBox="0 0 24 24" aria-hidden="true">
+        <path class="mp l" d="M7 4.2L13.2 8L13.2 16L7 19.8Z"/>
+        <path class="mp r" d="M13.2 8L19.6 11.8L19.6 12.2L13.2 16Z"/>
+      </svg>
       <span class="spin"></span>
     </button>
   </div>
@@ -150,7 +161,7 @@
     </div>
 
     <div class="seek">
-      <div class="seek-rail" id="seekRail"><i id="seekFill"></i><b id="seekKnob"></b></div>
+      <div class="seek-rail" id="seekRail"><i id="seekFill"><span class="fill-in"><span class="shimmer"></span></span></i><span class="knob-track"><b id="seekKnob"></b></span></div>
       <div class="times"><span id="nCur">0:00</span><span id="nDur">0:00</span></div>
     </div>
 
@@ -162,8 +173,10 @@
         <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12zM6 5h2v14H6z"/></svg>
       </button>
       <button id="nPlay" class="play" aria-label="Play">
-        <svg class="ic-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
-        <svg class="ic-pause" viewBox="0 0 24 24" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+        <svg class="morph" viewBox="0 0 24 24" aria-hidden="true">
+          <path class="mp l" d="M7 4.2L13.2 8L13.2 16L7 19.8Z"/>
+          <path class="mp r" d="M13.2 8L19.6 11.8L19.6 12.2L13.2 16Z"/>
+        </svg>
         <span class="spin"></span>
       </button>
       <button id="nNext" aria-label="Next">
@@ -216,6 +229,19 @@
     <button class="act" data-sleep="60">1 hour</button>
     <button class="act" data-sleep="track">End of this track</button>
     <button class="act ghost" data-sleep="0">Turn off</button>
+  </div>
+</section>
+
+<!-- ============ CONNECT TELEGRAM ============ -->
+<section class="sheet" id="linkSheet" aria-hidden="true">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2 id="linkTitle">Connect Telegram</h2></div>
+    <p class="link-copy" id="linkCopy">Your favourites will follow you to any phone, and match what the bot already knows.</p>
+    <div class="link-wait" id="linkWait" hidden><span></span><span></span><span></span></div>
+    <button class="act" id="linkGo">Open Telegram</button>
+    <button class="act ghost" id="linkAlt" hidden>Telegram didn't open — copy the link</button>
+    <button class="act ghost" id="linkCancel">Not now</button>
   </div>
 </section>
 
