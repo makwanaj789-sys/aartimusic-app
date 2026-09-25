@@ -120,6 +120,30 @@ html, body { background:#0A0908; margin:0; }
     <h3>Nothing saved</h3>
     <p>Tap the heart on any song to keep it here.</p>
   </div>
+
+  <!-- Whose app this is. Both open outside; the click handler in
+       app.js tries the app's own scheme before the web page. -->
+  <footer class="made">
+    <span class="made-by">Made by</span>
+    <div class="handles">
+      <a class="handle" data-press href="https://instagram.com/h81t6"
+         data-app="instagram://user?username=h81t6" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="3" y="3" width="18" height="18" rx="5.2"/>
+          <circle cx="12" cy="12" r="4.1"/>
+          <circle class="dot" cx="17.3" cy="6.7" r="1.15"/>
+        </svg>
+        <span>@h81t6</span>
+      </a>
+      <a class="handle" data-press href="https://t.me/umclon"
+         data-app="tg://resolve?domain=umclon" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path class="solid" d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>
+        </svg>
+        <span>@umclon</span>
+      </a>
+    </div>
+  </footer>
 </section>
 
 <!-- ============ MINI PLAYER ============ -->

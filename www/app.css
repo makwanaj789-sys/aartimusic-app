@@ -403,6 +403,39 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 .now-ctrls .small svg{ fill:none; stroke:currentColor; }
 .now-ctrls .small.on{ color:var(--flame); }
 /* ==========================================================
+   WHOSE APP THIS IS
+
+   A line at the end of the library, not a screen of its own.
+   Quiet until touched — it is a signature, not a banner.
+   ========================================================== */
+
+.made{
+  margin:34px 0 8px; padding-top:20px;
+  border-top:1px solid var(--line);
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+}
+.made-by{
+  font-size:10px; letter-spacing:.3em; text-transform:uppercase;
+  color:color-mix(in srgb,var(--mist) 62%,transparent);
+}
+.handles{ display:flex; gap:10px; }
+.handle{
+  display:inline-flex; align-items:center; gap:7px;
+  padding:8px 13px 8px 10px; border-radius:999px;
+  border:1px solid var(--line);
+  background:color-mix(in srgb,var(--bg-2) 70%,transparent);
+  color:var(--mist); font-size:12.5px; font-weight:500;
+  text-decoration:none; position:relative;
+  transition:transform .26s var(--spring), color .2s ease, border-color .2s ease;
+}
+.handle svg{ width:15px; height:15px; flex:none; }
+/* The Instagram mark is drawn; the Telegram one is filled. */
+.handle svg rect, .handle svg circle{ fill:none; stroke:currentColor; stroke-width:1.7; }
+.handle svg circle.dot{ fill:currentColor; stroke:none; }
+.handle svg path.solid{ fill:currentColor; stroke:none; }
+.handle:active, .handle.pressing{ color:var(--flame); border-color:var(--flame); }
+
+/* ==========================================================
    CONTROLS WITH WEIGHT
 
    The transport is the centrepiece, so it is built as objects

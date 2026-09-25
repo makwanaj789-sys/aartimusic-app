@@ -672,25 +672,53 @@
 
   let lastLink = "";
 
-  function openTelegram(url, bot, start) {
-    try { tg.openTelegramLink(url); return; } catch (e) {}
+  /* Leaving the app, wherever the app happens to be.
+
+     Inside Telegram the bridge does it properly. Outside, the
+     WebView is all we have: an app's own scheme goes straight to
+     it through an Android intent, and if nothing answers, the https
+     link — which the system hands to a browser and the browser
+     hands back to the app — is the second try. The two are
+     attempted in that order rather than together, because firing
+     both opens two things.                                       */
+
+  function openOutside(url, deep) {
+    if (tg) {
+      try {
+        if (/\/\/t\.me\//.test(url)) tg.openTelegramLink(url);
+        else tg.openLink(url);
+        return;
+      } catch (e) {}
+    }
+
+    const away = () => {
+      try { window.open(url, "_blank"); }
+      catch (e) { try { window.location.href = url; } catch (e2) {} }
+    };
+
+    /* An app's own scheme is only worth trying where an app could
+       answer it. In a browser it is a navigation that can only fail,
+       and eight hundred milliseconds of waiting for it to. */
+    if (!deep || !window.Capacitor || !window.Capacitor.isNativePlatform ||
+        !window.Capacitor.isNativePlatform()) return away();
 
     let gone = false;
     const leaving = () => { gone = true; };
     document.addEventListener("visibilitychange", leaving, { once: true });
     window.addEventListener("pagehide", leaving, { once: true });
 
-    try {
-      window.location.href = "tg://resolve?domain=" + encodeURIComponent(bot) +
-        "&start=" + encodeURIComponent(start);
-    } catch (e) {}
+    try { window.location.href = deep; } catch (e) {}
 
     setTimeout(() => {
       document.removeEventListener("visibilitychange", leaving);
-      if (gone || document.hidden) return;   // Telegram took it
-      try { window.open(url, "_blank"); }
-      catch (e) { try { window.location.href = url; } catch (e2) {} }
+      if (gone || document.hidden) return;   // the app took it
+      away();
     }, 800);
+  }
+
+  function openTelegram(url, bot, start) {
+    openOutside(url, "tg://resolve?domain=" + encodeURIComponent(bot) +
+                     "&start=" + encodeURIComponent(start));
   }
 
   async function copyLink() {
@@ -1641,6 +1669,19 @@
   audio.addEventListener("pause", () => { told.state("paused"); told.position(true); });
   audio.addEventListener("seeked", () => told.position(true));
   audio.addEventListener("ratechange", () => told.position(true));
+
+  /* ---------- whose app this is -----------------------------
+     A line at the end of the library rather than a screen of its
+     own. Both open outside the app: an app link first, the web
+     page if that finds nothing.                                */
+
+  document.querySelectorAll(".handle").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      buzz();
+      openOutside(a.getAttribute("href"), a.dataset.app || "");
+    });
+  });
 
   /* ---------- start ----------------------------------------- */
 
