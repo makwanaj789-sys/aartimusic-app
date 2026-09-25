@@ -3,9 +3,11 @@
   "appName": "Aarti Music",
   "webDir": "www",
   "android": {
-    "allowMixedContent": false
+    "allowMixedContent": false,
+    "backgroundColor": "#0A0908"
   },
   "server": {
     "androidScheme": "https"
-  }
+  },
+  "backgroundColor": "#0A0908"
 }

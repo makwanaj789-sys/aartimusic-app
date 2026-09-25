@@ -18,6 +18,7 @@ on:
       - "assets/**"
       - "capacitor.config.json"
       - "package.json"
+      - "scripts/**"
       - ".github/workflows/build-apk.yml"
 
 jobs:
@@ -53,6 +54,15 @@ jobs:
         run: |
           npx --yes cap add android || true
           npx --yes cap sync android
+
+      # Two permissions no plugin declares for us. Android 14 will not
+      # start the media foreground service without the first, and
+      # Android 13 hides every notification until the second is
+      # granted — so without this step the playing notification never
+      # appears. The script says why in more detail, and re-running it
+      # changes nothing.
+      - name: Permissions the playing notification needs
+        run: python3 scripts/android-permissions.py android/app/src/main/AndroidManifest.xml
 
       # Turns assets/icon.png into every icon size Android wants,
       # including the adaptive pair. Skipped quietly if the folder

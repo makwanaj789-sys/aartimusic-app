@@ -522,21 +522,48 @@
     return h;
   }
 
+  /* Two different kinds of "no", and telling them apart is the
+     difference between a message that helps and one that does not.
+
+       unreachable   nothing answered — the phone is offline, or the
+                     address the app was handed has moved. Temporary,
+                     so sync stays on and the next change tries again.
+
+       syncOff       something answered, and it has never heard of
+                     these routes. Permanent for this session; asking
+                     again on every favourite would be pointless.   */
+  let unreachable = false;
+
   async function sync(path, opts) {
     if (syncOff) return null;
     await ready;
-    const res = await fetch(SERVER + path, Object.assign({
-      headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
-    }, opts || {}));
+
+    let res;
+    try {
+      res = await fetch(SERVER + path, Object.assign({
+        headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+      }, opts || {}));
+      unreachable = false;
+    } catch (e) {
+      unreachable = true;
+      return null;
+    }
+
     /* A server that has not learned these routes yet answers 404,
        and one built before accounts existed may answer 501. Either
        way, stop asking for the rest of the session rather than
        retrying on every favourite. */
-    if (res.status === 404 || res.status === 501) { syncOff = true; return null; }
+    if (res.status === 404 || res.status === 501) { syncOff = true; accState(); return null; }
     if (res.status === 401) { unlink(true); return null; }
     if (!res.ok) return null;
-    return res.json();
+    try { return await res.json(); } catch (e) { return null; }
   }
+
+  // What went wrong, in words that say what to do about it.
+  const whyNot = () =>
+    unreachable ? "Can't reach the server — check your connection"
+    : syncOff   ? "This server doesn't do accounts yet"
+                : "Couldn't start — try again";
 
   /* ---------- merging ---------------------------------------
      Last write wins, per song. Each side brings its favourites
@@ -677,7 +704,8 @@
   async function startLink() {
     const r = await sync("/api/link/start", { method: "POST" });
     if (!r || !r.nonce) {
-      toast(syncOff ? "The server can't do this yet" : "Couldn't start — try again");
+      toast(whyNot());
+      accState();
       sheet($("linkSheet"), false);
       return;
     }
@@ -736,6 +764,16 @@
       $("accBtn").hidden = true;
       return;
     }
+    if (syncOff && !store.link) {
+      // Answered, and it has no idea what an account is. Saying so
+      // beats a Connect button that can only ever fail.
+      box.classList.remove("linked");
+      $("accState").textContent = "Saved on this phone";
+      $("accSub").textContent = "This server doesn't do accounts yet — favourites stay here";
+      $("accBtn").hidden = true;
+      return;
+    }
+
     $("accBtn").hidden = false;
     if (store.link) {
       box.classList.add("linked");
@@ -921,6 +959,7 @@
   }
 
   audio.addEventListener("timeupdate", () => {
+    told.position();
     const d = audio.duration;
     if (!d || !isFinite(d)) return;
     // --p is a plain 0..1 number the stylesheet turns into a
@@ -1001,29 +1040,83 @@
     document.body.classList.remove("seeking");
   });
 
+  /* ---------- what Back means -------------------------------
+     Telegram draws its own back button, wired below. In the Android
+     app Back is the system gesture, and by default it leaves the
+     app — mid-song, from the full screen, which is not what anyone
+     means by pressing it.
+
+     So everything that opens over the screen adds a history entry.
+     Back closes that first and only leaves the app once nothing is
+     open. The browser gets the same behaviour for free.
+
+     The stack is kept in step by hand rather than by routing every
+     close through history.back(), because closing by tap, by drag
+     and by Back all have to keep working, and each has to know
+     whether the entry it is unwinding is already gone.          */
+
+  const overlays = [];    // { el, close }, innermost last
+  let unwinding = false;  // inside a close that Back itself started
+  let ourPops = 0;        // popstate events we asked for and must swallow
+
+  function opened(el, close) {
+    overlays.push({ el, close });
+    try { history.pushState({ aarti: overlays.length }, ""); } catch (e) {}
+  }
+
+  function closed(el) {
+    const i = overlays.map((o) => o.el).lastIndexOf(el);
+    if (i < 0) return;            // never opened through here, or already gone
+    overlays.splice(i, 1);
+    if (unwinding) return;        // Back has already spent the entry
+    ourPops++;
+    try { history.back(); } catch (e) { ourPops--; }
+  }
+
+  window.addEventListener("popstate", () => {
+    if (ourPops > 0) { ourPops--; return; }   // our own tidying up
+    const top = overlays.pop();
+    if (!top) return;                         // nothing of ours left: let it go
+    unwinding = true;
+    try { top.close(); } finally { unwinding = false; }
+  });
+
   /* ---------- sheets ---------------------------------------- */
 
   const sheet = (el, on) => {
+    // Opening what is open, or closing what is shut, would push or
+    // spend a history entry for nothing.
+    if (!!on === el.classList.contains("open")) return;
+
     el.classList.toggle("open", on);
     el.setAttribute("aria-hidden", on ? "false" : "true");
-    // A sheet dragged halfway and released leaves --veil part-faded;
-    // without this the next open would start dim.
-    if (on) el.style.setProperty("--veil", "1");
+    if (on) {
+      // A sheet dragged halfway and released leaves --veil part-faded;
+      // without this the next open would start dim.
+      el.style.setProperty("--veil", "1");
+      opened(el, () => sheet(el, false));
+    } else {
+      closed(el);
+    }
   };
 
   // full screen
   const now = $("now");
   const openNow = () => {
+    if (now.classList.contains("open")) return;
     now.classList.add("open");
     now.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
     try { tg.BackButton.show(); } catch (e) {}
+    opened(now, closeNow);
   };
   const closeNow = () => {
+    if (!now.classList.contains("open")) return;
     now.classList.remove("open");
     now.setAttribute("aria-hidden", "true");
     document.body.classList.remove("locked");
     try { tg.BackButton.hide(); } catch (e) {}
+    closed(now);
   };
   $("miniOpen").addEventListener("click", openNow);
   $("mArt").addEventListener("click", openNow);
@@ -1180,28 +1273,128 @@
     sheet($("sleepSheet"), false);
   });
 
-  /* ---------- lock screen -----------------------------------
-     Puts the track on the phone's own media controls, so playback
-     survives the screen going off and the notification shows the
-     right song.                                                */
-  audio.addEventListener("loadedmetadata", () => {
-    const song = queue[index];
-    if (!song || !("mediaSession" in navigator)) return;
+  /* ---------- what the phone shows while it plays ------------
+     The notification, the lock screen, and on phones that have one
+     the capsule in the status bar, are all the same thing: a media
+     session the system knows about.
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.title,
-      artist: song.artist || "Aarti Music",
-      album: "Aarti Music",
-      artwork: [{ src: song.thumb, sizes: "480x360", type: "image/jpeg" }],
-    });
-    navigator.mediaSession.setActionHandler("play", () => audio.play());
-    navigator.mediaSession.setActionHandler("pause", () => audio.pause());
-    navigator.mediaSession.setActionHandler("nexttrack", next);
-    navigator.mediaSession.setActionHandler("previoustrack", () => playAt(index - 1));
-    navigator.mediaSession.setActionHandler("seekto", (d) => {
-      if (d.seekTime != null) audio.currentTime = d.seekTime;
-    });
+     In a browser or inside Telegram the Media Session API provides
+     it. In the Android app it does not exist — the WebView has no
+     implementation, so an <audio> tag playing in here is invisible
+     to the system: no notification, nothing on the lock screen, and
+     Android is free to stop the audio the moment the app goes to
+     the background. The native plugin supplies both halves, the
+     session and the foreground service that keeps playback alive.
+
+     Same five actions either way. The rest of the file calls `told`
+     and does not have to know which one answered.               */
+
+  const nativeMS = (function () {
+    try {
+      const c = window.Capacitor;
+      return c && c.isNativePlatform && c.isNativePlatform() &&
+             c.Plugins && c.Plugins.MediaSession ? c.Plugins.MediaSession : null;
+    } catch (e) { return null; }
+  })();
+  const webMS = "mediaSession" in navigator ? navigator.mediaSession : null;
+
+  const told = {
+    /* Native side needs the handlers before it will draw any
+       controls, and they never change, so they are set once. */
+    wired: false,
+
+    actions() {
+      if (this.wired) return;
+      this.wired = true;
+
+      const acts = {
+        play: () => audio.play().catch(() => {}),
+        pause: () => audio.pause(),
+        nexttrack: () => next(),
+        previoustrack: () => playAt(index - 1),
+        stop: () => { audio.pause(); audio.currentTime = 0; },
+        seekto: (d) => { if (d && d.seekTime != null) audio.currentTime = d.seekTime; },
+      };
+
+      for (const name in acts) {
+        if (nativeMS) {
+          try { nativeMS.setActionHandler({ action: name }, acts[name]); } catch (e) {}
+        } else if (webMS) {
+          // A browser that has never heard of an action throws rather
+          // than ignoring it, so each one stands alone.
+          try { webMS.setActionHandler(name, acts[name]); } catch (e) {}
+        }
+      }
+    },
+
+    metadata(song) {
+      if (!song) return;
+      const m = {
+        title: song.title || "Aarti Music",
+        artist: song.artist || "Aarti Music",
+        album: "Aarti Music",
+        artwork: [{ src: song.thumb, sizes: "480x360", type: "image/jpeg" }],
+      };
+      if (nativeMS) { try { nativeMS.setMetadata(m); } catch (e) {} return; }
+      if (webMS && window.MediaMetadata) {
+        try { webMS.metadata = new MediaMetadata(m); } catch (e) {}
+      }
+    },
+
+    /* The notification only appears once the session says it is
+       playing, so this is not decoration — it is what puts it on
+       screen and what takes it away again. */
+    state(playbackState) {
+      if (nativeMS) { try { nativeMS.setPlaybackState({ playbackState }); } catch (e) {} return; }
+      if (webMS) { try { webMS.playbackState = playbackState; } catch (e) {} }
+    },
+
+    /* Moves the seek bar in the notification. timeupdate fires four
+       times a second and this crosses the bridge, so it is sent at
+       most once a second and whenever the position jumps. */
+    sent: 0,
+    position(force) {
+      const d = audio.duration;
+      if (!isFinite(d) || d <= 0) return;
+      const now = Date.now();
+      if (!force && now - this.sent < 1000) return;
+      this.sent = now;
+
+      const p = { duration: d, position: Math.min(audio.currentTime, d), playbackRate: audio.playbackRate || 1 };
+      if (nativeMS) { try { nativeMS.setPositionState(p); } catch (e) {} return; }
+      if (webMS && webMS.setPositionState) { try { webMS.setPositionState(p); } catch (e) {} }
+    },
+  };
+
+  /* Android 13 hides every notification, a foreground service's
+     included, until notifications are allowed. Asked on the first
+     song rather than at startup, so the prompt turns up when it
+     means something — and never on a platform that has no such
+     permission to ask about. Declining costs nothing but the
+     notification; the music plays either way. */
+  let askedToNotify = false;
+  async function mayNotify() {
+    if (askedToNotify || !nativeMS) return;
+    askedToNotify = true;
+    try {
+      const ln = window.Capacitor.Plugins.LocalNotifications;
+      if (!ln) return;
+      const now = await ln.checkPermissions();
+      if (now && /^prompt/.test(now.display || "")) await ln.requestPermissions();
+    } catch (e) {}
+  }
+
+  audio.addEventListener("loadedmetadata", () => {
+    told.actions();
+    told.metadata(queue[index]);
+    told.position(true);
   });
+  audio.addEventListener("playing", () => {
+    told.state("playing"); told.position(true); mayNotify();
+  });
+  audio.addEventListener("pause", () => { told.state("paused"); told.position(true); });
+  audio.addEventListener("seeked", () => told.position(true));
+  audio.addEventListener("ratechange", () => told.position(true));
 
   /* ---------- start ----------------------------------------- */
 
@@ -1211,4 +1404,35 @@
   // never heard of these routes, which is every server today.
   pull().catch(() => {});
   tab("Home");
+
+  /* ---------- putting the lamp away -------------------------
+     The first screen is drawn by the time this runs, so the only
+     thing worth waiting for is the frame that shows it. A floor of
+     roughly a second keeps the lamp from blinking past on a fast
+     phone; the timeout is a promise that nothing here can ever
+     leave someone staring at it.                                */
+  (function dismissBoot() {
+    const boot = $("boot");
+    if (!boot) return;
+
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      boot.classList.add("gone");                 // taps pass through now
+      setTimeout(() => { boot.hidden = true; }, 500);
+    };
+
+    const LEAST = REDUCED ? 0 : 900;
+    const start = performance.now();
+    const settled = () => setTimeout(go, Math.max(0, LEAST - (performance.now() - start)));
+
+    // Two frames: one to lay the home screen out, one to paint it.
+    requestAnimationFrame(() => requestAnimationFrame(settled));
+    setTimeout(go, 4000);
+
+    // Someone who has already decided what they want should not have
+    // to watch the lamp finish. A touch anywhere skips it.
+    boot.addEventListener("pointerdown", go);
+  })();
 })();

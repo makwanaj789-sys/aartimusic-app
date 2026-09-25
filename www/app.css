@@ -1,3 +1,59 @@
+/* ==========================================================
+   THE TYPEFACE, KEPT IN THE APP
+
+   Sora used to be fetched from Google on every start. In a browser
+   that is one cached request; in an app on a phone it is a round
+   trip before any text can be trusted to be the right shape, it
+   fails outright with no signal, and it tells a third party every
+   time someone opens the player.
+
+   Four weights, latin and latin-ext, sitting in fonts/. The
+   unicode-range on each keeps the extended file unread unless a
+   name actually needs it. Devanagari was never in Sora and still
+   falls to the phone's own font, exactly as before.
+   ========================================================== */
+
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:300; font-display:swap;
+  src:url('fonts/sora-300-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:300; font-display:swap;
+  src:url('fonts/sora-300-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:400; font-display:swap;
+  src:url('fonts/sora-400-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:400; font-display:swap;
+  src:url('fonts/sora-400-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:600; font-display:swap;
+  src:url('fonts/sora-600-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:600; font-display:swap;
+  src:url('fonts/sora-600-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:700; font-display:swap;
+  src:url('fonts/sora-700-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family:'Sora'; font-style:normal; font-weight:700; font-display:swap;
+  src:url('fonts/sora-700-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ============================================================
    AARTI MUSIC
    Dark, thumb-sized, one screen at a time. Everything assumes a
@@ -646,4 +702,54 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce){
   .account.syncing .acc-dot,.link-wait span{ animation:none; }
+}
+
+/* ==========================================================
+   LIGHTING THE LAMP
+
+   What the first second looks like. The markup and the two
+   rules that have to be true on the first frame live inline in
+   index.html; everything that moves is here, because none of it
+   matters until a frame has already been painted.
+
+   The flame is scaled and rotated about its own base, never
+   resized, so the flicker costs nothing per frame.
+   ========================================================== */
+
+.boot-flame{ transform-origin:256px 296px; animation:flicker 2.6s ease-in-out infinite; }
+.boot-glow { transform-origin:256px 230px; animation:breathe 2.6s ease-in-out infinite; }
+
+@keyframes flicker{
+  0%,100%{ transform:scale(1,1)      rotate(0deg); }
+  18%    { transform:scale(.97,1.05) rotate(-1.4deg); }
+  37%    { transform:scale(1.03,.97) rotate(1.1deg); }
+  54%    { transform:scale(.98,1.04) rotate(.6deg); }
+  76%    { transform:scale(1.02,.99) rotate(-.8deg); }
+}
+@keyframes breathe{
+  0%,100%{ transform:scale(1);   opacity:.85; }
+  50%    { transform:scale(1.1); opacity:1; }
+}
+
+.boot-word{
+  margin:0; font-size:15px; font-weight:600; letter-spacing:.34em;
+  text-transform:uppercase; color:var(--mist,#8B7F76);
+  animation:bootWord 900ms 220ms cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes bootWord{
+  from{ opacity:0; transform:translateY(10px); }
+  to  { opacity:1; transform:none; }
+}
+
+/* Going: the whole thing lifts and thins at once. pointer-events is
+   dropped on the same frame the fade starts, so a tap during the
+   handover reaches the app underneath rather than the lamp. */
+#boot{ transition:opacity 420ms ease, transform 420ms cubic-bezier(.22,1,.36,1); }
+#boot.gone{ opacity:0; transform:scale(1.06); pointer-events:none; }
+#boot[hidden]{ display:none; }
+
+@media (prefers-reduced-motion:reduce){
+  .boot-flame, .boot-glow, .boot-word{ animation:none; }
+  #boot{ transition:opacity 160ms linear; }
+  #boot.gone{ transform:none; }
 }
