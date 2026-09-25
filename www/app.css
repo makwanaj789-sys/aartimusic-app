@@ -705,36 +705,51 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 }
 
 /* ==========================================================
-   LIGHTING THE LAMP
+   THE WAY IN
 
-   What the first second looks like. The markup and the two
-   rules that have to be true on the first frame live inline in
+   What the first second looks like. The markup and the two rules
+   that have to be true on the first frame live inline in
    index.html; everything that moves is here, because none of it
    matters until a frame has already been painted.
 
-   The flame is scaled and rotated about its own base, never
-   resized, so the flicker costs nothing per frame.
+   The mark is the launcher icon — a solid letterform, so it
+   settles rather than wobbles. What carries the motion is the
+   ember behind it, which is the one thing in the mark's own
+   colour that can move without the shape looking broken.
    ========================================================== */
 
-.boot-flame{ transform-origin:256px 296px; animation:flicker 2.6s ease-in-out infinite; }
-.boot-glow { transform-origin:256px 230px; animation:breathe 2.6s ease-in-out infinite; }
+.boot-stage{ position:relative; display:grid; place-items:center; }
 
-@keyframes flicker{
-  0%,100%{ transform:scale(1,1)      rotate(0deg); }
-  18%    { transform:scale(.97,1.05) rotate(-1.4deg); }
-  37%    { transform:scale(1.03,.97) rotate(1.1deg); }
-  54%    { transform:scale(.98,1.04) rotate(.6deg); }
-  76%    { transform:scale(1.02,.99) rotate(-.8deg); }
+.boot-glow{
+  position:absolute; width:320px; height:320px; border-radius:50%;
+  background:radial-gradient(circle, rgba(224,162,83,.42) 0%,
+                                     rgba(224,162,83,.16) 42%,
+                                     rgba(224,162,83,0) 70%);
+  animation:bootBloom 800ms cubic-bezier(.22,1,.36,1) both,
+            bootEmber 2.8s 800ms ease-in-out infinite;
 }
-@keyframes breathe{
-  0%,100%{ transform:scale(1);   opacity:.85; }
-  50%    { transform:scale(1.1); opacity:1; }
+@keyframes bootBloom{
+  from{ opacity:0; transform:scale(.55); }
+  to  { opacity:1; transform:scale(1); }
+}
+@keyframes bootEmber{
+  0%,100%{ transform:scale(1);    opacity:.82; }
+  50%    { transform:scale(1.14); opacity:1; }
+}
+
+.boot-mark{
+  position:relative;
+  animation:bootRise 760ms cubic-bezier(.16,1.02,.28,1) both;
+}
+@keyframes bootRise{
+  from{ opacity:0; transform:translateY(16px) scale(.9); }
+  to  { opacity:1; transform:none; }
 }
 
 .boot-word{
   margin:0; font-size:15px; font-weight:600; letter-spacing:.34em;
   text-transform:uppercase; color:var(--mist,#8B7F76);
-  animation:bootWord 900ms 220ms cubic-bezier(.22,1,.36,1) both;
+  animation:bootWord 900ms 260ms cubic-bezier(.22,1,.36,1) both;
 }
 @keyframes bootWord{
   from{ opacity:0; transform:translateY(10px); }
@@ -743,13 +758,14 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 
 /* Going: the whole thing lifts and thins at once. pointer-events is
    dropped on the same frame the fade starts, so a tap during the
-   handover reaches the app underneath rather than the lamp. */
+   handover reaches the app underneath rather than the mark. */
 #boot{ transition:opacity 420ms ease, transform 420ms cubic-bezier(.22,1,.36,1); }
 #boot.gone{ opacity:0; transform:scale(1.06); pointer-events:none; }
 #boot[hidden]{ display:none; }
 
 @media (prefers-reduced-motion:reduce){
-  .boot-flame, .boot-glow, .boot-word{ animation:none; }
+  .boot-glow, .boot-mark, .boot-word{ animation:none; }
   #boot{ transition:opacity 160ms linear; }
   #boot.gone{ transform:none; }
+}
 }
