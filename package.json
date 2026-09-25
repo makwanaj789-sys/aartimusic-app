@@ -2,9 +2,10 @@
   "name": "aarti-music",
   "version": "1.0.0",
   "private": true,
-  "description": "Aarti Music — Android app",
+  "description": "Aarti Music \u2014 Android app",
   "devDependencies": {
-    "@capacitor/cli": "^6.2.0"
+    "@capacitor/cli": "^6.2.0",
+    "@capacitor/assets": "^3.0.5"
   },
   "dependencies": {
     "@capacitor/core": "^6.2.0",
