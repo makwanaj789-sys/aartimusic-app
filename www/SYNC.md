@@ -3,6 +3,10 @@
 The app half is written and tested. This is the other half, which
 lives in the bot's codebase.
 
+> **Built.** `api/websync.py` and `jiosaavn/plugins/applink.py` in the
+> `aarti-music` repo implement everything below. This page stays as
+> the contract between the two — change one side and change this.
+
 **None of it is required.** Every route below may be missing. The app
 tries once at startup, gets a 404, and never asks again for the rest
 of the session — favourites keep working on the phone exactly as they
