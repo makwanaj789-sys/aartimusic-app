@@ -13,6 +13,8 @@
   --nav-h:60px; --mini-h:60px;
   --ease:cubic-bezier(.22,.61,.36,1);
   --out:cubic-bezier(.16,1,.3,1);
+  --spring:cubic-bezier(.34,1.56,.64,1);   /* overshoots, then settles */
+  --snap:cubic-bezier(.2,.9,.3,1);
 }
 
 html,body{ height:100%; }
@@ -304,4 +306,53 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 
 @media (prefers-reduced-motion: reduce){
   *{ animation-duration:.01ms !important; transition-duration:.01ms !important; }
+}
+
+
+/* ============================================================
+   TOUCH
+   Every tappable thing answers the finger: it sinks on press,
+   springs back on release, and an amber ripple leaves from the
+   point that was actually touched.
+
+   None of it can block a tap. The ripple layer is pointer-events
+   none and is a child of the target, so it never sits over the
+   thing it decorates, and the press class is applied on
+   pointerdown — after the browser has already decided where the
+   tap is going.
+   ============================================================ */
+.pressable{ position:relative; transition:transform .26s var(--spring); }
+.pressable.pressing{ transform:scale(.955); transition-duration:.08s; }
+/* Round controls sink a little further — there is less of them to
+   read the movement on. */
+.icon.pressing,.play.pressing,.nav button.pressing{ transform:scale(.88); }
+.row.pressing,.card.pressing{ transform:scale(.982); }
+
+/* A layer of its own, rather than overflow:hidden on the target —
+   .play has a spinner at inset:-4px that clipping would cut off. */
+.rip-layer{
+  position:absolute; inset:0; border-radius:inherit;
+  overflow:hidden; pointer-events:none; z-index:0;
+}
+.play .rip-layer,.icon .rip-layer,.nav button .rip-layer{ border-radius:50%; }
+.rip{
+  position:absolute; width:var(--r); height:var(--r);
+  left:var(--x); top:var(--y); margin:calc(var(--r) / -2);
+  border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle,
+    color-mix(in srgb,var(--flame) 55%,transparent) 0%,
+    color-mix(in srgb,var(--flame) 18%,transparent) 45%,
+    transparent 70%);
+  transform:scale(0); opacity:.9;
+  animation:rip .52s var(--out) forwards;
+}
+@keyframes rip{ to{ transform:scale(1); opacity:0; } }
+
+/* Keep button content above its own ripple. */
+.pressable > svg,.pressable > span,.pressable > b,
+.row > *,.card > *{ position:relative; z-index:1; }
+
+@media (prefers-reduced-motion: reduce){
+  .pressable,.pressable.pressing{ transform:none; }
+  .rip{ display:none; }
 }

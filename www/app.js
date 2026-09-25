@@ -63,7 +63,77 @@
     return m + ":" + String(Math.floor(s % 60)).padStart(2, "0");
   };
 
-  const buzz = (k) => { try { tg.HapticFeedback.impactOccurred(k || "light"); } catch (e) {} };
+  const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- haptics ---------------------------------------
+     Telegram's bridge where there is one; silence everywhere
+     else. Every call is wrapped because the bridge exists but
+     throws on desktop clients that have no haptic hardware. */
+  const buzz = (k) => {
+    try { tg.HapticFeedback.impactOccurred(k || "light"); } catch (e) {}
+  };
+  const buzzDone = (type) => {
+    try { tg.HapticFeedback.notificationOccurred(type || "success"); } catch (e) {}
+  };
+  const buzzPick = () => {
+    try { tg.HapticFeedback.selectionChanged(); } catch (e) {}
+  };
+
+  /* ---------- press and ripple ------------------------------
+     Delegated, so anything added to the DOM later is covered
+     without being registered. Everything here is decoration: it
+     runs on pointerdown, after the browser has already decided
+     which element the tap belongs to, and the ripple lives in a
+     pointer-events:none layer inside the target. A second tap
+     during an animation hits the element, not the ripple. */
+  const PRESSABLE = "button,.row,.card,.chip,.act,.queue-open,[data-press]";
+
+  function ripple(el, e) {
+    if (REDUCED) return;
+    let layer = el.querySelector(":scope > .rip-layer");
+    if (!layer) {
+      layer = document.createElement("span");
+      layer.className = "rip-layer";
+      el.appendChild(layer);
+    }
+    const box = el.getBoundingClientRect();
+    const size = Math.max(box.width, box.height) * 2.1;
+    const dot = document.createElement("span");
+    dot.className = "rip";
+    dot.style.setProperty("--r", size + "px");
+    dot.style.setProperty("--x", ((e.clientX || box.left + box.width / 2) - box.left) + "px");
+    dot.style.setProperty("--y", ((e.clientY || box.top + box.height / 2) - box.top) + "px");
+    layer.appendChild(dot);
+    dot.addEventListener("animationend", () => dot.remove(), { once: true });
+    // A dropped animationend (backgrounded tab, mid-flight removal)
+    // would otherwise leave the node behind for good.
+    setTimeout(() => dot.remove(), 900);
+  }
+
+  let pressed = null;
+  const release = () => {
+    if (pressed) pressed.classList.remove("pressing");
+    pressed = null;
+  };
+
+  document.addEventListener("pointerdown", (e) => {
+    const el = e.target.closest && e.target.closest(PRESSABLE);
+    if (!el || el.disabled) return;
+    el.classList.add("pressable", "pressing");
+    pressed = el;
+    ripple(el, e);
+  }, { passive: true });
+
+  ["pointerup", "pointercancel", "pointerleave"].forEach((ev) =>
+    document.addEventListener(ev, release, { passive: true })
+  );
+  // Scrolling away from a press should let go of it too.
+  document.addEventListener("scroll", release, { passive: true, capture: true });
+  /* Window-level blur only. A capture-phase blur listener fires
+     whenever focus moves between elements — including the blur the
+     press itself causes — which cancelled every press the moment
+     it started. */
+  window.addEventListener("blur", release);
 
   let toastTimer;
   function toast(msg) {
