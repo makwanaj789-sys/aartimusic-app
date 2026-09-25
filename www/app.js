@@ -1435,10 +1435,18 @@
       mine = false;
     }, { passive: true });
 
-    // Belt and braces: whatever ends the capture also ends the
-    // gesture, so nothing can be left holding it.
+    /* Belt and braces: whatever ends the capture also ends the
+       gesture, so nothing can be left holding it.
+
+       Only when it is this element losing it, though. A touch
+       pointer is implicitly captured by whatever it landed on the
+       moment it lands, so taking the capture here makes *that*
+       element lose it — and the event bubbles up through this one.
+       Treating that as the end of the gesture killed every swipe on
+       the second frame of movement, on every phone, while a mouse
+       (which has no implicit capture) went on working. */
     hit.addEventListener("lostpointercapture", (e) => {
-      if (e.pointerId !== id && id !== null) return;
+      if (e.target !== hit || e.pointerId !== id) return;
       id = null;
       if (gesture === "x") gesture = null;
       mine = false;

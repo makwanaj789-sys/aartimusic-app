@@ -322,7 +322,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
                 letter-spacing:.2em; text-transform:uppercase; color:var(--mist); }
 
 .cover{ flex:1; display:grid; place-items:center; padding:18px 0; min-height:0;
-        touch-action:pan-y; }
+        touch-action:none; }
 /* Holds the artwork and gives the grid something of its own size to
    centre. Nothing transforms it — a swipe changes the track, it does
    not drag the cover about. */
@@ -521,7 +521,14 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   background:var(--bg-2); border-radius:18px 18px 0 0;
   padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 16px);
   transform:translateY(100%); transition:transform .36s var(--snap);
-  will-change:transform; touch-action:pan-y;
+  will-change:transform;
+  /* The full screen is dragged down to close and the cover is swiped
+     sideways, so it keeps every gesture that lands on it. Left as
+     pan-y the browser treated a downward drag as a scroll it might
+     want, cancelled the pointer part-way, and the sheet never
+     closed — on a finger, though never on a mouse. Nothing in here
+     scrolls; the sheets that do are their own elements. */
+  touch-action:none;
 }
 .sheet.dragging .sheet-in{ transition:none; }
 .sheet.dragging{ transition:opacity .28s var(--ease), visibility .28s; }
