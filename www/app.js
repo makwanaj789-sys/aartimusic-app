@@ -1040,29 +1040,83 @@
     document.body.classList.remove("seeking");
   });
 
+  /* ---------- what Back means -------------------------------
+     Telegram draws its own back button, wired below. In the Android
+     app Back is the system gesture, and by default it leaves the
+     app — mid-song, from the full screen, which is not what anyone
+     means by pressing it.
+
+     So everything that opens over the screen adds a history entry.
+     Back closes that first and only leaves the app once nothing is
+     open. The browser gets the same behaviour for free.
+
+     The stack is kept in step by hand rather than by routing every
+     close through history.back(), because closing by tap, by drag
+     and by Back all have to keep working, and each has to know
+     whether the entry it is unwinding is already gone.          */
+
+  const overlays = [];    // { el, close }, innermost last
+  let unwinding = false;  // inside a close that Back itself started
+  let ourPops = 0;        // popstate events we asked for and must swallow
+
+  function opened(el, close) {
+    overlays.push({ el, close });
+    try { history.pushState({ aarti: overlays.length }, ""); } catch (e) {}
+  }
+
+  function closed(el) {
+    const i = overlays.map((o) => o.el).lastIndexOf(el);
+    if (i < 0) return;            // never opened through here, or already gone
+    overlays.splice(i, 1);
+    if (unwinding) return;        // Back has already spent the entry
+    ourPops++;
+    try { history.back(); } catch (e) { ourPops--; }
+  }
+
+  window.addEventListener("popstate", () => {
+    if (ourPops > 0) { ourPops--; return; }   // our own tidying up
+    const top = overlays.pop();
+    if (!top) return;                         // nothing of ours left: let it go
+    unwinding = true;
+    try { top.close(); } finally { unwinding = false; }
+  });
+
   /* ---------- sheets ---------------------------------------- */
 
   const sheet = (el, on) => {
+    // Opening what is open, or closing what is shut, would push or
+    // spend a history entry for nothing.
+    if (!!on === el.classList.contains("open")) return;
+
     el.classList.toggle("open", on);
     el.setAttribute("aria-hidden", on ? "false" : "true");
-    // A sheet dragged halfway and released leaves --veil part-faded;
-    // without this the next open would start dim.
-    if (on) el.style.setProperty("--veil", "1");
+    if (on) {
+      // A sheet dragged halfway and released leaves --veil part-faded;
+      // without this the next open would start dim.
+      el.style.setProperty("--veil", "1");
+      opened(el, () => sheet(el, false));
+    } else {
+      closed(el);
+    }
   };
 
   // full screen
   const now = $("now");
   const openNow = () => {
+    if (now.classList.contains("open")) return;
     now.classList.add("open");
     now.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
     try { tg.BackButton.show(); } catch (e) {}
+    opened(now, closeNow);
   };
   const closeNow = () => {
+    if (!now.classList.contains("open")) return;
     now.classList.remove("open");
     now.setAttribute("aria-hidden", "true");
     document.body.classList.remove("locked");
     try { tg.BackButton.hide(); } catch (e) {}
+    closed(now);
   };
   $("miniOpen").addEventListener("click", openNow);
   $("mArt").addEventListener("click", openNow);
