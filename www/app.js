@@ -672,25 +672,53 @@
 
   let lastLink = "";
 
-  function openTelegram(url, bot, start) {
-    try { tg.openTelegramLink(url); return; } catch (e) {}
+  /* Leaving the app, wherever the app happens to be.
+
+     Inside Telegram the bridge does it properly. Outside, the
+     WebView is all we have: an app's own scheme goes straight to
+     it through an Android intent, and if nothing answers, the https
+     link — which the system hands to a browser and the browser
+     hands back to the app — is the second try. The two are
+     attempted in that order rather than together, because firing
+     both opens two things.                                       */
+
+  function openOutside(url, deep) {
+    if (tg) {
+      try {
+        if (/\/\/t\.me\//.test(url)) tg.openTelegramLink(url);
+        else tg.openLink(url);
+        return;
+      } catch (e) {}
+    }
+
+    const away = () => {
+      try { window.open(url, "_blank"); }
+      catch (e) { try { window.location.href = url; } catch (e2) {} }
+    };
+
+    /* An app's own scheme is only worth trying where an app could
+       answer it. In a browser it is a navigation that can only fail,
+       and eight hundred milliseconds of waiting for it to. */
+    if (!deep || !window.Capacitor || !window.Capacitor.isNativePlatform ||
+        !window.Capacitor.isNativePlatform()) return away();
 
     let gone = false;
     const leaving = () => { gone = true; };
     document.addEventListener("visibilitychange", leaving, { once: true });
     window.addEventListener("pagehide", leaving, { once: true });
 
-    try {
-      window.location.href = "tg://resolve?domain=" + encodeURIComponent(bot) +
-        "&start=" + encodeURIComponent(start);
-    } catch (e) {}
+    try { window.location.href = deep; } catch (e) {}
 
     setTimeout(() => {
       document.removeEventListener("visibilitychange", leaving);
-      if (gone || document.hidden) return;   // Telegram took it
-      try { window.open(url, "_blank"); }
-      catch (e) { try { window.location.href = url; } catch (e2) {} }
+      if (gone || document.hidden) return;   // the app took it
+      away();
     }, 800);
+  }
+
+  function openTelegram(url, bot, start) {
+    openOutside(url, "tg://resolve?domain=" + encodeURIComponent(bot) +
+                     "&start=" + encodeURIComponent(start));
   }
 
   async function copyLink() {
@@ -866,9 +894,93 @@
     markRows();
   }
 
+  /* ---------- the light in the room -------------------------
+     One colour, taken from the artwork, is what lights the full
+     screen: the pool behind the cover, and the colour the cover
+     casts onto what is under it. The palette is unchanged — the
+     controls stay amber — but the light around them belongs to
+     whatever is playing.
+
+     Reading pixels back from an image the host will not share
+     throws, so every step falls back to the amber the app already
+     used rather than failing. The answer is kept, because the same
+     cover comes round again.                                    */
+
+  const AMBER = "224,162,83";
+  const litBy = new Map();
+
+  function lightFrom(src) {
+    if (!src) return Promise.resolve(AMBER);
+    if (litBy.has(src)) return Promise.resolve(litBy.get(src));
+
+    return new Promise((done) => {
+      const finish = (v) => { litBy.set(src, v); done(v); };
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onerror = () => finish(AMBER);
+      img.onload = () => {
+        try {
+          const N = 14;                       // enough to find a colour
+          const c = document.createElement("canvas");
+          c.width = c.height = N;
+          const g = c.getContext("2d", { willReadFrequently: true });
+          g.drawImage(img, 0, 0, N, N);
+          const d = g.getImageData(0, 0, N, N).data;
+
+          let r = 0, gr = 0, b = 0, w = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            const R = d[i], G = d[i + 1], B = d[i + 2];
+            const hi = Math.max(R, G, B), lo = Math.min(R, G, B);
+            if (hi < 32 || hi > 246) continue;          // black, or blown out
+            const sat = (hi - lo) / hi;
+            if (sat < 0.12) continue;                    // grey carries no light
+            // A colour counts for more the more of a colour it is.
+            const k = sat * sat * (hi / 255);
+            r += R * k; gr += G * k; b += B * k; w += k;
+          }
+          if (!w) return finish(AMBER);
+
+          // Lifted to an even brightness, so a dark cover still
+          // lights the room and a bright one does not flood it.
+          let out = [r / w, gr / w, b / w];
+          const lift = 208 / Math.max(1, Math.max(out[0], out[1], out[2]));
+          out = out.map((n) => Math.min(255, Math.round(n * lift)));
+          finish(out.join(","));
+        } catch (e) {
+          finish(AMBER);                      // the canvas was tainted
+        }
+      };
+      img.src = src;
+    });
+  }
+
+  function relight(song) {
+    const lit = $("nowLit");
+    if (lit) lit.classList.add("dimming");
+    lightFrom(song && song.thumb).then((rgb) => {
+      document.documentElement.style.setProperty("--lit", rgb);
+      if (lit) requestAnimationFrame(() => lit.classList.remove("dimming"));
+    });
+  }
+
+  /* The new cover arrives rather than being swapped out from under
+     you: hidden the instant the track changes, faded up once it has
+     actually loaded. Opacity only, and a timeout so a picture that
+     never loads cannot leave an empty square. */
+  function setArt(el, src) {
+    if (!el || el.getAttribute("src") === src) return;
+    el.classList.add("swapping");
+    const show = () => el.classList.remove("swapping");
+    el.addEventListener("load", show, { once: true });
+    el.addEventListener("error", show, { once: true });
+    el.src = src;
+    setTimeout(show, 900);
+  }
+
   function paint(song) {
-    $("mArt").src = song.thumb;
-    $("nArt").src = song.thumb;
+    setArt($("mArt"), song.thumb);
+    setArt($("nArt"), song.thumb);
+    relight(song);
     $("nowBg").style.backgroundImage = 'url("' + song.thumb + '")';
     $("mTitle").textContent = song.title;
     $("nTitle").textContent = song.title;
@@ -1238,142 +1350,111 @@
      than just not happening.                                  */
 
   /* ---------- swiping to change song ------------------------
-     Left for the next one, right for the one before. The surface
-     follows the finger, and on release either flies out and the
-     new one comes in from the other side, or springs back.
+     Left for the next one, right for the one before.
+
+     Nothing moves with the finger and nothing slides away. The
+     gesture is recognised, the track changes, and the new cover
+     arrives on its own — a card sliding off costs two hundred
+     milliseconds that the change itself does not need, and the
+     whole point of a swipe here is that it is faster than
+     reaching for the button.
 
      Used twice: the cover on the full screen, and the strip along
-     the bottom. Both want the same gesture, and the strip is where
-     the hand already is most of the time.
+     the bottom, which is where the hand already is.           */
 
-     `hit` is what listens and `surface` is what moves: mid-flight
-     the surface is off the side of the screen, and a second swipe
-     has to land where the first one started rather than on empty
-     space.                                                      */
-
-  function swipeToChange(hit, surface, opts) {
-    if (!hit || !surface) return;
+  function swipeToSkip(hit, opts) {
+    if (!hit) return;
     const o = opts || {};
-    const OUT = 120;                    // per cent of its own width
-    let id = null, x0 = 0, y0 = 0, t0 = 0, dx = 0, mine = false, busy = false;
-    let settling = 0;
-
-    const canGo = (dir) => (dir < 0 ? nextIndex() >= 0 : index > 0);
-    const setX = (v) => { surface.style.transform = "translateX(" + v.toFixed(1) + "px)"; };
-    const loose = () => { surface.style.transition = ""; };
-
-    function settle() {
-      surface.style.transition = "transform 320ms var(--spring, cubic-bezier(.22,1,.36,1))";
-      setX(0);
-      // Left as a bare translateX(0) it would keep a compositor
-      // layer and an inline style it no longer needs.
-      clearTimeout(settling);
-      settling = setTimeout(() => { loose(); surface.style.transform = ""; }, 340);
-    }
-
-    /* Out one way, in from the other. The track changes at the far
-       end of the first half, so what comes back is already the new
-       one. */
-    function commit(dir) {
-      const go = () => { if (dir < 0) next(); else playAt(index - 1); };
-      if (REDUCED) { surface.style.transform = ""; go(); return; }
-
-      busy = true;
-      surface.style.transition = "transform 190ms ease-out, opacity 190ms ease-out";
-      surface.style.transform = "translateX(" + (dir < 0 ? -OUT : OUT) + "%)";
-      surface.style.opacity = "0";
-
-      setTimeout(() => {
-        go();
-        surface.style.transition = "none";
-        surface.style.transform = "translateX(" + (dir < 0 ? OUT : -OUT) + "%)";
-        // Read something back so the jump is its own frame.
-        void surface.offsetWidth;
-        surface.style.transition =
-          "transform 300ms var(--spring, cubic-bezier(.22,1,.36,1)), opacity 200ms ease";
-        surface.style.transform = "";
-        surface.style.opacity = "1";
-        setTimeout(() => {
-          loose(); surface.style.transform = ""; surface.style.opacity = ""; busy = false;
-        }, 320);
-      }, 190);
-    }
+    const NEED = o.threshold || 64;   // px of travel before it counts
+    let id = null, x0 = 0, y0 = 0, t0 = 0, mine = false, spent = false;
 
     hit.addEventListener("dragstart", (e) => e.preventDefault());
+
+    function skip(dx) {
+      spent = true;                   // one gesture, one track, ever
+      buzzPick();
+      if (o.onTaken) o.onTaken();
+      if (dx < 0) next(); else playAt(index - 1);
+    }
 
     hit.addEventListener("pointerdown", (e) => {
       if (o.when && !o.when()) return;
       if (o.skip && e.target.closest && e.target.closest(o.skip)) return;
-      // A swipe landing mid-flight wins: stop the old one rather
-      // than making anyone wait for it.
-      if (busy) { busy = false; loose(); surface.style.opacity = ""; }
-      clearTimeout(settling);
       id = e.pointerId; x0 = e.clientX; y0 = e.clientY; t0 = e.timeStamp;
-      dx = 0; mine = false;
+      mine = false; spent = false;
     }, { passive: true });
 
     hit.addEventListener("pointermove", (e) => {
-      if (e.pointerId !== id) return;
-      dx = e.clientX - x0;
+      if (e.pointerId !== id || spent) return;
+      const dx = e.clientX - x0;
       const dy = e.clientY - y0;
 
       if (!mine) {
-        if (gesture === "y") { id = null; return; }   // dragging to close
-        if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+        // The full screen drags down to close from these same
+        // pixels. A gesture that is mostly vertical is theirs, and
+        // must stay theirs — sideways has to be clearly sideways.
+        if (gesture === "y") { id = null; return; }
+        if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
         mine = true;
         gesture = "x";
-        loose();
-        /* Taken only now, not on the way down. A swipe to the edge
-           of the screen carries the finger off the surface, and
-           without capture the gesture ends half-finished. But a
-           captured pointer also delivers its click to the capturing
-           element, which would stop a plain tap on the strip from
-           reaching the thing that opens the full screen. */
+        /* Taken now, not on the way down. A swipe carries the finger
+           off the cover and often off the screen, and without this
+           the release is never heard — which leaves the gesture
+           marked as this one's for the rest of the session, and the
+           drag that closes the full screen silently stops working.
+
+           Not on pointerdown, because a captured pointer delivers
+           its click to whatever captured it, and the strip below
+           has to stay tappable. */
         try { hit.setPointerCapture(e.pointerId); } catch (err) {}
       }
-      setX(canGo(dx) ? dx : dx / 4);
+
+      // The moment it is far enough, it has happened. Waiting for
+      // the finger to lift is what makes a swipe feel sluggish.
+      if (Math.abs(dx) >= NEED) skip(dx);
     }, { passive: true });
 
     const finish = (e) => {
       if (e.pointerId !== id) return;
       id = null;
-      if (!mine) return;
-      mine = false;
       if (gesture === "x") gesture = null;
-
-      const dt = Math.max(1, e.timeStamp - t0);
-      const speed = Math.abs(dx) / dt;
-      const far = Math.abs(dx) > (o.threshold || 70);
-      const flung = speed > 0.5 && Math.abs(dx) > 24;
-
-      // A swipe is not a tap, and the strip underneath opens the
-      // full screen when tapped.
-      if (o.onTaken) o.onTaken();
-
-      if ((far || flung) && canGo(dx)) { buzzPick(); commit(dx); return; }
-      settle();
+      // A quick flick is a swipe even when it barely travelled.
+      if (mine && !spent) {
+        const dx = e.clientX - x0;
+        const dt = Math.max(1, e.timeStamp - t0);
+        if (Math.abs(dx) / dt > 0.5 && Math.abs(dx) > 24) skip(dx);
+      }
+      mine = false;
     };
 
     hit.addEventListener("pointerup", finish, { passive: true });
     hit.addEventListener("pointercancel", (e) => {
       if (e.pointerId !== id) return;
       id = null;
-      if (mine && gesture === "x") gesture = null;
+      if (gesture === "x") gesture = null;
       mine = false;
-      settle();
     }, { passive: true });
+
+    // Belt and braces: whatever ends the capture also ends the
+    // gesture, so nothing can be left holding it.
+    hit.addEventListener("lostpointercapture", (e) => {
+      if (e.pointerId !== id && id !== null) return;
+      id = null;
+      if (gesture === "x") gesture = null;
+      mine = false;
+    });
   }
 
   // The cover on the full screen.
-  swipeToChange($("coverSwipe") && $("coverSwipe").parentElement, $("coverSwipe"),
-                { when: () => now.classList.contains("open") });
+  swipeToSkip($("coverSwipe") && $("coverSwipe").parentElement,
+              { when: () => now.classList.contains("open") });
 
   /* The strip along the bottom. Its buttons are left alone — a
      finger that starts on play or the heart means that button —
      and a swipe there must not also count as the tap that opens
      the full screen. */
   let swipedAt = 0;
-  swipeToChange($("mini"), $("miniIn"), {
+  swipeToSkip($("mini"), {
     skip: "button",
     onTaken: () => { swipedAt = Date.now(); },
   });
@@ -1588,6 +1669,19 @@
   audio.addEventListener("pause", () => { told.state("paused"); told.position(true); });
   audio.addEventListener("seeked", () => told.position(true));
   audio.addEventListener("ratechange", () => told.position(true));
+
+  /* ---------- whose app this is -----------------------------
+     A line at the end of the library rather than a screen of its
+     own. Both open outside the app: an app link first, the web
+     page if that finds nothing.                                */
+
+  document.querySelectorAll(".handle").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      buzz();
+      openOutside(a.getAttribute("href"), a.dataset.app || "");
+    });
+  });
 
   /* ---------- start ----------------------------------------- */
 
