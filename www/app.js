@@ -439,15 +439,39 @@
     })
   );
 
+  /* Finding something without scrolling for it. Title and artist,
+     because half of what anyone remembers is who sang it. */
+  let libFind = "";
+
   function drawLib() {
     accState();
-    const list = libView === "favs" ? store.favs : store.recents;
+    const all = libView === "favs" ? store.favs : store.recents;
+    const q = libFind.trim().toLowerCase();
+    const list = q
+      ? all.filter((s) =>
+          (s.title || "").toLowerCase().includes(q) ||
+          (s.artist || "").toLowerCase().includes(q))
+      : all;
+
+    $("libFindClear").hidden = !libFind;
     $("libEmpty").hidden = list.length > 0;
-    $("libEmpty").querySelector("h3").textContent =
-      libView === "favs" ? "Nothing saved" : "Nothing played yet";
-    $("libEmpty").querySelector("p").textContent =
-      libView === "favs" ? "Tap the heart on any song to keep it here."
-                         : "Songs you play show up here.";
+
+    if (q && !list.length) {
+      $("libEmpty").querySelector("h3").textContent = "Nothing matches";
+      $("libEmpty").querySelector("p").textContent = "Try a different word.";
+    } else {
+      $("libEmpty").querySelector("h3").textContent =
+        libView === "favs" ? "Nothing saved" : "Nothing played yet";
+      $("libEmpty").querySelector("p").textContent =
+        libView === "favs" ? "Tap the heart on any song to keep it here."
+                           : "Songs you play show up here.";
+    }
+
+    // The field is only worth showing once there is enough to look
+    // through — on an empty library it is one more thing in the way.
+    const find = document.querySelector("#pLib .find");
+    if (find) find.hidden = all.length < 6 && !libFind;
+
     fill($("libRows"), list);
   }
 
@@ -1708,6 +1732,17 @@
   audio.addEventListener("pause", () => { told.state("paused"); told.position(true); });
   audio.addEventListener("seeked", () => told.position(true));
   audio.addEventListener("ratechange", () => told.position(true));
+
+  $("libFind").addEventListener("input", (e) => {
+    libFind = e.target.value;
+    drawLib();
+  });
+  $("libFindClear").addEventListener("click", () => {
+    libFind = "";
+    $("libFind").value = "";
+    $("libFind").focus();
+    drawLib();
+  });
 
   /* ---------- whose app this is -----------------------------
      A line at the end of the library rather than a screen of its

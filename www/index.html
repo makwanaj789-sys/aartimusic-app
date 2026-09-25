@@ -114,6 +114,16 @@ html, body { background:#0A0908; margin:0; }
     <button data-lib="recents">History</button>
   </div>
 
+  <!-- Finding something in a long library without scrolling it. -->
+  <div class="find">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+    <input id="libFind" type="search" inputmode="search" autocomplete="off"
+           placeholder="Find in your library" aria-label="Find in your library">
+    <button id="libFindClear" class="find-x" aria-label="Clear" hidden>
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+
   <div class="rows" id="libRows"></div>
   <div class="empty" id="libEmpty" hidden>
     <div class="art">🤍</div>

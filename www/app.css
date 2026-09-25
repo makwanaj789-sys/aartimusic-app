@@ -414,6 +414,30 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 .now-ctrls .small{ width:40px; height:40px; padding:9px; color:var(--mist); }
 .now-ctrls .small svg{ fill:none; stroke:currentColor; }
 .now-ctrls .small.on{ color:var(--flame); }
+/* ---------- finding something in the library --------------- */
+
+.find{
+  display:flex; align-items:center; gap:9px;
+  margin:0 0 12px; padding:0 12px; height:40px;
+  border-radius:12px; border:1px solid var(--line);
+  background:color-mix(in srgb,var(--bg-2) 70%,transparent);
+}
+.find[hidden]{ display:none; }
+.find svg{ width:16px; height:16px; flex:none; color:var(--mist);
+           fill:none; stroke:currentColor; stroke-width:1.9;
+           stroke-linecap:round; }
+.find input{
+  flex:1; min-width:0; background:none; border:0; outline:none;
+  color:var(--ink); font:inherit; font-size:13.5px;
+}
+.find input::placeholder{ color:color-mix(in srgb,var(--mist) 75%,transparent); }
+/* Safari and Chrome both draw their own clear button on a search
+   field, and it is not the one below. */
+.find input::-webkit-search-cancel-button{ display:none; }
+.find-x{ width:26px; height:26px; padding:5px; border-radius:50%; color:var(--mist); }
+.find-x[hidden]{ display:none; }
+.find:focus-within{ border-color:color-mix(in srgb,var(--flame) 55%,transparent); }
+
 /* ==========================================================
    WHOSE APP THIS IS
 
