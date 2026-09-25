@@ -619,6 +619,61 @@
     if (!silent) toast("Disconnected");
   }
 
+  /* ---------- getting to Telegram --------------------------
+     Inside Telegram the bridge opens the chat properly. The
+     standalone APK has no bridge: the tg:// scheme reaches the
+     installed app directly through an Android intent, and if
+     nothing answers it the https link — which the system gives to
+     a browser, and the browser gives back to Telegram — is the
+     second try. The two are attempted in that order rather than
+     together, because firing both opens two things.
+
+     If neither lands the sheet still offers the link to copy, so
+     a phone without Telegram installed is never a dead end. */
+
+  let lastLink = "";
+
+  function openTelegram(url, bot, start) {
+    try { tg.openTelegramLink(url); return; } catch (e) {}
+
+    let gone = false;
+    const leaving = () => { gone = true; };
+    document.addEventListener("visibilitychange", leaving, { once: true });
+    window.addEventListener("pagehide", leaving, { once: true });
+
+    try {
+      window.location.href = "tg://resolve?domain=" + encodeURIComponent(bot) +
+        "&start=" + encodeURIComponent(start);
+    } catch (e) {}
+
+    setTimeout(() => {
+      document.removeEventListener("visibilitychange", leaving);
+      if (gone || document.hidden) return;   // Telegram took it
+      try { window.open(url, "_blank"); }
+      catch (e) { try { window.location.href = url; } catch (e2) {} }
+    }, 800);
+  }
+
+  async function copyLink() {
+    if (!lastLink) return;
+    try {
+      await navigator.clipboard.writeText(lastLink);
+      buzzDone("success");
+      toast("Link copied — paste it in any browser");
+      return;
+    } catch (e) {}
+    /* No clipboard permission in this WebView. A selected, readable
+       link the person can long-press is still better than nothing. */
+    $("linkCopy").textContent = lastLink;
+    try {
+      const rng = document.createRange();
+      rng.selectNodeContents($("linkCopy"));
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(rng);
+    } catch (e) {}
+    toast("Long-press the link to copy it");
+  }
+
   async function startLink() {
     const r = await sync("/api/link/start", { method: "POST" });
     if (!r || !r.nonce) {
@@ -626,12 +681,17 @@
       sheet($("linkSheet"), false);
       return;
     }
-    const url = r.url || ("https://t.me/" + (r.bot || "AartiMusic_bot") + "?start=link_" + r.nonce);
+    const named = /t\.me\/([A-Za-z0-9_]+)/.exec(r.url || "");
+    const bot = r.bot || (named && named[1]) || "AartiMusic_bot";
+    const start = "link_" + r.nonce;
+    const url = r.url || ("https://t.me/" + bot + "?start=" + encodeURIComponent(start));
     $("linkWait").hidden = false;
     $("linkGo").textContent = "Open Telegram again";
     $("linkCopy").textContent = "Waiting for Telegram. Tap Start in the chat, then come back.";
 
-    try { tg.openTelegramLink(url); } catch (e) { window.open(url, "_blank"); }
+    openTelegram(url, bot, start);
+    lastLink = url;
+    $("linkAlt").hidden = false;
 
     // Poll rather than hold a socket open: the round trip is a
     // person switching apps, and this has to survive the app being
@@ -698,12 +758,14 @@
     buzz();
     if (store.link) { unlink(); return; }
     $("linkWait").hidden = true;
+    $("linkAlt").hidden = true;
     $("linkGo").textContent = "Open Telegram";
     $("linkCopy").textContent =
       "Your favourites will follow you to any phone, and match what the bot already knows.";
     sheet($("linkSheet"), true);
   });
   $("linkGo").addEventListener("click", () => { buzz(); startLink().catch(() => {}); });
+  $("linkAlt").addEventListener("click", () => { buzz(); copyLink(); });
   $("linkCancel").addEventListener("click", () => {
     clearTimeout(pollTimer);
     sheet($("linkSheet"), false);

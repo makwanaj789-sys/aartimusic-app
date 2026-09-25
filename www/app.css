@@ -350,6 +350,8 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
       font-size:14.5px; border-bottom:1px solid var(--line); }
 .act:last-child{ border-bottom:0; }
 .act.ghost{ color:var(--mist); }
+/* .act sets display:block, which outranks the UA's [hidden] rule. */
+.act[hidden]{ display:none; }
 
 /* ============================================================
    TOAST
