@@ -249,14 +249,12 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
   background:var(--bg-3); border-top:1px solid var(--line);
   /* The strip swipes sideways to change song, so it keeps the
-     horizontal axis and hands the vertical one back to the page.
-     overflow hides the row on its way out rather than letting it
-     widen the screen. */
+     horizontal axis and hands the vertical one back to the page. */
   touch-action:pan-y; overflow:hidden;
 }
 .bar{ position:relative; height:2px; background:var(--line); overflow:hidden; }
 .mini-in{ display:grid; grid-template-columns:40px 1fr auto auto; gap:10px;
-          align-items:center; padding:8px 12px; will-change:transform; }
+          align-items:center; padding:8px 12px; }
 .mini-in img{ width:40px; height:40px; border-radius:7px; object-fit:cover; background:var(--bg); }
 .mini-in .meta{ min-width:0; cursor:pointer; }
 .meta .t{ font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -325,10 +323,10 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 
 .cover{ flex:1; display:grid; place-items:center; padding:18px 0; min-height:0;
         touch-action:pan-y; }
-/* The wrapper is what the swipe moves; the img underneath keeps
-   breathing. Sized by its content so the grid still centres it. */
-.cover-swipe{ display:grid; place-items:center; min-height:0; max-height:100%;
-              will-change:transform; }
+/* Holds the artwork and gives the grid something of its own size to
+   centre. Nothing transforms it — a swipe changes the track, it does
+   not drag the cover about. */
+.cover-swipe{ display:grid; place-items:center; min-height:0; max-height:100%; }
 .cover img{
   width:min(76vw,44vh); aspect-ratio:1; object-fit:cover; border-radius:14px;
   box-shadow:0 30px 60px -20px rgba(0,0,0,.8);

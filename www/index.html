@@ -174,9 +174,8 @@ html, body { background:#0A0908; margin:0; }
       </button>
     </header>
 
-    <!-- The img carries the breathing animation, so the swipe moves
-         the wrapper around it: an animation outranks an inline
-         transform, and the two would fight over the same property. -->
+    <!-- The wrapper is what the gesture listens through; the img
+         underneath keeps breathing. -->
     <div class="cover"><div class="cover-swipe" id="coverSwipe"><img id="nArt" alt=""></div></div>
 
     <div class="now-meta">
