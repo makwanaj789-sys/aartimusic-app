@@ -285,9 +285,30 @@
     return row;
   }
 
+  /* Rows arrive one after another rather than all at once. The
+     delay is capped, because a 30-row library staggered at the
+     full rate would still be arriving a second later.
+
+     The class is stripped once the animation ends. animation-fill-
+     mode:both keeps the final transform applied, and an applied
+     transform outranks the press-scale — leaving it on would mean
+     a row could never be pressed again. */
+  function stagger(row, i) {
+    if (REDUCED) return row;
+    row.style.setProperty("--i", Math.min(i, 12));
+    row.classList.add("stagger");
+    row.addEventListener("animationend", function done(e) {
+      if (e.animationName !== "rowIn") return;
+      row.classList.remove("stagger");
+      row.style.removeProperty("--i");
+      row.removeEventListener("animationend", done);
+    });
+    return row;
+  }
+
   function fill(box, list) {
     box.innerHTML = "";
-    list.forEach((song, i) => box.appendChild(rowFor(song, list, i)));
+    list.forEach((song, i) => box.appendChild(stagger(rowFor(song, list, i), i)));
   }
 
   /* ---------- home ------------------------------------------ */
@@ -315,6 +336,7 @@
       const t = document.createElement("div");
       t.className = "t"; t.textContent = song.title;
       card.append(img, t);
+      stagger(card, i);
       card.addEventListener("click", () => {
         queue = store.recents.slice();
         playAt(i);

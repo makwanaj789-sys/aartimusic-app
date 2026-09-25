@@ -532,3 +532,30 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
   .icon.popping svg{ animation:none; }
   .spark{ display:none; }
 }
+
+
+/* ============================================================
+   ARRIVING
+   ============================================================ */
+.stagger{
+  animation:rowIn .44s var(--out) both;
+  animation-delay:calc(var(--i,0) * 30ms);
+}
+@keyframes rowIn{
+  from{ opacity:0; transform:translateY(12px); }
+  to  { opacity:1; transform:none; }
+}
+
+/* Tabs cross-fade with a short slide, so switching reads as
+   movement between two places rather than a repaint. [hidden] is
+   display:none, and leaving it restarts the animation on its own —
+   no class juggling needed. */
+.page{ animation:pageIn .34s var(--out) both; }
+@keyframes pageIn{
+  from{ opacity:0; transform:translateY(10px); }
+  to  { opacity:1; transform:none; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .stagger,.page{ animation:none; }
+}
