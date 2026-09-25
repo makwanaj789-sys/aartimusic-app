@@ -1150,6 +1150,14 @@
      own vertical movement. */
   const DRAG_SKIP = "button,input,.seek-rail,.rows,.rail";
 
+  /* ---------- one gesture at a time -------------------------
+     The full screen drags down to close and the cover swipes
+     sideways to change song. Both start from the same finger on
+     the same pixels, so whichever recognises its own direction
+     first owns the gesture until that finger lifts, and the other
+     stands down rather than both moving at once.              */
+  let gesture = null;                     // "x" | "y" | null
+
   function draggable(el, onClose, opts) {
     const o = opts || {};
     const surface = o.surface || el;
@@ -1177,8 +1185,10 @@
       // Wait for a clear vertical intent before taking the gesture,
       // so a tap that wobbles a pixel is still a tap.
       if (!live) {
+        if (gesture === "x") return;      // the cover has this one
         if (dy < 6) return;
         live = true;
+        gesture = "y";
         el.classList.add("dragging");
       }
       // Upward is resisted rather than blocked — the surface is
@@ -1200,17 +1210,141 @@
       surface.style.transform = "";
       if (o.onDrag) o.onDrag(0);
       live = false;
+      if (gesture === "y") gesture = null;
       if (far || flung) onClose();
     };
     el.addEventListener("pointerup", finish, { passive: true });
     el.addEventListener("pointercancel", (e) => {
       if (e.pointerId !== id) return;
       id = null; live = false; clear();
+      if (gesture === "y") gesture = null;
       if (o.onDrag) o.onDrag(0);
     }, { passive: true });
   }
 
   draggable(now, closeNow, { threshold: 120 });
+
+  /* ---------- swiping the cover to change song --------------
+     Left for the next one, right for the one before. The cover
+     follows the finger, and on release either flies out and the
+     new one comes in from the other side, or springs back.
+
+     At the ends of the queue the drag is damped to a quarter
+     instead of being ignored: the edge should be felt rather
+     than just not happening.                                  */
+
+  (function coverSwipe() {
+    const el = $("coverSwipe");
+    if (!el) return;
+    /* The listeners go on the frame, not on the thing that moves.
+       Mid-flight the cover is off the side of the screen, and a
+       second swipe has to land where the first one started rather
+       than on empty space. */
+    const hit = el.parentElement;
+
+    const OUT = 120;                    // per cent of its own width
+    let id = null, x0 = 0, y0 = 0, t0 = 0, dx = 0, mine = false, busy = false;
+
+    const canGo = (dir) =>
+      dir < 0 ? nextIndex() >= 0 : index > 0;
+
+    const setX = (v) => { el.style.transform = "translateX(" + v.toFixed(1) + "px)"; };
+    const loose = () => { el.style.transition = ""; };
+    let settling = 0;
+
+    function settle() {
+      el.style.transition = "transform 320ms var(--spring, cubic-bezier(.22,1,.36,1))";
+      setX(0);
+      // Left as a bare translateX(0) the cover would keep a
+      // will-change layer and an inline style it no longer needs.
+      clearTimeout(settling);
+      settling = setTimeout(() => { loose(); el.style.transform = ""; }, 340);
+    }
+
+    /* Out one way, in from the other. The track change happens at
+       the far end of the first half, so the cover that comes back
+       is already the new one. */
+    function commit(dir) {
+      const go = () => { if (dir < 0) next(); else playAt(index - 1); };
+      if (REDUCED) { el.style.transform = ""; go(); return; }
+
+      busy = true;
+      el.style.transition = "transform 190ms ease-out, opacity 190ms ease-out";
+      el.style.transform = "translateX(" + (dir < 0 ? -OUT : OUT) + "%)";
+      el.style.opacity = "0";
+
+      setTimeout(() => {
+        go();
+        el.style.transition = "none";
+        el.style.transform = "translateX(" + (dir < 0 ? OUT : -OUT) + "%)";
+        // Read something back so the jump is a separate frame from
+        // the animation that follows it.
+        void el.offsetWidth;
+        el.style.transition = "transform 300ms var(--spring, cubic-bezier(.22,1,.36,1)), opacity 200ms ease";
+        el.style.transform = "";
+        el.style.opacity = "1";
+        setTimeout(() => {
+          loose(); el.style.transform = ""; el.style.opacity = ""; busy = false;
+        }, 320);
+      }, 190);
+    }
+
+    hit.addEventListener("dragstart", (e) => e.preventDefault());
+
+    hit.addEventListener("pointerdown", (e) => {
+      if (!now.classList.contains("open")) return;
+      // A swipe landing mid-flight wins: stop the old one rather
+      // than making anyone wait for it.
+      if (busy) { busy = false; loose(); el.style.opacity = ""; }
+      clearTimeout(settling);
+      id = e.pointerId; x0 = e.clientX; y0 = e.clientY; t0 = e.timeStamp;
+      dx = 0; mine = false;
+      // Without this a finger that leaves the cover — which a swipe
+      // to the edge of the screen always does — stops being heard,
+      // and the gesture ends half-finished with the cover off-centre.
+      try { hit.setPointerCapture(e.pointerId); } catch (err) {}
+    }, { passive: true });
+
+    hit.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== id) return;
+      dx = e.clientX - x0;
+      const dy = e.clientY - y0;
+
+      if (!mine) {
+        if (gesture === "y") { id = null; return; }   // dragging to close
+        if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy)) return;
+        mine = true;
+        gesture = "x";
+        loose();
+      }
+      setX(canGo(dx) ? dx : dx / 4);
+    }, { passive: true });
+
+    const finish = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      if (!mine) return;
+      mine = false;
+      if (gesture === "x") gesture = null;
+
+      const dt = Math.max(1, e.timeStamp - t0);
+      const speed = Math.abs(dx) / dt;
+      const far = Math.abs(dx) > 70;
+      const flung = speed > 0.5 && Math.abs(dx) > 24;
+
+      if ((far || flung) && canGo(dx)) { buzzPick(); commit(dx); return; }
+      settle();
+    };
+
+    hit.addEventListener("pointerup", finish, { passive: true });
+    hit.addEventListener("pointercancel", (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      if (mine && gesture === "x") gesture = null;
+      mine = false;
+      settle();
+    }, { passive: true });
+  })();
 
   /* The sheets drag on their own panel rather than the whole
      overlay, and the backdrop thins as the panel goes down — the
