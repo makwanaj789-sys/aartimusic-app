@@ -71,6 +71,14 @@ jobs:
       - name: Manifest bits the notification needs
         run: python3 scripts/android-manifest.py android/app/src/main/AndroidManifest.xml
 
+      # The one way the whole of Android agrees an app is a music
+      # player: a browser service in the manifest. Phones that draw
+      # their own music capsule ask the same question, and the three
+      # other signals were not enough on a Realme. The service itself
+      # does nothing — it exists to be found.
+      - name: Say this is a music player
+        run: python3 scripts/android-media-app.py
+
       # Turns assets/icon.png into every icon size Android wants,
       # including the adaptive pair. Skipped quietly if the folder
       # isn't there, so a missing icon never fails the build.
