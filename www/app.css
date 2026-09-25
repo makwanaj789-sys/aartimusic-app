@@ -248,9 +248,10 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   position:fixed; left:0; right:0; z-index:39;
   bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
   background:var(--bg-3); border-top:1px solid var(--line);
-  /* The strip swipes sideways to change song, so it keeps the
-     horizontal axis and hands the vertical one back to the page. */
-  touch-action:pan-y; overflow:hidden;
+  /* Sideways changes the song and up opens the full screen, so the
+     strip keeps both axes of its own gestures and hands plain
+     scrolling back to the page. */
+  touch-action:none; overflow:hidden;
 }
 .bar{ position:relative; height:2px; background:var(--line); overflow:hidden; }
 .mini-in{ display:grid; grid-template-columns:40px 1fr auto auto; gap:10px;
@@ -725,6 +726,14 @@ body.playing .row.on .eq i{ animation:eq .9s ease-in-out infinite; }
 /* Hidden without a transition, shown with one: the old cover goes at
    once, the new one arrives. */
 .cover img.swapping, .mini-in img.swapping{ opacity:0; transition:none; }
+
+/* The swipe landed: the new cover comes in from the side the old one
+   went. Eighteen pixels and a fifth of a second — an acknowledgement,
+   not the card slide this replaced. */
+@keyframes cameNext{ from{ transform:translateX(20px); } to{ transform:none; } }
+@keyframes camePrev{ from{ transform:translateX(-20px); } to{ transform:none; } }
+.came-next{ animation:cameNext .22s var(--out) both; }
+.came-prev{ animation:camePrev .22s var(--out) both; }
 body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 @keyframes breathe{
   0%,100%{ transform:scale(1); }

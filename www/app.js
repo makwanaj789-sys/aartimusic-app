@@ -1349,6 +1349,25 @@
      instead of being ignored: the edge should be felt rather
      than just not happening.                                  */
 
+  /* The swipe is acknowledged rather than animated: the new cover
+     comes in from the side the old one went, over a fifth of a
+     second and eighteen pixels. Enough to say the gesture landed;
+     not the card slide that made this feel slow. */
+  function arrived(way) {
+    if (REDUCED) return;
+    ["coverSwipe", "mArt"].forEach((id) => {
+      const el = $(id);
+      if (!el) return;
+      el.classList.remove("came-next", "came-prev");
+      void el.offsetWidth;                 // so a second swipe replays it
+      el.classList.add("came-" + way);
+      el.addEventListener("animationend", function off() {
+        el.classList.remove("came-next", "came-prev");
+        el.removeEventListener("animationend", off);
+      }, { once: true });
+    });
+  }
+
   /* ---------- swiping to change song ------------------------
      Left for the next one, right for the one before.
 
@@ -1375,6 +1394,7 @@
       buzzPick();
       if (o.onTaken) o.onTaken();
       if (dx < 0) next(); else playAt(index - 1);
+      arrived(dx < 0 ? "next" : "prev");
     }
 
     hit.addEventListener("pointerdown", (e) => {
@@ -1394,6 +1414,16 @@
         // pixels. A gesture that is mostly vertical is theirs, and
         // must stay theirs — sideways has to be clearly sideways.
         if (gesture === "y") { id = null; return; }
+
+        // Up is a way in. The strip is a handle for the screen
+        // underneath it, so a clear upward swipe lifts it.
+        if (o.onUp && dy < -26 && Math.abs(dy) > Math.abs(dx) * 1.4) {
+          spent = true;
+          buzz();
+          o.onUp();
+          return;
+        }
+
         if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
         mine = true;
         gesture = "x";
@@ -1465,6 +1495,7 @@
   swipeToSkip($("mini"), {
     skip: "button",
     onTaken: () => { swipedAt = Date.now(); },
+    onUp: () => { swipedAt = Date.now(); openNow(); },
   });
 
   /* The sheets drag on their own panel rather than the whole
