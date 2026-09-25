@@ -28,6 +28,13 @@
   const KEY = "aarti.v1";
   const store = {
     favs: [], recents: [], history: [], repeat: "off", shuffle: false,
+    /* Removals are remembered, not just applied. Without a record
+       that a song was un-favourited, the next sync sees it missing
+       locally, present on the server, and helpfully puts it back —
+       the classic deleted-thing-returns bug. id -> removal time. */
+    gone: {},
+    link: null,          // { token, userId, name } once connected
+    syncedAt: 0,
   };
 
   function load() {
@@ -433,6 +440,7 @@
   );
 
   function drawLib() {
+    accState();
     const list = libView === "favs" ? store.favs : store.recents;
     $("libEmpty").hidden = list.length > 0;
     $("libEmpty").querySelector("h3").textContent =
@@ -446,16 +454,20 @@
   /* ---------- favourites and history ------------------------ */
 
   function toggleFav(song) {
+    const now = Date.now();
     if (isFav(song.id)) {
       store.favs = store.favs.filter((s) => s.id !== song.id);
+      store.gone[song.id] = now;
       buzz("light");
       toast("Removed");
     } else {
-      store.favs.unshift(song);
+      delete store.gone[song.id];
+      store.favs.unshift(Object.assign({}, song, { at: now }));
       buzzDone("success");
       toast("Saved to favourites");
     }
     save();
+    pushSoon();
     paintFavButtons();
     if (!pages.Lib.hidden) drawLib();
     if (!pages.Home.hidden) drawHome();
@@ -482,6 +494,223 @@
   };
   $("mFav").addEventListener("click", tapFav);
   $("nFav").addEventListener("click", tapFav);
+
+  /* ==========================================================
+     ACCOUNT AND SYNC
+
+     Favourites live on the phone and always have. This adds a
+     copy on the server so they survive a new phone, and so the
+     bot and the app agree about what is saved. Nothing here is
+     required: every endpoint below may be missing, and the app
+     carries on exactly as it did before.
+
+     Identity comes from Telegram, which already knows who this
+     is — no password, no email, nothing new to remember. Inside
+     Telegram the signed initData is enough on its own. The
+     standalone APK has no Telegram around it, so it opens the bot
+     with a one-time nonce and waits for the bot to claim it.
+     ========================================================== */
+
+  let syncOff = false;          // set once the server says it cannot
+  let pushTimer = 0;
+
+  const linked = () => !!(store.link && store.link.token) || !!INIT;
+
+  function authHeaders() {
+    const h = headers();
+    if (store.link && store.link.token) h["Authorization"] = "Bearer " + store.link.token;
+    return h;
+  }
+
+  async function sync(path, opts) {
+    if (syncOff) return null;
+    await ready;
+    const res = await fetch(SERVER + path, Object.assign({
+      headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
+    }, opts || {}));
+    /* A server that has not learned these routes yet answers 404,
+       and one built before accounts existed may answer 501. Either
+       way, stop asking for the rest of the session rather than
+       retrying on every favourite. */
+    if (res.status === 404 || res.status === 501) { syncOff = true; return null; }
+    if (res.status === 401) { unlink(true); return null; }
+    if (!res.ok) return null;
+    return res.json();
+  }
+
+  /* ---------- merging ---------------------------------------
+     Last write wins, per song. Each side brings its favourites
+     with the time they were added and its tombstones with the
+     time they were removed; for any one id the later of the two
+     decides whether it is saved. That way a removal on one phone
+     survives a sync with a phone that still has the song, and
+     neither side has to be treated as the truth. */
+  function mergeFavs(local, remote) {
+    const at = {}, gone = {}, song = {};
+
+    const take = (side) => {
+      (side.favs || []).forEach((s) => {
+        if (!s || !s.id) return;
+        const t = s.at || 1;
+        if (!at[s.id] || t > at[s.id]) { at[s.id] = t; song[s.id] = s; }
+      });
+      Object.entries(side.gone || {}).forEach(([id, t]) => {
+        if (!gone[id] || t > gone[id]) gone[id] = t;
+      });
+    };
+    take(local); take(remote);
+
+    const favs = Object.keys(at)
+      .filter((id) => !gone[id] || at[id] > gone[id])
+      .sort((a, b) => at[b] - at[a])
+      .map((id) => Object.assign({}, song[id], { at: at[id] }));
+
+    // Tombstones for songs that came back are dead weight.
+    Object.keys(gone).forEach((id) => { if (at[id] > gone[id]) delete gone[id]; });
+    return { favs, gone };
+  }
+
+  async function pull() {
+    if (!linked()) return;
+    const remote = await sync("/api/favs");
+    if (!remote) return;
+    const merged = mergeFavs(store, remote);
+    const changed = merged.favs.length !== store.favs.length ||
+      merged.favs.some((s, i) => !store.favs[i] || store.favs[i].id !== s.id);
+    store.favs = merged.favs;
+    store.gone = merged.gone;
+    save();
+    if (changed) {
+      paintFavButtons();
+      if (!pages.Lib.hidden) drawLib();
+      if (!pages.Home.hidden) drawHome();
+    }
+    // Hand the merge straight back, so the server ends up agreeing.
+    await push();
+  }
+
+  async function push() {
+    if (!linked()) return;
+    accState("syncing");
+    const r = await sync("/api/favs", {
+      method: "POST",
+      body: JSON.stringify({ favs: store.favs, gone: store.gone }),
+    });
+    if (r) { store.syncedAt = Date.now(); save(); }
+    accState();
+  }
+
+  /* Favouriting a whole album one tap at a time should not be a
+     request each. Collect for a moment, then send once. */
+  function pushSoon() {
+    if (!linked() || syncOff) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => push().catch(() => {}), 1200);
+  }
+
+  /* ---------- connecting ------------------------------------ */
+
+  let pollTimer = 0, pollStop = 0;
+
+  function unlink(silent) {
+    store.link = null; save();
+    clearTimeout(pollTimer);
+    accState();
+    if (!silent) toast("Disconnected");
+  }
+
+  async function startLink() {
+    const r = await sync("/api/link/start", { method: "POST" });
+    if (!r || !r.nonce) {
+      toast(syncOff ? "The server can't do this yet" : "Couldn't start — try again");
+      sheet($("linkSheet"), false);
+      return;
+    }
+    const url = r.url || ("https://t.me/" + (r.bot || "AartiMusic_bot") + "?start=link_" + r.nonce);
+    $("linkWait").hidden = false;
+    $("linkGo").textContent = "Open Telegram again";
+    $("linkCopy").textContent = "Waiting for Telegram. Tap Start in the chat, then come back.";
+
+    try { tg.openTelegramLink(url); } catch (e) { window.open(url, "_blank"); }
+
+    // Poll rather than hold a socket open: the round trip is a
+    // person switching apps, and this has to survive the app being
+    // backgrounded and brought back.
+    clearTimeout(pollTimer);
+    pollStop = Date.now() + 120000;
+    const beat = async () => {
+      if (Date.now() > pollStop) {
+        $("linkWait").hidden = true;
+        $("linkCopy").textContent = "That took too long. Try again when you're ready.";
+        return;
+      }
+      const p = await sync("/api/link/poll?nonce=" + encodeURIComponent(r.nonce));
+      if (p && p.token) {
+        store.link = { token: p.token, userId: p.userId, name: p.name || "" };
+        save();
+        buzzDone("success");
+        sheet($("linkSheet"), false);
+        $("linkWait").hidden = true;
+        accState();
+        toast("Connected");
+        pull().catch(() => {});
+        return;
+      }
+      pollTimer = setTimeout(beat, 1800);
+    };
+    pollTimer = setTimeout(beat, 1800);
+  }
+
+  /* ---------- the strip ------------------------------------- */
+
+  function accState(mode) {
+    const box = $("account");
+    if (!box) return;
+    box.classList.toggle("syncing", mode === "syncing");
+
+    if (INIT && !store.link) {
+      // Running inside Telegram: already identified, nothing to do.
+      box.classList.add("linked");
+      $("accState").textContent = "Synced through Telegram";
+      $("accSub").textContent = "Your favourites match the bot";
+      $("accBtn").hidden = true;
+      return;
+    }
+    $("accBtn").hidden = false;
+    if (store.link) {
+      box.classList.add("linked");
+      $("accState").textContent = store.link.name
+        ? "Connected as " + store.link.name : "Connected to Telegram";
+      $("accSub").textContent = store.syncedAt
+        ? "Last synced " + new Date(store.syncedAt).toLocaleTimeString("en-IN",
+            { hour: "2-digit", minute: "2-digit" })
+        : "Favourites will follow you to any phone";
+      $("accBtn").textContent = "Disconnect";
+    } else {
+      box.classList.remove("linked");
+      $("accState").textContent = "Saved on this phone";
+      $("accSub").textContent = "Connect Telegram to keep these if you change phones";
+      $("accBtn").textContent = "Connect";
+    }
+  }
+
+  $("accBtn").addEventListener("click", () => {
+    buzz();
+    if (store.link) { unlink(); return; }
+    $("linkWait").hidden = true;
+    $("linkGo").textContent = "Open Telegram";
+    $("linkCopy").textContent =
+      "Your favourites will follow you to any phone, and match what the bot already knows.";
+    sheet($("linkSheet"), true);
+  });
+  $("linkGo").addEventListener("click", () => { buzz(); startLink().catch(() => {}); });
+  $("linkCancel").addEventListener("click", () => {
+    clearTimeout(pollTimer);
+    sheet($("linkSheet"), false);
+  });
+  $("linkSheet").addEventListener("click", (e) => {
+    if (e.target === $("linkSheet")) { clearTimeout(pollTimer); sheet($("linkSheet"), false); }
+  });
 
   /* ---------- playing --------------------------------------- */
 
@@ -915,5 +1144,9 @@
   /* ---------- start ----------------------------------------- */
 
   paintModes();
+  accState();
+  // One attempt at startup. It fails quietly on a server that has
+  // never heard of these routes, which is every server today.
+  pull().catch(() => {});
   tab("Home");
 })();

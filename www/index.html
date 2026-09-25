@@ -74,6 +74,15 @@
 <section class="page" id="pLib" hidden>
   <header class="head"><h1>Your library</h1></header>
 
+  <div class="account" id="account">
+    <span class="acc-dot" id="accDot" aria-hidden="true"></span>
+    <div class="acc-text">
+      <div class="acc-state" id="accState">Saved on this phone</div>
+      <div class="acc-sub" id="accSub">Connect Telegram to keep these if you change phones</div>
+    </div>
+    <button class="acc-btn" id="accBtn">Connect</button>
+  </div>
+
   <div class="seg">
     <button class="on" data-lib="favs">Favourites</button>
     <button data-lib="recents">History</button>
@@ -220,6 +229,18 @@
     <button class="act" data-sleep="60">1 hour</button>
     <button class="act" data-sleep="track">End of this track</button>
     <button class="act ghost" data-sleep="0">Turn off</button>
+  </div>
+</section>
+
+<!-- ============ CONNECT TELEGRAM ============ -->
+<section class="sheet" id="linkSheet" aria-hidden="true">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2 id="linkTitle">Connect Telegram</h2></div>
+    <p class="link-copy" id="linkCopy">Your favourites will follow you to any phone, and match what the bot already knows.</p>
+    <div class="link-wait" id="linkWait" hidden><span></span><span></span><span></span></div>
+    <button class="act" id="linkGo">Open Telegram</button>
+    <button class="act ghost" id="linkCancel">Not now</button>
   </div>
 </section>
 
