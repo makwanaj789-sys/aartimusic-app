@@ -166,6 +166,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 
 .play{ position:relative; width:40px; height:40px; padding:11px; border-radius:50%; }
 .play svg{ fill:currentColor; stroke:none; }
+.play .mp{ transition:d .3s var(--out); }
 .play .spin{
   position:absolute; inset:-4px; border:2px solid transparent;
   border-top-color:currentColor; border-radius:50%; opacity:0;
@@ -405,4 +406,20 @@ body.playing .shimmer{ opacity:.75; animation:shimmer 2.4s linear infinite; }
 @media (prefers-reduced-motion: reduce){
   body.playing .shimmer{ animation:none; opacity:0; }
   .bar i,.seek-rail i,.knob-track{ transition:none; }
+}
+
+
+/* ============================================================
+   PLAY / PAUSE
+   One icon that changes shape, not two that swap. The triangle is
+   built from two quadrilaterals — the left half and the right
+   half — so each can travel to one bar of the pause icon. Both
+   paths are four line segments in the same order, which is what
+   lets the browser interpolate between them at all.
+   ============================================================ */
+.play[data-state="playing"] .mp.l{ d:path("M6 4L10 4L10 20L6 20Z"); }
+.play[data-state="playing"] .mp.r{ d:path("M14 4L18 4L18 20L14 20Z"); }
+
+@media (prefers-reduced-motion: reduce){
+  .play .mp{ transition:none; }
 }

@@ -526,9 +526,27 @@
     $("seekRail").style.setProperty("--p", v);
   }
 
+  /* The morph is a CSS `d` transition. Where `d` is not an
+     animatable property the stylesheet's rules are simply
+     ignored, so the shape would stay stuck as a triangle — the
+     attribute gets written directly in that case, which lands on
+     the right shape without the travel. */
+  const CAN_MORPH = window.CSS && CSS.supports && CSS.supports("d", 'path("M0 0Z")');
+  const SHAPE = {
+    paused:  { l: "M7 4.2L13.2 8L13.2 16L7 19.8Z", r: "M13.2 8L19.6 11.8L19.6 12.2L13.2 16Z" },
+    playing: { l: "M6 4L10 4L10 20L6 20Z",         r: "M14 4L18 4L18 20L14 20Z" },
+  };
+
   function icons(playing) {
-    document.querySelectorAll(".ic-play").forEach((s) => (s.hidden = playing));
-    document.querySelectorAll(".ic-pause").forEach((s) => (s.hidden = !playing));
+    const state = playing ? "playing" : "paused";
+    document.querySelectorAll(".play").forEach((btn) => {
+      btn.dataset.state = state;
+      btn.setAttribute("aria-label", playing ? "Pause" : "Play");
+      if (CAN_MORPH) return;
+      const l = btn.querySelector(".mp.l"), r = btn.querySelector(".mp.r");
+      if (l) l.setAttribute("d", SHAPE[state].l);
+      if (r) r.setAttribute("d", SHAPE[state].r);
+    });
   }
 
   audio.addEventListener("timeupdate", () => {
