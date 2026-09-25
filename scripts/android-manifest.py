@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Adds the permissions the playing notification needs to the generated
-AndroidManifest.
+Adds the things the playing notification needs to the generated
+AndroidManifest: two permissions, and the category that tells Android
+this is a music app.
 
 The android/ folder is made fresh by `npx cap add android` on every
 build and is not in the repo, so there is nowhere to write these by
@@ -20,8 +21,13 @@ of it; these two are the ones no plugin declares for us:
       the only one — cheap, and it means the media notification does
       not quietly depend on a plugin kept for another reason.
 
+It also sets android:appCategory="audio" on <application>. That is
+how an app says what kind of app it is, and phones that draw their own
+music capsule or island decide what belongs there partly from it. A
+player that never says it is a player is easy to leave out.
+
 Run it after `cap add android` and before the Gradle build. It is
-idempotent: a permission already present is left alone.
+idempotent: anything already present is left alone.
 """
 
 import sys
@@ -50,6 +56,15 @@ for name in WANTED:
         sys.exit(f"{path} has no </manifest> — refusing to guess where this goes")
     xml = xml.replace("</manifest>", line + "</manifest>")
     added.append(name.rsplit(".", 1)[-1])
+
+# <application ...> is written by Capacitor's template with each
+# attribute on its own line, so the category goes in beside them.
+if "android:appCategory" not in xml:
+    marker = '    <application\n'
+    if marker not in xml:
+        sys.exit(f"{path} has no <application> block laid out as expected")
+    xml = xml.replace(marker, marker + '        android:appCategory="audio"\n', 1)
+    added.append('appCategory="audio"')
 
 if added:
     open(path, "w", encoding="utf-8").write(xml)
