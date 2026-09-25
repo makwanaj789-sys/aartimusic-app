@@ -533,6 +533,7 @@
                      these routes. Permanent for this session; asking
                      again on every favourite would be pointless.   */
   let unreachable = false;
+  let lastStatus = 0;       // what the server actually said, for the message
 
   async function sync(path, opts) {
     if (syncOff) return null;
@@ -544,8 +545,10 @@
         headers: Object.assign({ "Content-Type": "application/json" }, authHeaders()),
       }, opts || {}));
       unreachable = false;
+      lastStatus = res.status;
     } catch (e) {
       unreachable = true;
+      lastStatus = 0;
       return null;
     }
 
@@ -556,14 +559,23 @@
     if (res.status === 404 || res.status === 501) { syncOff = true; accState(); return null; }
     if (res.status === 401) { unlink(true); return null; }
     if (!res.ok) return null;
-    try { return await res.json(); } catch (e) { return null; }
+    try { return await res.json(); } catch (e) { lastStatus = -1; return null; }
   }
 
-  // What went wrong, in words that say what to do about it.
-  const whyNot = () =>
-    unreachable ? "Can't reach the server — check your connection"
-    : syncOff   ? "This server doesn't do accounts yet"
-                : "Couldn't start — try again";
+  /* What went wrong, in words that say what to do about it — and,
+     when the server answered with something unexpected, what it
+     actually said. A number in the message is not pretty, but it is
+     the difference between "it didn't work" and knowing whether the
+     bot is down, rate limiting, or erroring. */
+  function whyNot() {
+    if (unreachable) return "Can't reach the server — check your connection";
+    if (syncOff)     return "This server doesn't do accounts yet";
+    if (lastStatus === 429) return "Too many tries — wait a minute";
+    if (lastStatus === -1)  return "The server sent something unreadable";
+    if (lastStatus >= 500)  return "The server had a problem (" + lastStatus + ") — try again";
+    if (lastStatus > 0)     return "The server said " + lastStatus + " — try again";
+    return "Couldn't start — try again";
+  }
 
   /* ---------- merging ---------------------------------------
      Last write wins, per song. Each side brings its favourites
@@ -1289,13 +1301,28 @@
      Same five actions either way. The rest of the file calls `told`
      and does not have to know which one answered.               */
 
-  const nativeMS = (function () {
+  /* Capacitor does not hand the page its plugins. Capacitor.Plugins
+     is filled in by registerPlugin(), which is normally called by the
+     plugin's own JavaScript — and importing that needs a bundler,
+     which this app deliberately does not have. So reading
+     Capacitor.Plugins.MediaSession finds nothing, for ever, in
+     silence. The global registerPlugin is the same function and asks
+     the native side for the method signatures, which is what makes a
+     callback method like setActionHandler work at all.
+
+     isPluginAvailable checks the headers the native bridge injects,
+     so this is a real answer about this build rather than a guess. */
+  function nativePlugin(name) {
     try {
       const c = window.Capacitor;
-      return c && c.isNativePlatform && c.isNativePlatform() &&
-             c.Plugins && c.Plugins.MediaSession ? c.Plugins.MediaSession : null;
+      if (!c || !c.isNativePlatform || !c.isNativePlatform()) return null;
+      if (c.Plugins && c.Plugins[name]) return c.Plugins[name];
+      if (!c.isPluginAvailable || !c.isPluginAvailable(name)) return null;
+      return c.registerPlugin ? c.registerPlugin(name) : null;
     } catch (e) { return null; }
-  })();
+  }
+
+  const nativeMS = nativePlugin("MediaSession");
   const webMS = "mediaSession" in navigator ? navigator.mediaSession : null;
 
   const told = {
@@ -1377,7 +1404,7 @@
     if (askedToNotify || !nativeMS) return;
     askedToNotify = true;
     try {
-      const ln = window.Capacitor.Plugins.LocalNotifications;
+      const ln = nativePlugin("LocalNotifications");
       if (!ln) return;
       const now = await ln.checkPermissions();
       if (now && /^prompt/.test(now.display || "")) await ln.requestPermissions();
