@@ -921,6 +921,7 @@
   }
 
   audio.addEventListener("timeupdate", () => {
+    told.position();
     const d = audio.duration;
     if (!d || !isFinite(d)) return;
     // --p is a plain 0..1 number the stylesheet turns into a
@@ -1180,28 +1181,128 @@
     sheet($("sleepSheet"), false);
   });
 
-  /* ---------- lock screen -----------------------------------
-     Puts the track on the phone's own media controls, so playback
-     survives the screen going off and the notification shows the
-     right song.                                                */
-  audio.addEventListener("loadedmetadata", () => {
-    const song = queue[index];
-    if (!song || !("mediaSession" in navigator)) return;
+  /* ---------- what the phone shows while it plays ------------
+     The notification, the lock screen, and on phones that have one
+     the capsule in the status bar, are all the same thing: a media
+     session the system knows about.
 
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: song.title,
-      artist: song.artist || "Aarti Music",
-      album: "Aarti Music",
-      artwork: [{ src: song.thumb, sizes: "480x360", type: "image/jpeg" }],
-    });
-    navigator.mediaSession.setActionHandler("play", () => audio.play());
-    navigator.mediaSession.setActionHandler("pause", () => audio.pause());
-    navigator.mediaSession.setActionHandler("nexttrack", next);
-    navigator.mediaSession.setActionHandler("previoustrack", () => playAt(index - 1));
-    navigator.mediaSession.setActionHandler("seekto", (d) => {
-      if (d.seekTime != null) audio.currentTime = d.seekTime;
-    });
+     In a browser or inside Telegram the Media Session API provides
+     it. In the Android app it does not exist — the WebView has no
+     implementation, so an <audio> tag playing in here is invisible
+     to the system: no notification, nothing on the lock screen, and
+     Android is free to stop the audio the moment the app goes to
+     the background. The native plugin supplies both halves, the
+     session and the foreground service that keeps playback alive.
+
+     Same five actions either way. The rest of the file calls `told`
+     and does not have to know which one answered.               */
+
+  const nativeMS = (function () {
+    try {
+      const c = window.Capacitor;
+      return c && c.isNativePlatform && c.isNativePlatform() &&
+             c.Plugins && c.Plugins.MediaSession ? c.Plugins.MediaSession : null;
+    } catch (e) { return null; }
+  })();
+  const webMS = "mediaSession" in navigator ? navigator.mediaSession : null;
+
+  const told = {
+    /* Native side needs the handlers before it will draw any
+       controls, and they never change, so they are set once. */
+    wired: false,
+
+    actions() {
+      if (this.wired) return;
+      this.wired = true;
+
+      const acts = {
+        play: () => audio.play().catch(() => {}),
+        pause: () => audio.pause(),
+        nexttrack: () => next(),
+        previoustrack: () => playAt(index - 1),
+        stop: () => { audio.pause(); audio.currentTime = 0; },
+        seekto: (d) => { if (d && d.seekTime != null) audio.currentTime = d.seekTime; },
+      };
+
+      for (const name in acts) {
+        if (nativeMS) {
+          try { nativeMS.setActionHandler({ action: name }, acts[name]); } catch (e) {}
+        } else if (webMS) {
+          // A browser that has never heard of an action throws rather
+          // than ignoring it, so each one stands alone.
+          try { webMS.setActionHandler(name, acts[name]); } catch (e) {}
+        }
+      }
+    },
+
+    metadata(song) {
+      if (!song) return;
+      const m = {
+        title: song.title || "Aarti Music",
+        artist: song.artist || "Aarti Music",
+        album: "Aarti Music",
+        artwork: [{ src: song.thumb, sizes: "480x360", type: "image/jpeg" }],
+      };
+      if (nativeMS) { try { nativeMS.setMetadata(m); } catch (e) {} return; }
+      if (webMS && window.MediaMetadata) {
+        try { webMS.metadata = new MediaMetadata(m); } catch (e) {}
+      }
+    },
+
+    /* The notification only appears once the session says it is
+       playing, so this is not decoration — it is what puts it on
+       screen and what takes it away again. */
+    state(playbackState) {
+      if (nativeMS) { try { nativeMS.setPlaybackState({ playbackState }); } catch (e) {} return; }
+      if (webMS) { try { webMS.playbackState = playbackState; } catch (e) {} }
+    },
+
+    /* Moves the seek bar in the notification. timeupdate fires four
+       times a second and this crosses the bridge, so it is sent at
+       most once a second and whenever the position jumps. */
+    sent: 0,
+    position(force) {
+      const d = audio.duration;
+      if (!isFinite(d) || d <= 0) return;
+      const now = Date.now();
+      if (!force && now - this.sent < 1000) return;
+      this.sent = now;
+
+      const p = { duration: d, position: Math.min(audio.currentTime, d), playbackRate: audio.playbackRate || 1 };
+      if (nativeMS) { try { nativeMS.setPositionState(p); } catch (e) {} return; }
+      if (webMS && webMS.setPositionState) { try { webMS.setPositionState(p); } catch (e) {} }
+    },
+  };
+
+  /* Android 13 hides every notification, a foreground service's
+     included, until notifications are allowed. Asked on the first
+     song rather than at startup, so the prompt turns up when it
+     means something — and never on a platform that has no such
+     permission to ask about. Declining costs nothing but the
+     notification; the music plays either way. */
+  let askedToNotify = false;
+  async function mayNotify() {
+    if (askedToNotify || !nativeMS) return;
+    askedToNotify = true;
+    try {
+      const ln = window.Capacitor.Plugins.LocalNotifications;
+      if (!ln) return;
+      const now = await ln.checkPermissions();
+      if (now && /^prompt/.test(now.display || "")) await ln.requestPermissions();
+    } catch (e) {}
+  }
+
+  audio.addEventListener("loadedmetadata", () => {
+    told.actions();
+    told.metadata(queue[index]);
+    told.position(true);
   });
+  audio.addEventListener("playing", () => {
+    told.state("playing"); told.position(true); mayNotify();
+  });
+  audio.addEventListener("pause", () => { told.state("paused"); told.position(true); });
+  audio.addEventListener("seeked", () => told.position(true));
+  audio.addEventListener("ratechange", () => told.position(true));
 
   /* ---------- start ----------------------------------------- */
 
