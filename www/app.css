@@ -67,6 +67,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
    ============================================================ */
 .rows{ display:flex; flex-direction:column; }
 .row{
+  position:relative;
   display:grid; grid-template-columns:50px 1fr auto auto;
   gap:12px; align-items:center; padding:8px 4px; border-radius:11px;
   transition:background-color .2s var(--ease);
@@ -422,4 +423,52 @@ body.playing .shimmer{ opacity:.75; animation:shimmer 2.4s linear infinite; }
 
 @media (prefers-reduced-motion: reduce){
   .play .mp{ transition:none; }
+}
+
+
+/* ============================================================
+   WHAT IS PLAYING
+   Two signals, both scale-only so neither costs a layout:
+   an equaliser over the artwork of the live row, and a cover that
+   breathes on the full screen.
+   ============================================================ */
+.row .eq{
+  position:absolute; left:4px; top:50%;
+  width:50px; height:50px; margin-top:-25px;
+  border-radius:8px; background:rgba(10,9,8,.55);
+  display:none; align-items:center; justify-content:center; gap:3px;
+  pointer-events:none; z-index:2;
+}
+.row.on .eq{ display:flex; }
+.row .eq i{
+  width:3px; height:18px; border-radius:2px;
+  background:var(--flame); transform-origin:center bottom;
+  transform:scaleY(.22);
+  transition:transform .3s var(--ease);
+}
+/* The bars move only while audio is playing; pausing leaves them
+   standing where they are, which is the honest reading of the
+   state. Height is fixed and scaleY does the work — animating
+   height here would lay out four elements every frame. */
+body.playing .row.on .eq i{ animation:eq .9s ease-in-out infinite; }
+.row .eq i:nth-child(2){ animation-delay:-.62s; }
+.row .eq i:nth-child(3){ animation-delay:-.31s; }
+.row .eq i:nth-child(4){ animation-delay:-.83s; }
+@keyframes eq{
+  0%,100%{ transform:scaleY(.22); }
+  50%    { transform:scaleY(1); }
+}
+
+/* The cover swells very slightly, on a cycle slow enough to read
+   as breathing rather than as a pulse. */
+.cover img{ transition:transform .7s var(--out); will-change:transform; }
+body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
+@keyframes breathe{
+  0%,100%{ transform:scale(1); }
+  50%    { transform:scale(1.035); }
+}
+
+@media (prefers-reduced-motion: reduce){
+  body.playing .row.on .eq i{ animation:none; transform:scaleY(.6); }
+  body.playing .cover img{ animation:none; }
 }

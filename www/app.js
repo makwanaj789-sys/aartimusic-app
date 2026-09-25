@@ -212,6 +212,14 @@
     const img = document.createElement("img");
     img.loading = "lazy"; img.src = song.thumb;
 
+    /* Sits over the artwork and only shows on the playing row, so
+       the list says which track is live without a second column
+       that is empty for every other row. */
+    const eq = document.createElement("span");
+    eq.className = "eq";
+    eq.setAttribute("aria-hidden", "true");
+    eq.innerHTML = "<i></i><i></i><i></i><i></i>";
+
     const info = document.createElement("div");
     info.className = "info";
     const t = document.createElement("div");
@@ -227,7 +235,7 @@
     more.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>';
     more.addEventListener("click", (e) => { e.stopPropagation(); openActions(song); });
 
-    row.append(img, info, heart(song), more);
+    row.append(img, eq, info, heart(song), more);
 
     const play = () => { queue = list.slice(); playAt(i); };
     img.addEventListener("click", play);
