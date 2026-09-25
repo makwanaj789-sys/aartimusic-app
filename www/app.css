@@ -281,8 +281,11 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
    ============================================================ */
 .sheet{
   position:fixed; inset:0; z-index:60; visibility:hidden;
-  background:rgba(0,0,0,.55); opacity:0;
-  transition:opacity .28s var(--ease), visibility .28s;
+  /* --veil lets a drag thin the backdrop without touching the
+     overlay's own open/closed opacity. */
+  background:rgba(0,0,0,calc(.55 * var(--veil,1)));
+  opacity:0;
+  transition:opacity .28s var(--ease), visibility .28s, background-color .18s linear;
 }
 .sheet.open{ visibility:visible; opacity:1; }
 .sheet-in{
@@ -290,8 +293,14 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   max-height:78%; overflow-y:auto;
   background:var(--bg-2); border-radius:18px 18px 0 0;
   padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 16px);
-  transform:translateY(100%); transition:transform .32s var(--out);
+  transform:translateY(100%); transition:transform .36s var(--snap);
+  will-change:transform; touch-action:pan-y;
 }
+.sheet.dragging .sheet-in{ transition:none; }
+.sheet.dragging{ transition:opacity .28s var(--ease), visibility .28s; }
+/* The handle is the obvious place to grab, so make it look it. */
+.grab{ cursor:grab; }
+.sheet.dragging .grab{ cursor:grabbing; }
 .sheet.open .sheet-in{ transform:translateY(0); }
 .grab{ width:38px; height:4px; border-radius:2px; background:var(--line);
        margin:4px auto 14px; }

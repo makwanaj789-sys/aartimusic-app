@@ -693,6 +693,9 @@
   const sheet = (el, on) => {
     el.classList.toggle("open", on);
     el.setAttribute("aria-hidden", on ? "false" : "true");
+    // A sheet dragged halfway and released leaves --veil part-faded;
+    // without this the next open would start dim.
+    if (on) el.style.setProperty("--veil", "1");
   };
 
   // full screen
@@ -762,7 +765,9 @@
       }
       // Upward is resisted rather than blocked — the surface is
       // already as far up as it goes.
-      setY(dy < 0 ? dy / 4 : dy);
+      const shown = dy < 0 ? dy / 4 : dy;
+      setY(shown);
+      if (o.onDrag) o.onDrag(shown);
     }, { passive: true });
 
     const finish = (e) => {
@@ -775,6 +780,7 @@
       const flung = speed > 0.55 && dy > 24;
       el.classList.remove("dragging");
       surface.style.transform = "";
+      if (o.onDrag) o.onDrag(0);
       live = false;
       if (far || flung) onClose();
     };
@@ -782,10 +788,29 @@
     el.addEventListener("pointercancel", (e) => {
       if (e.pointerId !== id) return;
       id = null; live = false; clear();
+      if (o.onDrag) o.onDrag(0);
     }, { passive: true });
   }
 
   draggable(now, closeNow, { threshold: 120 });
+
+  /* The sheets drag on their own panel rather than the whole
+     overlay, and the backdrop thins as the panel goes down — the
+     screen behind it coming back is what tells you the gesture is
+     working before you have committed to it. A shorter threshold
+     than the full screen, because a sheet is shorter. */
+  [["queueSheet", 90], ["actionSheet", 80], ["sleepSheet", 80]].forEach(([id, threshold]) => {
+    const el = $(id);
+    const panel = el.querySelector(".sheet-in");
+    draggable(el, () => sheet(el, false), {
+      surface: panel,
+      threshold: threshold,
+      onDrag: (dy) => {
+        const fade = dy > 0 ? Math.max(0, 1 - dy / (threshold * 2.4)) : 1;
+        el.style.setProperty("--veil", fade.toFixed(3));
+      },
+    });
+  });
 
   // queue
   $("queueOpen").addEventListener("click", () => {
