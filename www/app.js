@@ -866,9 +866,93 @@
     markRows();
   }
 
+  /* ---------- the light in the room -------------------------
+     One colour, taken from the artwork, is what lights the full
+     screen: the pool behind the cover, and the colour the cover
+     casts onto what is under it. The palette is unchanged — the
+     controls stay amber — but the light around them belongs to
+     whatever is playing.
+
+     Reading pixels back from an image the host will not share
+     throws, so every step falls back to the amber the app already
+     used rather than failing. The answer is kept, because the same
+     cover comes round again.                                    */
+
+  const AMBER = "224,162,83";
+  const litBy = new Map();
+
+  function lightFrom(src) {
+    if (!src) return Promise.resolve(AMBER);
+    if (litBy.has(src)) return Promise.resolve(litBy.get(src));
+
+    return new Promise((done) => {
+      const finish = (v) => { litBy.set(src, v); done(v); };
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onerror = () => finish(AMBER);
+      img.onload = () => {
+        try {
+          const N = 14;                       // enough to find a colour
+          const c = document.createElement("canvas");
+          c.width = c.height = N;
+          const g = c.getContext("2d", { willReadFrequently: true });
+          g.drawImage(img, 0, 0, N, N);
+          const d = g.getImageData(0, 0, N, N).data;
+
+          let r = 0, gr = 0, b = 0, w = 0;
+          for (let i = 0; i < d.length; i += 4) {
+            const R = d[i], G = d[i + 1], B = d[i + 2];
+            const hi = Math.max(R, G, B), lo = Math.min(R, G, B);
+            if (hi < 32 || hi > 246) continue;          // black, or blown out
+            const sat = (hi - lo) / hi;
+            if (sat < 0.12) continue;                    // grey carries no light
+            // A colour counts for more the more of a colour it is.
+            const k = sat * sat * (hi / 255);
+            r += R * k; gr += G * k; b += B * k; w += k;
+          }
+          if (!w) return finish(AMBER);
+
+          // Lifted to an even brightness, so a dark cover still
+          // lights the room and a bright one does not flood it.
+          let out = [r / w, gr / w, b / w];
+          const lift = 208 / Math.max(1, Math.max(out[0], out[1], out[2]));
+          out = out.map((n) => Math.min(255, Math.round(n * lift)));
+          finish(out.join(","));
+        } catch (e) {
+          finish(AMBER);                      // the canvas was tainted
+        }
+      };
+      img.src = src;
+    });
+  }
+
+  function relight(song) {
+    const lit = $("nowLit");
+    if (lit) lit.classList.add("dimming");
+    lightFrom(song && song.thumb).then((rgb) => {
+      document.documentElement.style.setProperty("--lit", rgb);
+      if (lit) requestAnimationFrame(() => lit.classList.remove("dimming"));
+    });
+  }
+
+  /* The new cover arrives rather than being swapped out from under
+     you: hidden the instant the track changes, faded up once it has
+     actually loaded. Opacity only, and a timeout so a picture that
+     never loads cannot leave an empty square. */
+  function setArt(el, src) {
+    if (!el || el.getAttribute("src") === src) return;
+    el.classList.add("swapping");
+    const show = () => el.classList.remove("swapping");
+    el.addEventListener("load", show, { once: true });
+    el.addEventListener("error", show, { once: true });
+    el.src = src;
+    setTimeout(show, 900);
+  }
+
   function paint(song) {
-    $("mArt").src = song.thumb;
-    $("nArt").src = song.thumb;
+    setArt($("mArt"), song.thumb);
+    setArt($("nArt"), song.thumb);
+    relight(song);
     $("nowBg").style.backgroundImage = 'url("' + song.thumb + '")';
     $("mTitle").textContent = song.title;
     $("nTitle").textContent = song.title;

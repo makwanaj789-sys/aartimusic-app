@@ -329,7 +329,51 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .cover-swipe{ display:grid; place-items:center; min-height:0; max-height:100%; }
 .cover img{
   width:min(76vw,44vh); aspect-ratio:1; object-fit:cover; border-radius:14px;
-  box-shadow:0 30px 60px -20px rgba(0,0,0,.8);
+  /* Two shadows: the weight of the thing, and the colour it throws
+     onto whatever is under it. The second is the whole idea. */
+  box-shadow:0 30px 60px -20px rgba(0,0,0,.8),
+             0 20px 56px -14px rgba(var(--lit,224,162,83),.42);
+}
+
+/* ==========================================================
+   THE LIGHT IN THE ROOM
+
+   The cover is the only light source on the full screen. Its
+   colour is read from the artwork itself and arrives as --lit;
+   everything here is that colour at various strengths.
+
+   Only opacity and transform are ever animated. The gradient is
+   repainted once, when the track changes, and then left alone.
+   ========================================================== */
+
+.now-lit{
+  position:absolute; left:50%; top:34%; width:134vw; aspect-ratio:1;
+  pointer-events:none; opacity:0;
+  transform:translate(-50%,-50%);
+  background:radial-gradient(circle at center,
+    rgba(var(--lit,224,162,83),.30) 0%,
+    rgba(var(--lit,224,162,83),.13) 36%,
+    rgba(var(--lit,224,162,83),0)   68%);
+  transition:opacity .55s ease;
+}
+.now.open .now-lit{ opacity:1; }
+/* Held dark for the moment between one cover and the next, so the
+   colour changes with the picture instead of ahead of it. */
+.now.open .now-lit.dimming{ opacity:0; transition:opacity .18s ease; }
+
+/* It breathes while something is playing and settles when it is not
+   — the same idea as the cover, one beat slower. */
+body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
+@keyframes lamp{
+  0%,100%{ transform:translate(-50%,-50%) scale(1); }
+  50%    { transform:translate(-50%,-50%) scale(1.1); }
+}
+/* Written here rather than in the block further up, because it has
+   to outrank body.playing .now-lit — which it only does by sitting
+   after it with the same weight. */
+@media (prefers-reduced-motion: reduce){
+  body.playing .now-lit{ animation:none; }
+  .now-lit{ transition:none; }
 }
 
 .now-meta{ display:flex; align-items:center; gap:14px; }
@@ -587,7 +631,15 @@ body.playing .row.on .eq i{ animation:eq .9s ease-in-out infinite; }
 
 /* The cover swells very slightly, on a cycle slow enough to read
    as breathing rather than as a pulse. */
-.cover img{ transition:transform .7s var(--out); will-change:transform; }
+.cover img{ transition:transform .7s var(--out), opacity .26s ease;
+            will-change:transform; }
+.mini-in img{ transition:opacity .26s ease; }
+/* Hidden without a transition, shown with one: the old cover goes at
+   once, the new one arrives. */
+.cover img.swapping, .mini-in img.swapping{ opacity:0; transition:none; }
+@media (prefers-reduced-motion: reduce){
+  .cover img, .mini-in img{ transition:none; }
+}
 body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 @keyframes breathe{
   0%,100%{ transform:scale(1); }
