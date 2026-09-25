@@ -368,12 +368,12 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   0%,100%{ transform:translate(-50%,-50%) scale(1); }
   50%    { transform:translate(-50%,-50%) scale(1.1); }
 }
-/* Written here rather than in the block further up, because it has
-   to outrank body.playing .now-lit — which it only does by sitting
-   after it with the same weight. */
+/* Written here rather than in the block further up, because it has to
+   outrank body.playing .now-lit — which it only does by sitting after
+   it with the same weight. The blanket rule up there crushes
+   durations but not animation-name, so this is the one that counts. */
 @media (prefers-reduced-motion: reduce){
   body.playing .now-lit{ animation:none; }
-  .now-lit{ transition:none; }
 }
 
 .now-meta{ display:flex; align-items:center; gap:14px; }
@@ -402,9 +402,57 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 .now-ctrls .small{ width:40px; height:40px; padding:9px; color:var(--mist); }
 .now-ctrls .small svg{ fill:none; stroke:currentColor; }
 .now-ctrls .small.on{ color:var(--flame); }
+/* ==========================================================
+   CONTROLS WITH WEIGHT
+
+   The transport is the centrepiece, so it is built as objects
+   rather than as flat targets: a disc with a lit rim and a
+   shadow under it, and skip buttons that move the way the music
+   is about to.
+
+   Everything that moves per frame is transform. The shadows and
+   rims are painted once and then left alone.
+   ========================================================== */
+
 .now-ctrls .play{
-  width:64px; height:64px; padding:19px;
-  background:linear-gradient(135deg,var(--flame),var(--ember)); color:#0A0908;
+  width:68px; height:68px; padding:20px;
+  background:linear-gradient(150deg,
+    color-mix(in srgb,var(--flame) 92%,#fff),
+    var(--flame) 38%, var(--ember));
+  color:#0A0908;
+  /* A rim catching light at the top, a darker one at the bottom, and
+     a shadow on the surface below — the three things that make a
+     circle read as a disc rather than a hole. */
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,244,228,.55),
+    inset 0 -2px 3px rgba(80,26,12,.35),
+    0 10px 22px -8px rgba(0,0,0,.85),
+    0 6px 26px -6px rgba(var(--lit,224,162,83),.45);
+  transition:transform .3s var(--spring), box-shadow .3s ease;
+}
+/* Pressed, it goes down into the surface: further than the others,
+   and the shadow under it shortens as it gets closer. */
+.now-ctrls .play.pressing{
+  transform:scale(.9) translateY(1.5px);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,244,228,.4),
+    inset 0 -1px 2px rgba(80,26,12,.3),
+    0 4px 10px -6px rgba(0,0,0,.9),
+    0 2px 12px -4px rgba(var(--lit,224,162,83),.35);
+}
+
+/* Skip moves the way the track is about to. Two pixels is enough to
+   feel and not enough to look like a bug. */
+#nPrev, #nNext{ transition:transform .3s var(--spring); }
+#nPrev.pressing{ transform:scale(.86) translateX(-3px); }
+#nNext.pressing{ transform:scale(.86) translateX(3px); }
+
+/* Shuffle and repeat sit back until they are on, and then they are
+   lit rather than merely coloured. */
+.now-ctrls .small{ transition:transform .3s var(--spring), color .2s ease; }
+.now-ctrls .small.on{
+  color:var(--flame);
+  filter:drop-shadow(0 0 7px color-mix(in srgb,var(--flame) 55%,transparent));
 }
 #bRepeat{ position:relative; }
 #bRepeat .one{
@@ -637,9 +685,6 @@ body.playing .row.on .eq i{ animation:eq .9s ease-in-out infinite; }
 /* Hidden without a transition, shown with one: the old cover goes at
    once, the new one arrives. */
 .cover img.swapping, .mini-in img.swapping{ opacity:0; transition:none; }
-@media (prefers-reduced-motion: reduce){
-  .cover img, .mini-in img{ transition:none; }
-}
 body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 @keyframes breathe{
   0%,100%{ transform:scale(1); }
