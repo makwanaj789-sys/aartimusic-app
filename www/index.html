@@ -14,78 +14,150 @@
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<header class="top">
-  <div class="brand"><span class="dot"></span> Aarti Music</div>
-  <form class="searchbar" id="searchForm" autocomplete="off">
-    <input id="q" type="search" placeholder="Songs, artists…" enterkeyhint="search">
-    <button type="submit" aria-label="Search">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-    </button>
-  </form>
-</header>
+<!-- ============ HOME ============ -->
+<section class="page" id="pHome">
+  <header class="head">
+    <h1>Good evening</h1>
+    <p id="greetSub">Pick up where you left off</p>
+  </header>
 
-<main id="main">
-  <section id="hint" class="hint">
-    <div class="hint-art">🎧</div>
-    <h2>Search any song</h2>
-    <p>Type a name above. Everything the bot can find, it can play here.</p>
-  </section>
-
-  <section id="list" class="list" hidden></section>
-
-  <div id="loading" class="loading" hidden>
-    <span></span><span></span><span></span>
+  <div class="block" id="recentBlock" hidden>
+    <div class="block-head"><h2>Recently played</h2></div>
+    <div class="rail" id="recentRail"></div>
   </div>
-</main>
+
+  <div class="block" id="favBlock" hidden>
+    <div class="block-head">
+      <h2>Your favourites</h2>
+      <button class="link" id="playFavs">Shuffle</button>
+    </div>
+    <div class="rows" id="favRows"></div>
+  </div>
+
+  <div class="empty" id="homeEmpty">
+    <div class="art">🎧</div>
+    <h3>Nothing here yet</h3>
+    <p>Search for a song and it will show up here.</p>
+  </div>
+</section>
+
+<!-- ============ SEARCH ============ -->
+<section class="page" id="pSearch" hidden>
+  <header class="head">
+    <form class="searchbar" id="searchForm" autocomplete="off">
+      <input id="q" type="search" placeholder="Songs, artists…" enterkeyhint="search">
+      <button type="submit" aria-label="Search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      </button>
+    </form>
+  </header>
+
+  <div class="block" id="histBlock" hidden>
+    <div class="block-head">
+      <h2>Recent searches</h2>
+      <button class="link" id="clearHist">Clear</button>
+    </div>
+    <div class="chips" id="histChips"></div>
+  </div>
+
+  <div class="rows" id="results"></div>
+
+  <div class="loading" id="loading" hidden><span></span><span></span><span></span></div>
+  <div class="empty" id="searchEmpty">
+    <div class="art">🔍</div>
+    <h3>Search any song</h3>
+    <p>Everything the bot can find, it can play here.</p>
+  </div>
+</section>
+
+<!-- ============ LIBRARY ============ -->
+<section class="page" id="pLib" hidden>
+  <header class="head"><h1>Your library</h1></header>
+
+  <div class="seg">
+    <button class="on" data-lib="favs">Favourites</button>
+    <button data-lib="recents">History</button>
+  </div>
+
+  <div class="rows" id="libRows"></div>
+  <div class="empty" id="libEmpty" hidden>
+    <div class="art">🤍</div>
+    <h3>Nothing saved</h3>
+    <p>Tap the heart on any song to keep it here.</p>
+  </div>
+</section>
 
 <!-- ============ MINI PLAYER ============ -->
-<footer class="mini" id="mini" hidden>
-  <div class="bar" id="miniBar"><i id="miniFill"></i></div>
+<div class="mini" id="mini" hidden>
+  <div class="bar"><i id="miniFill"></i></div>
   <div class="mini-in">
     <img id="mArt" alt="">
     <div class="meta" id="miniOpen">
       <div class="t" id="mTitle"></div>
       <div class="a" id="mArtist"></div>
     </div>
-    <div class="ctrls">
-      <button id="mPlay" class="play" aria-label="Play">
-        <svg class="ic-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
-        <svg class="ic-pause" viewBox="0 0 24 24" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
-        <span class="spin"></span>
-      </button>
-      <button id="mNext" aria-label="Next">
-        <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7zM16 5h2v14h-2z"/></svg>
-      </button>
-    </div>
+    <button id="mFav" class="icon" aria-label="Favourite">
+      <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/></svg>
+    </button>
+    <button id="mPlay" class="play" aria-label="Play">
+      <svg class="ic-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
+      <svg class="ic-pause" viewBox="0 0 24 24" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+      <span class="spin"></span>
+    </button>
   </div>
-</footer>
+</div>
+
+<!-- ============ BOTTOM NAV ============ -->
+<nav class="nav" id="nav">
+  <button class="on" data-tab="Home">
+    <svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/></svg>
+    <span>Home</span>
+  </button>
+  <button data-tab="Search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <span>Search</span>
+  </button>
+  <button data-tab="Lib">
+    <svg viewBox="0 0 24 24"><path d="M4 6h10M4 12h10M4 18h7"/><path d="M18 8v10"/><circle cx="16" cy="18" r="2"/></svg>
+    <span>Library</span>
+  </button>
+</nav>
 
 <!-- ============ FULL SCREEN ============ -->
 <section class="now" id="now" aria-hidden="true">
   <div class="now-bg" id="nowBg"></div>
-
   <div class="now-in">
     <header class="now-top">
       <button id="nowClose" aria-label="Close">
         <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
       </button>
-      <span class="from">Playing from search</span>
-      <span class="spacer"></span>
+      <span class="from" id="nowFrom">Now playing</span>
+      <button id="nowMenu" aria-label="More">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/></svg>
+      </button>
     </header>
 
     <div class="cover"><img id="nArt" alt=""></div>
 
     <div class="now-meta">
-      <h1 id="nTitle"></h1>
-      <p id="nArtist"></p>
+      <div class="nm-text">
+        <h1 id="nTitle"></h1>
+        <p id="nArtist"></p>
+      </div>
+      <button id="nFav" class="icon big" aria-label="Favourite">
+        <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/></svg>
+      </button>
     </div>
 
-    <div class="seek" id="seek">
-      <div class="seek-rail"><i id="seekFill"></i><b id="seekKnob"></b></div>
+    <div class="seek">
+      <div class="seek-rail" id="seekRail"><i id="seekFill"></i><b id="seekKnob"></b></div>
       <div class="times"><span id="nCur">0:00</span><span id="nDur">0:00</span></div>
     </div>
 
     <div class="now-ctrls">
+      <button id="bShuffle" class="small" aria-label="Shuffle">
+        <svg viewBox="0 0 24 24"><path d="M16 4l4 3-4 3"/><path d="M16 14l4 3-4 3"/><path d="M4 7h4l8 10h4"/><path d="M4 17h4l2-2.5"/></svg>
+      </button>
       <button id="nPrev" aria-label="Previous">
         <svg viewBox="0 0 24 24"><path d="M18 5v14L8 12zM6 5h2v14H6z"/></svg>
       </button>
@@ -97,11 +169,57 @@
       <button id="nNext" aria-label="Next">
         <svg viewBox="0 0 24 24"><path d="M6 5v14l10-7zM16 5h2v14h-2z"/></svg>
       </button>
+      <button id="bRepeat" class="small" aria-label="Repeat">
+        <svg viewBox="0 0 24 24"><path d="M17 3l3 3-3 3"/><path d="M20 6H8a4 4 0 00-4 4v1"/><path d="M7 21l-3-3 3-3"/><path d="M4 18h12a4 4 0 004-4v-1"/></svg>
+        <b class="one" hidden>1</b>
+      </button>
     </div>
 
-    <div class="up-next" id="upNext"></div>
+    <button class="queue-open" id="queueOpen">
+      <svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h10M4 17h7"/><path d="M17 8l3 4-3 4"/></svg>
+      <span id="upNextLabel">Queue</span>
+    </button>
   </div>
 </section>
+
+<!-- ============ QUEUE ============ -->
+<section class="sheet" id="queueSheet" aria-hidden="true">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <div class="sheet-head">
+      <h2>Queue</h2>
+      <button class="link" id="queueClose">Done</button>
+    </div>
+    <div class="rows" id="queueRows"></div>
+  </div>
+</section>
+
+<!-- ============ ACTIONS ============ -->
+<section class="sheet" id="actionSheet" aria-hidden="true">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <div class="sheet-song" id="actSong"></div>
+    <button class="act" data-act="next">Play next</button>
+    <button class="act" data-act="queue">Add to queue</button>
+    <button class="act" data-act="fav" id="actFav">Add to favourites</button>
+    <button class="act ghost" data-act="close">Cancel</button>
+  </div>
+</section>
+
+<!-- ============ SLEEP TIMER ============ -->
+<section class="sheet" id="sleepSheet" aria-hidden="true">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2>Sleep timer</h2></div>
+    <button class="act" data-sleep="15">15 minutes</button>
+    <button class="act" data-sleep="30">30 minutes</button>
+    <button class="act" data-sleep="60">1 hour</button>
+    <button class="act" data-sleep="track">End of this track</button>
+    <button class="act ghost" data-sleep="0">Turn off</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
 
 <audio id="audio" preload="none"></audio>
 <script src="config.js"></script>
