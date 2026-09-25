@@ -185,21 +185,62 @@
     window.scrollTo(0, 0);
   }
   [...$("nav").children].forEach((b) =>
-    b.addEventListener("click", () => { buzz(); tab(b.dataset.tab); })
+    b.addEventListener("click", () => { buzzPick(); tab(b.dataset.tab); })
   );
 
   /* ---------- rows ------------------------------------------ */
 
   const isFav = (id) => store.favs.some((s) => s.id === id);
 
+  /* ---------- the heart -------------------------------------
+     Filling one is the single most satisfying thing in the app,
+     so it gets a pop and a burst. Emptying one does not — an
+     undo should feel quieter than the thing it undoes.
+
+     Only a real tap pops. paintFavButtons runs on every track
+     change too, and popping there would fire the burst every time
+     a song that happens to be a favourite comes on. */
+  function sparkle(btn) {
+    if (REDUCED) return;
+    let layer = btn.querySelector(":scope > .spark-layer");
+    if (!layer) {
+      layer = document.createElement("span");
+      layer.className = "spark-layer";
+      btn.appendChild(layer);
+    }
+    for (let i = 0; i < 7; i++) {
+      const dot = document.createElement("i");
+      dot.className = "spark";
+      dot.style.setProperty("--a", (i * (360 / 7) + Math.random() * 18) + "deg");
+      dot.style.setProperty("--d", (13 + Math.random() * 9).toFixed(1) + "px");
+      dot.style.animationDelay = (Math.random() * 40).toFixed(0) + "ms";
+      layer.appendChild(dot);
+      dot.addEventListener("animationend", () => dot.remove(), { once: true });
+      setTimeout(() => dot.remove(), 1100);
+    }
+  }
+
+  function markFav(btn, on, pop) {
+    if (!btn) return;
+    btn.classList.toggle("fav", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    if (!pop || !on) return;
+    btn.classList.remove("popping");
+    void btn.offsetWidth;                 // restart the animation mid-flight
+    btn.classList.add("popping");
+    sparkle(btn);
+  }
+
   function heart(song) {
     const b = document.createElement("button");
     b.className = "icon" + (isFav(song.id) ? " fav" : "");
+    b.setAttribute("aria-label", "Favourite");
+    b.setAttribute("aria-pressed", isFav(song.id) ? "true" : "false");
     b.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/></svg>';
     b.addEventListener("click", (e) => {
       e.stopPropagation();
       toggleFav(song);
-      b.classList.toggle("fav", isFav(song.id));
+      markFav(b, isFav(song.id), true);
     });
     return b;
   }
@@ -385,9 +426,11 @@
   function toggleFav(song) {
     if (isFav(song.id)) {
       store.favs = store.favs.filter((s) => s.id !== song.id);
+      buzz("light");
       toast("Removed");
     } else {
       store.favs.unshift(song);
+      buzzDone("success");
       toast("Saved to favourites");
     }
     save();
@@ -401,15 +444,22 @@
     save();
   }
 
-  function paintFavButtons() {
+  function paintFavButtons(pop) {
     const song = queue[index];
     if (!song) return;
-    $("mFav").classList.toggle("fav", isFav(song.id));
-    $("nFav").classList.toggle("fav", isFav(song.id));
+    const on = isFav(song.id);
+    markFav($("mFav"), on, pop);
+    markFav($("nFav"), on, pop);
   }
 
-  $("mFav").addEventListener("click", (e) => { e.stopPropagation(); if (queue[index]) toggleFav(queue[index]); });
-  $("nFav").addEventListener("click", () => { if (queue[index]) toggleFav(queue[index]); });
+  const tapFav = (e) => {
+    if (e) e.stopPropagation();
+    if (!queue[index]) return;
+    toggleFav(queue[index]);
+    paintFavButtons(true);
+  };
+  $("mFav").addEventListener("click", tapFav);
+  $("nFav").addEventListener("click", tapFav);
 
   /* ---------- playing --------------------------------------- */
 
@@ -700,10 +750,10 @@
 
     if (act === "next" && actionSong) {
       queue.splice(index + 1, 0, actionSong);
-      paint(queue[index]); toast("Playing next");
+      paint(queue[index]); buzzDone("success"); toast("Playing next");
     }
     if (act === "queue" && actionSong) {
-      queue.push(actionSong); toast("Added to queue");
+      queue.push(actionSong); buzzDone("success"); toast("Added to queue");
     }
     if (act === "fav" && actionSong) {
       toggleFav(actionSong);

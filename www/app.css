@@ -472,3 +472,41 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
   body.playing .row.on .eq i{ animation:none; transform:scaleY(.6); }
   body.playing .cover img{ animation:none; }
 }
+
+
+/* ============================================================
+   THE HEART
+   ============================================================ */
+.icon{ position:relative; }
+.icon.popping svg{ animation:heartPop .46s var(--spring); }
+@keyframes heartPop{
+  0%  { transform:scale(1); }
+  30% { transform:scale(.82); }
+  62% { transform:scale(1.28); }
+  100%{ transform:scale(1); }
+}
+
+/* The burst needs to leave the button, so this layer is not
+   clipped — unlike the ripple layer, which is. */
+.spark-layer{ position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:2; }
+.spark{
+  position:absolute; left:50%; top:50%;
+  width:5px; height:5px; border-radius:50%;
+  background:var(--flame);
+  /* rotate first, then push outward — the rotation decides the
+     direction and the translate decides how far */
+  transform:translate(-50%,-50%) rotate(var(--a)) translateY(0) scale(1);
+  animation:spark .58s var(--out) forwards;
+}
+.spark:nth-child(even){ background:var(--hot); width:4px; height:4px; }
+@keyframes spark{
+  to{
+    transform:translate(-50%,-50%) rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(0);
+    opacity:0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .icon.popping svg{ animation:none; }
+  .spark{ display:none; }
+}
