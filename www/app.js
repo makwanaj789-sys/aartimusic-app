@@ -1594,8 +1594,24 @@
   paintModes();
   accState();
   // One attempt at startup. It fails quietly on a server that has
-  // never heard of these routes, which is every server today.
+  // never heard of these routes.
   pull().catch(() => {});
+
+  /* Coming back to the app is the other moment worth asking. A
+     favourite added in the chat, on another phone, or from the
+     notification while this was in the background, is only news
+     once someone looks — and a pull at startup alone means waiting
+     for a cold start to see it.
+
+     Held to once every few seconds so flicking between two apps
+     does not turn into a stream of requests. */
+  let lastPull = 0;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    if (Date.now() - lastPull < 4000) return;
+    lastPull = Date.now();
+    pull().catch(() => {});
+  });
   tab("Home");
 
   /* ---------- putting the lamp away -------------------------
