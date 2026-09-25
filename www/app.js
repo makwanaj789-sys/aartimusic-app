@@ -714,12 +714,78 @@
   $("nowClose").addEventListener("click", closeNow);
   try { tg.BackButton.onClick(closeNow); } catch (e) {}
 
-  let startY = null;
-  now.addEventListener("touchstart", (e) => (startY = e.touches[0].clientY), { passive: true });
-  now.addEventListener("touchend", (e) => {
-    if (startY !== null && e.changedTouches[0].clientY - startY > 90) closeNow();
-    startY = null;
-  });
+  /* ---------- dragging the full screen down -----------------
+     It used to compare two touch points and close if the second
+     was 90px lower — the sheet never moved under the finger, so a
+     drag felt like a gesture being graded rather than a thing
+     being held.
+
+     Now it follows. Release decides by distance OR by speed, so a
+     short flick closes it and a slow pull most of the way down
+     does too, which is what the hand expects of both.
+
+     Drags that begin on a control are left alone: the seek rail
+     has its own touch handling, and a scrollable list needs its
+     own vertical movement. */
+  const DRAG_SKIP = "button,input,.seek-rail,.rows,.rail";
+
+  function draggable(el, onClose, opts) {
+    const o = opts || {};
+    const surface = o.surface || el;
+    let id = null, y0 = 0, t0 = 0, dy = 0, live = false;
+
+    const setY = (v) => { surface.style.transform = "translateY(" + v.toFixed(1) + "px)"; };
+    const clear = () => {
+      el.classList.remove("dragging");
+      surface.style.transform = "";
+    };
+
+    // -webkit-user-drag is not honoured everywhere; refusing the
+    // dragstart outright is what actually keeps the gesture alive.
+    el.addEventListener("dragstart", (e) => e.preventDefault());
+
+    el.addEventListener("pointerdown", (e) => {
+      if (!el.classList.contains("open")) return;
+      if (e.target.closest && e.target.closest(DRAG_SKIP)) return;
+      id = e.pointerId; y0 = e.clientY; t0 = e.timeStamp; dy = 0; live = false;
+    }, { passive: true });
+
+    el.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== id) return;
+      dy = e.clientY - y0;
+      // Wait for a clear vertical intent before taking the gesture,
+      // so a tap that wobbles a pixel is still a tap.
+      if (!live) {
+        if (dy < 6) return;
+        live = true;
+        el.classList.add("dragging");
+      }
+      // Upward is resisted rather than blocked — the surface is
+      // already as far up as it goes.
+      setY(dy < 0 ? dy / 4 : dy);
+    }, { passive: true });
+
+    const finish = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      if (!live) return;
+      const dt = Math.max(1, e.timeStamp - t0);
+      const speed = dy / dt;                      // px per ms
+      const far = dy > (o.threshold || 110);
+      const flung = speed > 0.55 && dy > 24;
+      el.classList.remove("dragging");
+      surface.style.transform = "";
+      live = false;
+      if (far || flung) onClose();
+    };
+    el.addEventListener("pointerup", finish, { passive: true });
+    el.addEventListener("pointercancel", (e) => {
+      if (e.pointerId !== id) return;
+      id = null; live = false; clear();
+    }, { passive: true });
+  }
+
+  draggable(now, closeNow, { threshold: 120 });
 
   // queue
   $("queueOpen").addEventListener("click", () => {

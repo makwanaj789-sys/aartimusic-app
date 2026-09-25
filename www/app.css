@@ -28,6 +28,10 @@ body.locked{ overflow:hidden; }
 
 svg{ width:100%; height:100%; fill:none; stroke:currentColor;
      stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+/* A native image drag swallows every pointermove after the first,
+   which silently kills any gesture that starts on artwork — and
+   almost every gesture in this app starts on artwork. */
+img{ -webkit-user-drag:none; user-select:none; }
 button{ font:inherit; border:0; background:transparent; color:inherit; cursor:pointer; }
 
 /* ============================================================
@@ -183,9 +187,17 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
    ============================================================ */
 .now{
   position:fixed; inset:0; z-index:50; visibility:hidden;
-  transform:translateY(100%); transition:transform .42s var(--out), visibility .42s;
+  transform:translateY(100%);
+  /* A touch of overshoot on the way up, so it arrives rather than
+     just stopping. */
+  transition:transform .46s var(--snap), visibility .46s;
   overflow:hidden;
+  will-change:transform;
+  touch-action:pan-y;
 }
+/* While a finger is on it the transform is written per-frame, so
+   any easing here would fight the finger. */
+.now.dragging{ transition:none; }
 .now.open{ transform:translateY(0); visibility:visible; }
 
 /* the cover, blown up and blurred — the screen takes its colour from
@@ -203,6 +215,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 
 .now-in{
   position:relative; height:100%; display:flex; flex-direction:column;
+  user-select:none;
   padding:calc(env(safe-area-inset-top,0px) + 10px) 24px
           calc(env(safe-area-inset-bottom,0px) + 16px);
 }
