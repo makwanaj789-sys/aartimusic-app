@@ -9,8 +9,52 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
+
+<style>
+/* The one piece of CSS that cannot wait for app.css. A stylesheet is
+   fetched before the first paint but the WebView's own background is
+   white until then, which is the flash this removes. Everything that
+   moves lives in app.css; this is only what has to be true on the
+   very first frame. */
+html, body { background:#0A0908; margin:0; }
+#boot { position:fixed; inset:0; z-index:999; display:flex;
+        flex-direction:column; align-items:center; justify-content:center;
+        gap:22px; background:#0A0908; }
+/* app.css strokes every svg, because every other one in here is a
+   line icon. This one is solid shapes. */
+#boot svg { width:min(42vw, 176px); height:auto; stroke:none; fill:none; }
+</style>
 </head>
 <body>
+
+<!-- The lamp is lit before anything else, and lifts away in app.js
+     once the first screen is ready to be looked at. -->
+<div id="boot">
+    <svg viewBox="0 0 512 512" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="bf" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#F3C67A"/><stop offset="1" stop-color="#B0553C"/>
+        </linearGradient>
+        <linearGradient id="bl" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#E0A253"/><stop offset="1" stop-color="#9C4A33"/>
+        </linearGradient>
+        <radialGradient id="bg" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stop-color="#E0A253" stop-opacity=".55"/>
+          <stop offset="1" stop-color="#E0A253" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <circle class="boot-glow" cx="256" cy="230" r="228" fill="url(#bg)"/>
+      <g class="boot-flame">
+        <path d="M256 92 C300 158, 320 196, 320 228 C320 272, 292 296, 256 296 C220 296, 192 272, 192 228 C192 196, 212 158, 256 92 Z" fill="url(#bf)"/>
+        <path d="M256 166 C279 208, 288 227, 288 244 C288 269, 274 284, 256 284 C238 284, 224 269, 224 244 C224 227, 233 208, 256 166 Z" fill="#FFF3DC"/>
+      </g>
+      <path d="M249 290 L263 290 L261 322 L251 322 Z" fill="url(#bl)"/>
+      <path d="M100 320 C100 412, 412 412, 412 320 Z" fill="url(#bl)"/>
+      <path d="M96 314 L416 314 C416 326, 382 332, 256 332 C130 332, 96 326, 96 314 Z" fill="#E0A253"/>
+    </svg>
+  <p class="boot-word">Aarti Music</p>
+</div>
+
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 

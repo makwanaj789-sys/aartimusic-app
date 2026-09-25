@@ -1211,4 +1211,35 @@
   // never heard of these routes, which is every server today.
   pull().catch(() => {});
   tab("Home");
+
+  /* ---------- putting the lamp away -------------------------
+     The first screen is drawn by the time this runs, so the only
+     thing worth waiting for is the frame that shows it. A floor of
+     roughly a second keeps the lamp from blinking past on a fast
+     phone; the timeout is a promise that nothing here can ever
+     leave someone staring at it.                                */
+  (function dismissBoot() {
+    const boot = $("boot");
+    if (!boot) return;
+
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      boot.classList.add("gone");                 // taps pass through now
+      setTimeout(() => { boot.hidden = true; }, 500);
+    };
+
+    const LEAST = REDUCED ? 0 : 900;
+    const start = performance.now();
+    const settled = () => setTimeout(go, Math.max(0, LEAST - (performance.now() - start)));
+
+    // Two frames: one to lay the home screen out, one to paint it.
+    requestAnimationFrame(() => requestAnimationFrame(settled));
+    setTimeout(go, 4000);
+
+    // Someone who has already decided what they want should not have
+    // to watch the lamp finish. A touch anywhere skips it.
+    boot.addEventListener("pointerdown", go);
+  })();
 })();

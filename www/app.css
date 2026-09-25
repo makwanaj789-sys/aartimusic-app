@@ -647,3 +647,53 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce){
   .account.syncing .acc-dot,.link-wait span{ animation:none; }
 }
+
+/* ==========================================================
+   LIGHTING THE LAMP
+
+   What the first second looks like. The markup and the two
+   rules that have to be true on the first frame live inline in
+   index.html; everything that moves is here, because none of it
+   matters until a frame has already been painted.
+
+   The flame is scaled and rotated about its own base, never
+   resized, so the flicker costs nothing per frame.
+   ========================================================== */
+
+.boot-flame{ transform-origin:256px 296px; animation:flicker 2.6s ease-in-out infinite; }
+.boot-glow { transform-origin:256px 230px; animation:breathe 2.6s ease-in-out infinite; }
+
+@keyframes flicker{
+  0%,100%{ transform:scale(1,1)      rotate(0deg); }
+  18%    { transform:scale(.97,1.05) rotate(-1.4deg); }
+  37%    { transform:scale(1.03,.97) rotate(1.1deg); }
+  54%    { transform:scale(.98,1.04) rotate(.6deg); }
+  76%    { transform:scale(1.02,.99) rotate(-.8deg); }
+}
+@keyframes breathe{
+  0%,100%{ transform:scale(1);   opacity:.85; }
+  50%    { transform:scale(1.1); opacity:1; }
+}
+
+.boot-word{
+  margin:0; font-size:15px; font-weight:600; letter-spacing:.34em;
+  text-transform:uppercase; color:var(--mist,#8B7F76);
+  animation:bootWord 900ms 220ms cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes bootWord{
+  from{ opacity:0; transform:translateY(10px); }
+  to  { opacity:1; transform:none; }
+}
+
+/* Going: the whole thing lifts and thins at once. pointer-events is
+   dropped on the same frame the fade starts, so a tap during the
+   handover reaches the app underneath rather than the lamp. */
+#boot{ transition:opacity 420ms ease, transform 420ms cubic-bezier(.22,1,.36,1); }
+#boot.gone{ opacity:0; transform:scale(1.06); pointer-events:none; }
+#boot[hidden]{ display:none; }
+
+@media (prefers-reduced-motion:reduce){
+  .boot-flame, .boot-glow, .boot-word{ animation:none; }
+  #boot{ transition:opacity 160ms linear; }
+  #boot.gone{ transform:none; }
+}
