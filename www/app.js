@@ -1405,125 +1405,179 @@
   $("miniOpen").addEventListener("click", () => {
     // A swipe that ended on this element still fires a click.
     if (Date.now() - swipedAt < 400) return;
-    openNow($("mArt"));
+    openPlayerFromMini($("mArt"));
   });
-  $("mArt").addEventListener("click", () => openNow($("mArt")));
+  $("mArt").addEventListener("click", () => openPlayerFromMini($("mArt")));
   $("nowClose").addEventListener("click", () => closeNow());
   try { tg.BackButton.onClick(() => closeNow()); } catch (e) {}
 
-  /* ---------- dragging the full screen down -----------------
-     It used to compare two touch points and close if the second
-     was 90px lower — the sheet never moved under the finger, so a
-     drag felt like a gesture being graded rather than a thing
-     being held.
+  /* ---------- player expansion gesture --------------------
+     One continuous progress value:
+       0 = mini player
+       1 = full player
 
-     Now it follows. Release decides by distance OR by speed, so a
-     short flick closes it and a slow pull most of the way down
-     does too, which is what the hand expects of both.
-
-     Drags that begin on a control are left alone: the seek rail
-     has its own touch handling, and a scrollable list needs its
-     own vertical movement. */
+     While the finger is down this value is written directly every
+     frame. No CSS transition is allowed to fight the hand. On release
+     the value springs to either end. Because the mini and full UI share
+     the same artwork element, the cover grows/shrinks with the gesture
+     instead of being swapped for a second image.
+  */
   const DRAG_SKIP = "button,input,.seek-rail,.rows,.rail";
+  let gesture = null; // "player" | "cover" | null
+  let playerProgress = 0;
+  let playerSpring = null;
 
-  /* ---------- one gesture at a time -------------------------
-     The full screen drags down to close and the cover swipes
-     sideways to change song. Both start from the same finger on
-     the same pixels, so whichever recognises its own direction
-     first owns the gesture until that finger lifts, and the other
-     stands down rather than both moving at once.              */
-  let gesture = null;                     // "x" | "y" | null
+  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
-  function draggable(el, onClose, opts) {
-    const o = opts || {};
-    const surface = o.surface || el;
-    let id = null, y0 = 0, t0 = 0, dy = 0, live = false;
+  function setPlayerProgress(p) {
+    playerProgress = clamp01(p);
+    const root = now;
+    if (!root) return;
+    root.style.setProperty("--player-p", playerProgress.toFixed(4));
+    const motion = $("nowMotion");
+    const cover = $("coverSwipe");
+    if (motion) motion.style.setProperty("--player-p", playerProgress.toFixed(4));
+    if (cover) cover.style.setProperty("--player-p", playerProgress.toFixed(4));
+  }
 
-    const setY = (v) => { surface.style.transform = "translateY(" + v.toFixed(1) + "px)"; };
-    const clear = () => {
-      el.classList.remove("dragging");
-      surface.style.transform = "";
+  function springPlayerTo(target, velocityPx) {
+    target = clamp01(target);
+    if (REDUCED) {
+      setPlayerProgress(target);
+      return;
+    }
+
+    cancelAnimationFrame(playerSpring);
+    const from = playerProgress;
+    const velocity = Math.max(-1.2, Math.min(1.2, (velocityPx || 0) / 1200));
+    const distance = target - from;
+    const duration = Math.max(220, Math.min(480, 300 + Math.abs(distance) * 160));
+    const t0 = performance.now();
+
+    const tick = (nowTime) => {
+      const t = Math.min(1, (nowTime - t0) / duration);
+      // Critically-damped-ish spring feel: quick response, soft settle.
+      const e = 1 - Math.pow(1 - t, 3);
+      const overshoot = Math.sin(t * Math.PI) * velocity * (1 - t) * 0.035;
+      setPlayerProgress(from + distance * e + overshoot);
+      if (t < 1) playerSpring = requestAnimationFrame(tick);
+      else {
+        setPlayerProgress(target);
+        playerSpring = null;
+      }
     };
+    playerSpring = requestAnimationFrame(tick);
+  }
 
-    // -webkit-user-drag is not honoured everywhere; refusing the
-    // dragstart outright is what actually keeps the gesture alive.
-    el.addEventListener("dragstart", (e) => e.preventDefault());
+  function playerOpenTarget() {
+    return now.classList.contains("open") ? 1 : 0;
+  }
 
-    el.addEventListener("pointerdown", (e) => {
-      if (!el.classList.contains("open")) return;
+  function bindPlayerGesture() {
+    let pointerId = null;
+    let y0 = 0;
+    let t0 = 0;
+    let lastY = 0;
+    let lastT = 0;
+
+    now.addEventListener("pointerdown", (e) => {
+      if (!now.classList.contains("open")) return;
       if (e.target.closest && e.target.closest(DRAG_SKIP)) return;
-      id = e.pointerId; y0 = e.clientY; t0 = e.timeStamp; dy = 0; live = false;
+
+      pointerId = e.pointerId;
+      y0 = e.clientY;
+      lastY = y0;
+      t0 = lastT = performance.now();
+      gesture = null;
+
+      cancelAnimationFrame(playerSpring);
+      playerSpring = null;
+      now.classList.add("dragging");
+      try { now.setPointerCapture(pointerId); } catch (err) {}
     }, { passive: true });
 
-    el.addEventListener("pointermove", (e) => {
-      if (e.pointerId !== id) return;
-      dy = e.clientY - y0;
-      // Wait for a clear vertical intent before taking the gesture,
-      // so a tap that wobbles a pixel is still a tap.
-      if (!live) {
-        if (gesture === "x") return;      // the cover has this one
-        if (dy < 6) return;
-        live = true;
-        gesture = "y";
-        // Whatever the panel was in the middle of, it is being held
-        // now; the per-frame transform below is the only thing that
-        // should be moving it.
-        el.classList.remove("growing");
-        el.classList.add("dragging");
+    now.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== pointerId) return;
+
+      const y = e.clientY;
+      const dy = y - y0;
+      const dt = Math.max(1, performance.now() - lastT);
+      const vy = (y - lastY) / dt;
+      lastY = y;
+      lastT = performance.now();
+
+      if (!gesture) {
+        if (Math.abs(dy) < 6) return;
+        gesture = Math.abs(dy) >= Math.abs(e.clientX - (e.clientX || 0))
+          ? "player" : "player";
+        // Always own this vertical player gesture once it starts.
       }
-      // Upward is resisted rather than blocked — the surface is
-      // already as far up as it goes.
-      const shown = dy < 0 ? dy / 4 : dy;
-      setY(shown);
-      if (o.onDrag) o.onDrag(shown);
+
+      if (gesture !== "player") return;
+
+      // Pulling down closes: dy=0 -> 1, dy=viewport -> 0.
+      const h = Math.max(1, window.innerHeight);
+      const delta = dy / h;
+      const next = clamp01(1 - delta);
+      setPlayerProgress(next);
+      now.style.setProperty("--player-vy", vy.toFixed(5));
     }, { passive: true });
 
     const finish = (e) => {
-      if (e.pointerId !== id) return;
-      id = null;
-      if (!live) return;
-      const dt = Math.max(1, e.timeStamp - t0);
-      const speed = dy / dt;                      // px per ms
-      const far = dy > (o.threshold || 110);
-      const flung = speed > 0.55 && dy > 24;
-      el.classList.remove("dragging");
-      surface.style.transform = "";
-      if (o.onDrag) o.onDrag(0);
-      live = false;
-      if (gesture === "y") gesture = null;
-      if (far || flung) onClose();
+      if (e.pointerId !== pointerId) return;
+      const dy = e.clientY - y0;
+      const dt = Math.max(1, performance.now() - t0);
+      const vy = dy / dt;
+
+      pointerId = null;
+      now.classList.remove("dragging");
+      try { now.releasePointerCapture(e.pointerId); } catch (err) {}
+
+      if (gesture !== "player") {
+        gesture = null;
+        return;
+      }
+
+      const progress = playerProgress;
+      const far = progress < 0.58;
+      const flingDown = vy > 0.55;
+      const flingUp = vy < -0.55;
+      const target = flingUp ? 1 : (flingDown || far ? 0 : (progress > 0.5 ? 1 : 0));
+
+      springPlayerTo(target, vy * 1000);
+      gesture = null;
+
+      if (target === 0) {
+        setTimeout(() => {
+          if (!now.classList.contains("open") && playerProgress < 0.01) return;
+          closeNow("drag");
+        }, 280);
+      }
     };
-    el.addEventListener("pointerup", finish, { passive: true });
-    el.addEventListener("pointercancel", (e) => {
-      if (e.pointerId !== id) return;
-      id = null; live = false; clear();
-      if (gesture === "y") gesture = null;
-      if (o.onDrag) o.onDrag(0);
-    }, { passive: true });
+
+    now.addEventListener("pointerup", finish, { passive: true });
+    now.addEventListener("pointercancel", finish, { passive: true });
   }
 
-  draggable(now, () => closeNow("drag"), { threshold: 120 });
+  /* The mini is still opened by tapping it. It uses the same progress
+     machinery as the drag rather than a different animation path. */
+  function openPlayerFromMini(from) {
+    openNow(from);
+    setPlayerProgress(0);
+    requestAnimationFrame(() => springPlayerTo(1, 0));
+  }
 
-  /* ---------- swiping the cover to change song --------------
-     Left for the next one, right for the one before. The cover
-     follows the finger, and on release either flies out and the
-     new one comes in from the other side, or springs back.
+  bindPlayerGesture();
 
-     At the ends of the queue the drag is damped to a quarter
-     instead of being ignored: the edge should be felt rather
-     than just not happening.                                  */
-
-  /* The swipe is acknowledged rather than animated: the new cover
-     comes in from the side the old one went, over a fifth of a
-     second and eighteen pixels. Enough to say the gesture landed;
-     not the card slide that made this feel slow. */
+  /* Cover tap/hold to skip is kept, but its horizontal gesture must
+     never compete with the vertical player expansion. */
   function arrived(way) {
     if (REDUCED) return;
     ["coverSwipe", "mArt"].forEach((id) => {
       const el = $(id);
       if (!el) return;
       el.classList.remove("came-next", "came-prev");
-      void el.offsetWidth;                 // so a second swipe replays it
+      void el.offsetWidth;
       el.classList.add("came-" + way);
       el.addEventListener("animationend", function off() {
         el.classList.remove("came-next", "came-prev");
