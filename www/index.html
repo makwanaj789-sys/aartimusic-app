@@ -109,6 +109,42 @@ html, body { background:#0A0908; margin:0; }
   </div>
 </section>
 
+<!-- ============ PLAYLISTS ============ -->
+<section class="page" id="pLists" hidden>
+  <header class="head">
+    <form class="searchbar" id="listForm" autocomplete="off">
+      <input id="lq" type="search" placeholder="Playlists on YouTube…" enterkeyhint="search">
+      <button type="submit" aria-label="Search playlists">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      </button>
+    </form>
+  </header>
+
+  <!-- Somewhere to start, so the screen is never just a box. -->
+  <div class="block" id="lqBlock">
+    <div class="block-head">
+      <h2>Try</h2>
+      <button class="link" id="lqAdd">Open a link</button>
+    </div>
+    <div class="chips" id="lqChips"></div>
+  </div>
+
+  <div class="block" id="lqMineBlock" hidden>
+    <div class="block-head"><h2>Opened before</h2></div>
+    <div class="tiles" id="lqMine"></div>
+  </div>
+
+  <div class="tiles" id="lqResults"></div>
+
+  <div class="loading" id="lqLoading" hidden aria-hidden="true"><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div></div>
+
+  <div class="empty" id="lqEmpty" hidden>
+    <div class="art">📼</div>
+    <h3>No playlists for that</h3>
+    <p>Try a shorter word, or paste a playlist link.</p>
+  </div>
+</section>
+
 <!-- ============ LIBRARY ============ -->
 <section class="page" id="pLib" hidden>
   <header class="head"><h1>Your library</h1></header>
@@ -219,8 +255,12 @@ html, body { background:#0A0908; margin:0; }
     <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
     <span>Search</span>
   </button>
+  <button data-tab="Lists">
+    <svg viewBox="0 0 24 24"><path d="M4 7h11M4 12h11M4 17h7"/><path d="M17 10v7.2"/><circle cx="19" cy="17.6" r="2.4"/></svg>
+    <span>Playlists</span>
+  </button>
   <button data-tab="Lib">
-    <svg viewBox="0 0 24 24"><path d="M4 6h10M4 12h10M4 18h7"/><path d="M18 8v10"/><circle cx="16" cy="18" r="2"/></svg>
+    <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/></svg>
     <span>Library</span>
   </button>
 </nav>

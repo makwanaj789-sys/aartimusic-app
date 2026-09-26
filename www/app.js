@@ -189,7 +189,8 @@
 
   /* ---------- tabs ------------------------------------------ */
 
-  const pages = { Home: $("pHome"), Search: $("pSearch"), Lib: $("pLib") };
+  const pages = { Home: $("pHome"), Search: $("pSearch"),
+                  Lists: $("pLists"), Lib: $("pLib") };
 
   function tab(name) {
     Object.entries(pages).forEach(([k, el]) => (el.hidden = k !== name));
@@ -197,6 +198,7 @@
     if (name === "Home") drawHome();
     if (name === "Lib") drawLib();
     if (name === "Search") drawHistory();
+    if (name === "Lists") drawFinder();
     window.scrollTo(0, 0);
   }
   [...$("nav").children].forEach((b) =>
@@ -2109,6 +2111,136 @@
       rail.appendChild(card);
     });
   }
+
+  /* ---------- finding playlists -----------------------------
+     A section of its own, because looking for a playlist is a
+     different errand from looking for a song: you are choosing
+     an hour of listening, not a track.
+
+     What comes back is only the cards — name, who made it, how
+     many songs. Opening one is a second call, and it goes through
+     exactly the same openPlaylist() as a card on the home screen
+     and a pasted link, so there is one playlist screen and one way
+     of playing out of it.                                      */
+
+  const TRY = ["Bhajan", "Aarti", "Arijit Singh", "Krishna", "Old Hindi",
+               "Lofi", "Garba", "Kirtan"];
+  let shown = [];          // the last playlist search
+
+  function tile(p, i) {
+    const el = document.createElement("button");
+    el.className = "tile";
+
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = "";
+    img.src = p.thumb || "";
+
+    const t = document.createElement("div");
+    t.className = "t";
+    t.textContent = p.title || "Playlist";      // arbitrary — never innerHTML
+
+    const sub = document.createElement("div");
+    sub.className = "s";
+    sub.textContent = [p.by, p.count ? p.count + " songs" : ""]
+      .filter(Boolean).join(" · ");
+
+    el.append(img, t, sub);
+    stagger(el, i);
+    // The tile is what the playlist screen grows out of.
+    el.addEventListener("click", () => { buzzPick(); openPlaylist(p.id, p, el); });
+    return el;
+  }
+
+  function paintTiles(box, list) {
+    box.innerHTML = "";
+    list.forEach((p, i) => box.appendChild(tile(p, i)));
+  }
+
+  function drawFinder() {
+    // Somewhere to start: a few words, and whatever has been opened
+    // before. Both disappear once there is a search on screen.
+    const chips = $("lqChips");
+    if (!chips.children.length) {
+      TRY.forEach((term) => {
+        const c = document.createElement("button");
+        c.className = "chip";
+        c.textContent = term;
+        c.addEventListener("click", () => findLists(term));
+        chips.appendChild(c);
+      });
+    }
+
+    const mine = (store.lists || []).slice(0, 6);
+    const idle = !shown.length;
+    $("lqBlock").hidden = !idle;
+    $("lqMineBlock").hidden = !idle || !mine.length;
+    if (idle && mine.length) paintTiles($("lqMine"), mine);
+  }
+
+  function noLists(head, msg) {
+    const box = $("lqEmpty");
+    box.hidden = false;
+    box.querySelector("h3").textContent = head;
+    box.querySelector("p").textContent = msg;
+  }
+
+  async function findLists(term) {
+    term = (term || "").trim();
+    if (!term) return;
+
+    // A link pasted in here means that playlist, not a search for
+    // its address — the same rule the song search follows.
+    const asList = listId(term);
+    if (asList) { $("lq").value = ""; openPlaylist(asList); return; }
+
+    $("lq").value = term;
+    $("lq").blur();
+    $("lqEmpty").hidden = true;
+    $("lqBlock").hidden = true;
+    $("lqMineBlock").hidden = true;
+    $("lqResults").innerHTML = "";
+    $("lqLoading").hidden = false;
+    shown = [];
+
+    try {
+      const r = await api("/api/playlists?q=" + encodeURIComponent(term));
+
+      if (r.status === 401) return noLists("Locked", "This copy can't reach the server.");
+      if (r.status === 404) return noLists("Not yet", "The server doesn't know how to do this.");
+      if (!r.ok) return noLists("Hmm", "That search failed. Try again.");
+
+      shown = (await r.json()).results || [];
+      if (!shown.length) {
+        return noLists("No playlists for that", "Try a shorter word, or paste a playlist link.");
+      }
+      paintTiles($("lqResults"), shown);
+    } catch (err) {
+      noLists("Offline", "Can't reach the server right now.");
+    } finally {
+      $("lqLoading").hidden = true;
+      drawFinder();
+    }
+  }
+
+  $("listForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    findLists($("lq").value);
+  });
+  // Clearing the box puts the starting points back.
+  $("lq").addEventListener("input", () => {
+    if ($("lq").value.trim()) return;
+    shown = [];
+    $("lqResults").innerHTML = "";
+    $("lqEmpty").hidden = true;
+    drawFinder();
+  });
+  $("lqAdd").addEventListener("click", () => {
+    buzz();
+    $("plInput").value = "";
+    sheet($("plSheet"), true);
+    setTimeout(() => $("plInput").focus(), 260);
+  });
 
   /* ---------- whose app this is -----------------------------
      A line at the end of the library rather than a screen of its

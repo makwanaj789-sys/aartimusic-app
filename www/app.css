@@ -246,6 +246,44 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 }
 
 /* ============================================================
+   PLAYLIST TILES
+
+   Two to a row, square art, two lines under it. The same card
+   idea as the home rail, laid out down the page instead of
+   across it — and, like everything else here, the thing that the
+   playlist screen grows out of when you tap it.
+   ============================================================ */
+.tiles{
+  display:grid; grid-template-columns:repeat(2,1fr); gap:16px 12px;
+}
+.tiles:empty{ display:none; }
+.tile{ text-align:left; padding:0; min-width:0; cursor:pointer; }
+.tile img{
+  width:100%; aspect-ratio:1; object-fit:cover; display:block;
+  border-radius:10px; background:var(--bg-2);
+  box-shadow:0 10px 26px -14px rgba(0,0,0,.9);
+}
+.tile .t{
+  margin-top:8px; font-size:12.5px; line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.tile .s{ margin-top:3px; font-size:11px; color:var(--mist);
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Skeletons in the shape of the tiles, not of rows. */
+#lqLoading.loading{ display:grid; grid-template-columns:repeat(2,1fr); gap:16px 12px; }
+#lqLoading.loading[hidden]{ display:none; }
+.sk-tile{ display:flex; flex-direction:column; gap:7px; }
+.sk-cover{ width:100%; aspect-ratio:1; border-radius:10px; }
+.sk-tile .sk-t{ width:80%; }
+.sk-tile:nth-child(2) .sk::after{ animation-delay:.08s; }
+.sk-tile:nth-child(3) .sk::after{ animation-delay:.16s; }
+.sk-tile:nth-child(4) .sk::after{ animation-delay:.24s; }
+.sk-tile:nth-child(5) .sk::after{ animation-delay:.32s; }
+.sk-tile:nth-child(6) .sk::after{ animation-delay:.40s; }
+
+/* ============================================================
    SEARCH BAR
    ============================================================ */
 .searchbar{ display:flex; gap:8px; margin-bottom:22px; }
@@ -278,7 +316,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
    line across the page. */
 .nav{
   position:fixed; left:0; right:0; bottom:0; z-index:39;
-  display:grid; grid-template-columns:repeat(3,1fr);
+  display:grid; grid-template-columns:repeat(4,1fr);
   background:transparent;
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
@@ -300,7 +338,8 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
 .nav button{
   display:flex; flex-direction:column; align-items:center; gap:4px;
-  padding:9px 0 8px; color:var(--mist); font-size:10px;
+  padding:9px 0 8px; color:var(--mist); font-size:9.5px;
+  white-space:nowrap; letter-spacing:-.01em;
 }
 /* The one concession to floating over a bright cover: the glyph and
    the word carry their own shadow, so neither needs a panel. */
