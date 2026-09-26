@@ -35,6 +35,10 @@
     gone: {},
     link: null,          // { token, userId, name } once connected
     syncedAt: 0,
+    /* Playlists that have been opened, newest first, so the home
+       screen fills itself with what is actually listened to rather
+       than staying empty until someone edits config.js. */
+    lists: [],
   };
 
   function load() {
@@ -328,9 +332,12 @@
     const hasRecent = store.recents.length > 0;
     const hasFavs = store.favs.length > 0;
 
+    drawLists();
+    const hasLists = !$("plBlock").hidden;
+
     $("recentBlock").hidden = !hasRecent;
     $("favBlock").hidden = !hasFavs;
-    $("homeEmpty").hidden = hasRecent || hasFavs;
+    $("homeEmpty").hidden = hasRecent || hasFavs || hasLists;
     $("greetSub").textContent = hasRecent ? "Pick up where you left off" : "Let's find something";
 
     const rail = $("recentRail");
@@ -371,6 +378,11 @@
   });
 
   async function search(term) {
+    // Someone pasting a playlist link into the search box means the
+    // playlist, not a search for its address.
+    const asList = listId(term);
+    if (asList) { $("q").value = ""; openPlaylist(asList); return; }
+
     $("q").value = term;
     $("q").blur();
     $("searchEmpty").hidden = true;
@@ -1743,6 +1755,227 @@
     $("libFind").focus();
     drawLib();
   });
+
+  /* ==========================================================
+     WHAT IT IS PLAYING THROUGH
+
+     The WebView cannot know: Chrome on Android does not enumerate
+     audio outputs at all. Android does know, and a small native
+     class asks it — see scripts/android-audio-out.py. Everywhere
+     else there is no such class, nothing is asked, and nothing is
+     shown. A label that guesses would be worse than none.
+
+     The strip only says anything when the sound is going somewhere
+     other than the phone's own speaker, because that is the part
+     worth knowing and the artist's name is worth more than
+     "speaker". The full screen has room, so it says either.
+     ========================================================== */
+
+  const audioOut = nativePlugin("AudioOut");
+  let outNow = { kind: "", name: "" };
+  let outTimer = 0;
+
+  function paintOut() {
+    const named = outNow.name || {
+      bluetooth: "Bluetooth", wired: "Headphones", speaker: "Phone speaker",
+    }[outNow.kind] || "";
+
+    const away = outNow.kind && outNow.kind !== "speaker";
+
+    $("nOut").hidden = !outNow.kind;
+    $("nOut").dataset.kind = outNow.kind;
+    $("nOut").classList.toggle("away", !!away);
+    $("nOutName").textContent = named;
+
+    $("mOut").hidden = !away;
+    $("mOut").dataset.kind = outNow.kind;
+    $("mArtist").hidden = !!away;
+    $("mOutName").textContent = named;
+  }
+
+  async function readOut() {
+    if (!audioOut) return;
+    try {
+      const r = await audioOut.current();
+      if (!r) return;
+      const kind = r.kind || "", name = r.name || "";
+      if (kind === outNow.kind && name === outNow.name) return;
+      outNow = { kind, name };
+      paintOut();
+    } catch (e) {
+      // an older phone, or a plugin that is not there: say nothing
+    }
+  }
+
+  function watchOut() {
+    clearInterval(outTimer);
+    if (!audioOut) return;
+    // Only while there is something to hear and someone to see it.
+    outTimer = setInterval(() => {
+      if (document.visibilityState !== "visible" || audio.paused) return;
+      readOut();
+    }, 5000);
+  }
+
+  if (audioOut) {
+    audio.addEventListener("playing", readOut);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") readOut();
+    });
+    watchOut();
+    readOut();
+  }
+
+  /* ==========================================================
+     PLAYLISTS
+
+     A playlist is a way of finding songs, not a second kind of
+     thing: the server hands them back in the same shape a search
+     does, the rows are the same rows, and playing one goes down
+     the same path. Nothing here knows how to play anything.
+     ========================================================== */
+
+  const plist = $("plist");
+  let plSongs = [];
+
+  const listId = (ref) => {
+    const m = /[?&]list=([A-Za-z0-9_-]+)/.exec(ref || "");
+    if (m) return m[1];
+    return /^(PL|UU|OL|RD|FL|LL)[A-Za-z0-9_-]{10,}$/.test((ref || "").trim())
+      ? ref.trim() : "";
+  };
+
+  function rememberList(p) {
+    if (!p || !p.id) return;
+    store.lists = [{ id: p.id, title: p.title, thumb: p.thumb, by: p.by }]
+      .concat(store.lists.filter((x) => x.id !== p.id))
+      .slice(0, 12);
+    save();
+    drawHome();
+  }
+
+  function openPl() {
+    if (plist.classList.contains("open")) return;
+    plist.classList.add("open");
+    plist.setAttribute("aria-hidden", "false");
+    document.body.classList.add("locked");
+    opened(plist, closePl);
+  }
+  function closePl() {
+    if (!plist.classList.contains("open")) return;
+    plist.classList.remove("open");
+    plist.setAttribute("aria-hidden", "true");
+    if (!now.classList.contains("open")) document.body.classList.remove("locked");
+    closed(plist);
+  }
+  $("plClose").addEventListener("click", closePl);
+  draggable(plist, closePl, { threshold: 120 });
+
+  async function openPlaylist(ref, known) {
+    const id = listId(ref) || ref;
+    openPl();
+
+    $("plRows").innerHTML = "";
+    $("plEmpty").hidden = true;
+    $("plLoading").hidden = false;
+    plSongs = [];
+    $("plTitle").textContent = (known && known.title) || "Playlist";
+    $("plBy").textContent = (known && known.by) || "";
+    $("plArt").src = (known && known.thumb) || "";
+    $("plBg").style.backgroundImage = known && known.thumb
+      ? 'url("' + known.thumb + '")' : "";
+
+    try {
+      const r = await api("/api/playlist?id=" + encodeURIComponent(id));
+      if (!r.ok) throw new Error("no");
+      const p = await r.json();
+
+      plSongs = p.results || [];
+      $("plTitle").textContent = p.title || "Playlist";
+      $("plBy").textContent = p.by || (plSongs.length + " songs");
+      if (p.thumb) {
+        $("plArt").src = p.thumb;
+        $("plBg").style.backgroundImage = 'url("' + p.thumb + '")';
+      }
+      $("plEmpty").hidden = plSongs.length > 0;
+      fill($("plRows"), plSongs);
+      rememberList({ id: p.id || id, title: p.title, thumb: p.thumb, by: p.by });
+    } catch (e) {
+      $("plEmpty").hidden = false;
+      $("plEmpty").querySelector("h3").textContent = "Couldn't open that";
+      $("plEmpty").querySelector("p").textContent =
+        "The server couldn't read that playlist.";
+    } finally {
+      $("plLoading").hidden = true;
+    }
+  }
+
+  $("plPlay").addEventListener("click", () => {
+    if (!plSongs.length) return;
+    buzz();
+    queue = plSongs.slice();
+    playAt(0);
+  });
+  $("plShuffle").addEventListener("click", () => {
+    if (!plSongs.length) return;
+    buzz();
+    const shuffled = plSongs.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    queue = shuffled;
+    playAt(0);
+  });
+
+  /* ---------- pasting a link to one ---------- */
+
+  $("plAdd").addEventListener("click", () => {
+    buzz();
+    $("plInput").value = "";
+    sheet($("plSheet"), true);
+    setTimeout(() => $("plInput").focus(), 260);
+  });
+  $("plCancel").addEventListener("click", () => sheet($("plSheet"), false));
+  $("plSheet").addEventListener("click", (e) => {
+    if (e.target === $("plSheet")) sheet($("plSheet"), false);
+  });
+  $("plForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const ref = $("plInput").value.trim();
+    if (!listId(ref)) { toast("That link has no playlist in it"); return; }
+    sheet($("plSheet"), false);
+    openPlaylist(ref);
+  });
+
+  /* ---------- the rail on the home screen ---------- */
+
+  function drawLists() {
+    const seen = {};
+    const all = []
+      .concat(window.AARTI_PLAYLISTS || [])
+      .map((p) => ({ id: p.id, title: p.name || p.title || "Playlist", thumb: p.thumb, by: "" }))
+      .concat(store.lists || [])
+      .filter((p) => p && p.id && !seen[p.id] && (seen[p.id] = 1));
+
+    $("plBlock").hidden = !all.length;
+    const rail = $("plRail");
+    rail.innerHTML = "";
+
+    all.forEach((p) => {
+      const card = document.createElement("button");
+      card.className = "card";
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.src = p.thumb || "";
+      const t = document.createElement("div");
+      t.className = "t";
+      t.textContent = p.title;                  // arbitrary text — never innerHTML
+      card.append(img, t);
+      card.addEventListener("click", () => { buzzPick(); openPlaylist(p.id, p); });
+      rail.appendChild(card);
+    });
+  }
 
   /* ---------- whose app this is -----------------------------
      A line at the end of the library rather than a screen of its

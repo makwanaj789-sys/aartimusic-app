@@ -60,6 +60,14 @@ html, body { background:#0A0908; margin:0; }
     <div class="rows" id="favRows"></div>
   </div>
 
+  <div class="block" id="plBlock" hidden>
+    <div class="block-head">
+      <h2>Playlists</h2>
+      <button class="link" id="plAdd">Open a link</button>
+    </div>
+    <div class="rail" id="plRail"></div>
+  </div>
+
   <div class="empty" id="homeEmpty">
     <div class="art">🎧</div>
     <h3>Nothing here yet</h3>
@@ -164,6 +172,10 @@ html, body { background:#0A0908; margin:0; }
     <div class="meta" id="miniOpen">
       <div class="t" id="mTitle"></div>
       <div class="a" id="mArtist"></div>
+      <!-- Shown in place of the artist only when the sound is going
+           somewhere other than the phone's own speaker, which is the
+           part worth saying. -->
+      <div class="out" id="mOut" hidden><svg class="out-i" viewBox="0 0 24 24" aria-hidden="true"><path class="bt" d="M8 6.5L16 17.5 12 21V3l4 3.5L8 17.5"/><path class="wire" d="M4 14v-2a8 8 0 0116 0v2"/><path class="wire" d="M4 14h3v5H5a1 1 0 01-1-1zM20 14h-3v5h2a1 1 0 001-1z"/><path class="spk" d="M4 9h3l5-4v14l-5-4H4z"/><path class="spk" d="M16 9.5a4 4 0 010 5"/></svg><span id="mOutName"></span></div>
     </div>
     <button id="mFav" class="icon" aria-label="Favourite">
       <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/></svg>
@@ -224,6 +236,8 @@ html, body { background:#0A0908; margin:0; }
         <svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.5-7 9-7 9z"/></svg>
       </button>
     </div>
+
+    <div class="out-row" id="nOut" hidden><svg class="out-i" viewBox="0 0 24 24" aria-hidden="true"><path class="bt" d="M8 6.5L16 17.5 12 21V3l4 3.5L8 17.5"/><path class="wire" d="M4 14v-2a8 8 0 0116 0v2"/><path class="wire" d="M4 14h3v5H5a1 1 0 01-1-1zM20 14h-3v5h2a1 1 0 001-1z"/><path class="spk" d="M4 9h3l5-4v14l-5-4H4z"/><path class="spk" d="M16 9.5a4 4 0 010 5"/></svg><span id="nOutName"></span></div>
 
     <div class="seek">
       <div class="seek-rail" id="seekRail"><i id="seekFill"><span class="fill-in"><span class="shimmer"></span></span></i><span class="knob-track"><b id="seekKnob"></b></span></div>
@@ -307,6 +321,68 @@ html, body { background:#0A0908; margin:0; }
     <button class="act" id="linkGo">Open Telegram</button>
     <button class="act ghost" id="linkAlt" hidden>Telegram didn't open — copy the link</button>
     <button class="act ghost" id="linkCancel">Not now</button>
+  </div>
+</section>
+
+<!-- ============ A PLAYLIST ============
+     Comes up over everything like the full-screen player, and is
+     closed the same ways: the button, a drag down, or Back. -->
+<section class="now plist" id="plist" aria-hidden="true">
+  <div class="now-bg" id="plBg"></div>
+  <div class="now-in">
+    <header class="now-top">
+      <button id="plClose" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <span class="from">Playlist</span>
+      <span class="now-top-spacer" aria-hidden="true"></span>
+    </header>
+
+    <div class="pl-head">
+      <img id="plArt" alt="">
+      <div class="pl-text">
+        <h1 id="plTitle">Playlist</h1>
+        <p id="plBy"></p>
+      </div>
+    </div>
+
+    <div class="pl-acts">
+      <button class="act-solid" id="plPlay">
+        <svg viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg>
+        <span>Play all</span>
+      </button>
+      <button class="act-ghost" id="plShuffle">
+        <svg viewBox="0 0 24 24"><path d="M16 4l4 3-4 3"/><path d="M16 14l4 3-4 3"/><path d="M4 7h4l8 10h4"/><path d="M4 17h4l2-2.5"/></svg>
+        <span>Shuffle</span>
+      </button>
+    </div>
+
+    <div class="rows pl-rows" id="plRows"></div>
+    <div class="loading" id="plLoading" hidden><span></span><span></span><span></span></div>
+    <div class="empty" id="plEmpty" hidden>
+      <div class="art">📃</div>
+      <h3>Nothing in here</h3>
+      <p>That playlist came back empty.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Pasting a link to one -->
+<section class="sheet" id="plSheet" aria-hidden="true">
+  <div class="sheet-in">
+    <div class="grab"></div>
+    <div class="sheet-head"><h2>Open a playlist</h2></div>
+    <p class="link-copy">Paste a YouTube playlist link. Anything with a list in it works.</p>
+    <!-- Deliberately not type="url": a bare list id is perfectly good
+         input here, and the browser's own validation would refuse it
+         without ever firing submit. What counts as a playlist is
+         decided in app.js, where the message can say something. -->
+    <form id="plForm" class="pl-form" novalidate>
+      <input id="plInput" type="text" inputmode="url" autocomplete="off"
+             placeholder="youtube.com/playlist?list=…" aria-label="Playlist link">
+      <button class="act" type="submit">Open it</button>
+    </form>
+    <button class="act ghost" id="plCancel" type="button">Not now</button>
   </div>
 </section>
 

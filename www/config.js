@@ -16,3 +16,13 @@ window.AARTI_DISCOVERY =
 // The Android build has no Telegram behind it to sign requests, so it
 // carries a key instead. Must match WEBAPP_DEV_KEY in the bot's .env.
 window.AARTI_KEY = "aarti-dev-9182";
+
+// Playlists to show on the home screen. Each one is a YouTube
+// playlist id — the part after list= in the address — and a name to
+// show it by. Leave it empty and the app still opens any playlist
+// link pasted into it; whatever is opened is remembered there too.
+//
+//   window.AARTI_PLAYLISTS = [
+//     { id: "PLxxxxxxxxxxxxxxxxxx", name: "Aarti & bhajan" },
+//   ];
+window.AARTI_PLAYLISTS = [];
