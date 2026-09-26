@@ -34,12 +34,11 @@ html, body { background:#0A0908; margin:0; }
 <!-- The same mark as the launcher icon, on the same black the
      launch screen uses, so the handover from one to the other is
      invisible. app.js takes it away once the first screen is ready. -->
-<div id="boot">
-  <div class="boot-stage">
-    <span class="boot-glow"></span>
-    <img class="boot-mark" src="boot-mark.png" width="512" height="444" alt="" aria-hidden="true">
+<div id="boot" aria-label="Aarti Music">
+  <div class="boot-eq" aria-hidden="true">
+    <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
   </div>
-  <p class="boot-word">Aarti Music</p>
+  <span class="boot-word">Aarti Music</span>
 </div>
 
 
@@ -268,10 +267,9 @@ html, body { background:#0A0908; margin:0; }
 <!-- ============ FULL SCREEN ============ -->
 <section class="now" id="now" aria-hidden="true">
   <div class="now-bg" id="nowBg"></div>
-  <!-- The pool of light the artwork throws into the room. Its colour
-       comes from the cover; only its opacity and scale ever move. -->
   <div class="now-lit" id="nowLit" aria-hidden="true"></div>
-  <div class="now-in">
+  <div class="now-motion" id="nowMotion">
+    <div class="now-in">
     <header class="now-top">
       <button id="nowClose" aria-label="Close">
         <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
@@ -330,6 +328,7 @@ html, body { background:#0A0908; margin:0; }
       <svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h10M4 17h7"/><path d="M17 8l3 4-3 4"/></svg>
       <span id="upNextLabel">Queue</span>
     </button>
+    </div>
   </div>
 </section>
 
