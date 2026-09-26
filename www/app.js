@@ -910,6 +910,9 @@
 
     buzz("light");
     $("mini").hidden = false;
+    // The scrim behind the floating controls has to grow to cover
+    // the strip as well, now that there is one.
+    document.body.classList.add("with-mini");
     waiting(true);
     paint(song);
     addRecent(song);

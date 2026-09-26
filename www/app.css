@@ -230,44 +230,71 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 /* ============================================================
    NAV + MINI
    ============================================================ */
-/* The bar and the strip are one sheet of glass over the page rather
-   than two panels sitting on it: the list runs underneath and is
-   blurred by it, which is what makes the screen feel deep instead of
-   stacked. */
+/* Neither of these is a surface. There is no bar and no strip —
+   no fill, no blur, no border, nothing with an edge. The page runs
+   all the way to the bottom of the screen and stays legible there;
+   the icons, the title and the play button simply float on top of
+   it.
+
+   What keeps them readable is one soft gradient, cast behind both
+   of them from the bottom of the screen upwards. It fades to
+   nothing well before it reaches anything you are reading, so it
+   darkens the pixels under the controls without ever drawing a
+   line across the page. */
 .nav{
-  position:fixed; left:0; right:0; bottom:0; z-index:40;
+  position:fixed; left:0; right:0; bottom:0; z-index:39;
   display:grid; grid-template-columns:repeat(3,1fr);
-  /* Nothing of its own: the page shows through and the blur is all
-     that separates them. The labels hold up because everything
-     behind them is already near-black. */
   background:transparent;
-  backdrop-filter:blur(26px) saturate(1.3);
-  -webkit-backdrop-filter:blur(26px) saturate(1.3);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
+/* The scrim. It lives on the nav, behind it, and reaches up past
+   the mini player — which is why the mini sits one layer above the
+   nav rather than below it, so this passes under both.
+   Its height follows whether there is a mini player to cover. */
+.nav::before{
+  content:''; position:absolute; z-index:-1; pointer-events:none;
+  left:0; right:0; bottom:0;
+  height:calc(100% + var(--scrim,46px));
+  background:linear-gradient(180deg,
+    transparent 0%,
+    color-mix(in srgb,var(--bg) 34%,transparent) 34%,
+    color-mix(in srgb,var(--bg) 72%,transparent) 66%,
+    color-mix(in srgb,var(--bg) 92%,transparent) 100%);
+  transition:height .32s var(--ease);
+}
+body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
 .nav button{
   display:flex; flex-direction:column; align-items:center; gap:4px;
   padding:9px 0 8px; color:var(--mist); font-size:10px;
 }
-.nav button svg{ width:21px; height:21px; }
+/* The one concession to floating over a bright cover: the glyph and
+   the word carry their own shadow, so neither needs a panel. */
+.nav button svg{ width:21px; height:21px;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.75)); }
+.nav button span{ text-shadow:0 1px 3px rgba(0,0,0,.8); }
 .nav button.on{ color:var(--flame); }
 
 .mini{
-  position:fixed; left:0; right:0; z-index:39;
+  position:fixed; left:0; right:0; z-index:40;
   bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
-  background:color-mix(in srgb,var(--bg-3) 58%,transparent);
-  backdrop-filter:blur(24px) saturate(1.25);
-  -webkit-backdrop-filter:blur(24px) saturate(1.25);
-  border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent);
+  background:transparent;
   /* Sideways changes the song and up opens the full screen, so the
      strip keeps both axes of its own gestures and hands plain
      scrolling back to the page. */
   touch-action:none; overflow:hidden;
 }
-.bar{ position:relative; height:2px; background:var(--line); overflow:hidden; }
+.mini .t, .mini .a, .mini .out{ text-shadow:0 1px 3px rgba(0,0,0,.8); }
+.mini .icon, .mini .play{ filter:drop-shadow(0 1px 3px rgba(0,0,0,.7)); }
+/* No track behind the progress — a hairline across the whole screen
+   is a border by another name. Only what has played is drawn. */
+.bar{ position:relative; height:2px; background:transparent; overflow:hidden; }
 .mini-in{ display:grid; grid-template-columns:40px 1fr auto auto; gap:10px;
           align-items:center; padding:8px 12px; }
-.mini-in img{ width:40px; height:40px; border-radius:7px; object-fit:cover; background:var(--bg); }
+.mini-in img{ width:40px; height:40px; border-radius:7px; object-fit:cover;
+  background:var(--bg);
+  /* With nothing behind it, the thumbnail has to sit on the page by
+     itself. The shadow is what puts it there. */
+  box-shadow:0 6px 18px -6px rgba(0,0,0,.85); }
 .mini-in .meta{ min-width:0; cursor:pointer; }
 .meta .t{ font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .meta .a{ font-size:11px; color:var(--mist); margin-top:1px;
