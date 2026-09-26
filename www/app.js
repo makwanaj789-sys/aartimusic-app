@@ -1376,34 +1376,35 @@
   const now = $("now");
   const openNow = (from) => {
     if (now.classList.contains("open")) return;
-    // The rectangle has to be a painted frame before the panel is
-    // told to fill the screen, or there is nothing to move from.
     if (growFrom(now, from)) { cameFrom.set(now, from); settle(now); }
     else cameFrom.delete(now);
+
     now.classList.add("open");
     now.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
+    setPlayerProgress(0);
+    requestAnimationFrame(() => springPlayerTo(1, 0));
     try { tg.BackButton.show(); } catch (e) {}
     opened(now, closeNow);
   };
-  /* how === "drag" when a finger pulled it down: that one goes back
-     down, because that is where the hand just put it. Everything
-     else — the chevron, Back, the system gesture — collapses into
-     the artwork it came out of. No flush here, on purpose: adding
-     the class and dropping .open in the same breath is what makes
-     the browser read identity as the start of the move. */
+
   const closeNow = (how) => {
     if (!now.classList.contains("open")) return;
-    if (how === "drag") now.classList.remove("growing");
-    else growFrom(now, cameFrom.get(now) || $("mArt"));
+
+    if (how === "drag") {
+      setPlayerProgress(0);
+    } else {
+      springPlayerTo(0, 0);
+    }
+
     now.classList.remove("open");
     now.setAttribute("aria-hidden", "true");
     document.body.classList.remove("locked");
     try { tg.BackButton.hide(); } catch (e) {}
     closed(now);
   };
+
   $("miniOpen").addEventListener("click", () => {
-    // A swipe that ended on this element still fires a click.
     if (Date.now() - swipedAt < 400) return;
     openPlayerFromMini($("mArt"));
   });
