@@ -39,6 +39,10 @@
        screen fills itself with what is actually listened to rather
        than staying empty until someone edits config.js. */
     lists: [],
+    /* Which palette. "amber" is what :root already is, so it is
+       stored as the absence of an attribute rather than one that
+       has to be kept in step with the stylesheet. */
+    theme: "amber",
   };
 
   function load() {
@@ -198,6 +202,47 @@
   [...$("nav").children].forEach((b) =>
     b.addEventListener("click", () => { buzzPick(); tab(b.dataset.tab); })
   );
+
+  /* ---------- the palette -----------------------------------
+     Amber and Grove. A theme is eight custom properties on :root,
+     so switching one is one attribute and a repaint — there is no
+     second stylesheet to load and nothing to keep in step.
+
+     Amber is what :root is without the attribute, which is what
+     makes it the one that cannot be got wrong.                */
+
+  const THEMES = ["amber", "green"];
+
+  function paintTheme() {
+    const t = THEMES.indexOf(store.theme) >= 0 ? store.theme : "amber";
+    const root = document.documentElement;
+    if (t === "amber") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", t);
+
+    // The status bar and the notch area, which Android paints from
+    // this and not from the page.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const bg = getComputedStyle(root).getPropertyValue("--bg").trim();
+    if (meta && bg) meta.setAttribute("content", bg);
+    try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); } catch (e) {}
+
+    document.querySelectorAll(".th").forEach((b) =>
+      b.setAttribute("aria-pressed", b.dataset.theme === t ? "true" : "false"));
+
+    // The pool of light under the cover is the artwork's colour when
+    // there is one and the palette's when there is not, so it has to
+    // be asked again.
+    relight(queue[index]);
+  }
+
+  document.querySelectorAll(".th").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (store.theme === b.dataset.theme) return;
+      store.theme = b.dataset.theme;
+      save(); buzzPick(); paintTheme();
+    }));
+
+  paintTheme();
 
   /* ---------- rows ------------------------------------------ */
 
@@ -945,18 +990,23 @@
      used rather than failing. The answer is kept, because the same
      cover comes round again.                                    */
 
-  const AMBER = "224,162,83";
+  /* The cover's own colour when one can be read; otherwise the
+     palette's. Cached as null rather than as a colour, so changing
+     the theme changes the fallback for covers already seen. */
+  const themeGlow = () =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--glow").trim() || "224,162,83";
   const litBy = new Map();
 
   function lightFrom(src) {
-    if (!src) return Promise.resolve(AMBER);
+    if (!src) return Promise.resolve(null);
     if (litBy.has(src)) return Promise.resolve(litBy.get(src));
 
     return new Promise((done) => {
       const finish = (v) => { litBy.set(src, v); done(v); };
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.onerror = () => finish(AMBER);
+      img.onerror = () => finish(null);
       img.onload = () => {
         try {
           const N = 14;                       // enough to find a colour
@@ -977,7 +1027,7 @@
             const k = sat * sat * (hi / 255);
             r += R * k; gr += G * k; b += B * k; w += k;
           }
-          if (!w) return finish(AMBER);
+          if (!w) return finish(null);
 
           // Lifted to an even brightness, so a dark cover still
           // lights the room and a bright one does not flood it.
@@ -986,7 +1036,7 @@
           out = out.map((n) => Math.min(255, Math.round(n * lift)));
           finish(out.join(","));
         } catch (e) {
-          finish(AMBER);                      // the canvas was tainted
+          finish(null);                       // the canvas was tainted
         }
       };
       img.src = src;
@@ -997,7 +1047,7 @@
     const lit = $("nowLit");
     if (lit) lit.classList.add("dimming");
     lightFrom(song && song.thumb).then((rgb) => {
-      document.documentElement.style.setProperty("--lit", rgb);
+      document.documentElement.style.setProperty("--lit", rgb || themeGlow());
       if (lit) requestAnimationFrame(() => lit.classList.remove("dimming"));
     });
   }

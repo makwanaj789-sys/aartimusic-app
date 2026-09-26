@@ -61,16 +61,51 @@
    ============================================================ */
 *,*::before,*::after{ box-sizing:border-box; }
 
+/* ==========================================================
+   THE PALETTE, AND THE OTHER ONE
+
+   Every colour in this file is one of these names. A theme is
+   therefore a swap of eight values on :root and nothing else —
+   no second stylesheet, no duplicated rules, nothing that can
+   fall out of step with the first one.
+
+   Two of them earn their keep specifically:
+
+   --glow is the accent as a bare "r,g,b" triple, because the
+   artwork's own colour arrives as --lit in that shape and every
+   glow in the app is written rgba(var(--lit,var(--glow)),a) —
+   the cover's colour when there is one, the theme's when there
+   is not.
+
+   --on-accent is what text becomes when it sits on the accent.
+   It used to be the literal #0A0908 in six places, which is fine
+   until the accent is a light green and the background is not
+   that exact black any more.
+   ========================================================== */
 :root{
   --bg:#0A0908; --bg-2:#131110; --bg-3:#1C1917;
   --line:#241F1B; --ink:#F7F1E8; --mist:#8C8079;
   --flame:#E0A253; --ember:#B0553C; --hot:#F7DCA8;
+  --glow:224,162,83;
+  --on-accent:#0A0908;
 
   --nav-h:60px; --mini-h:60px;
   --ease:cubic-bezier(.22,.61,.36,1);
   --out:cubic-bezier(.16,1,.3,1);
   --spring:cubic-bezier(.34,1.56,.64,1);   /* overshoots, then settles */
   --snap:cubic-bezier(.2,.9,.3,1);
+}
+
+/* Grove. The same near-black room, lit green instead of amber. The
+   background moves barely at all on purpose: the splash screen is
+   painted before this stylesheet is read, and a background that
+   changed here would show as a flash on every start. */
+:root[data-theme="green"]{
+  --bg:#070A08; --bg-2:#0F1411; --bg-3:#161E19;
+  --line:#1E2922; --ink:#EEF6F0; --mist:#7E8F85;
+  --flame:#5FD68F; --ember:#2C8F62; --hot:#C9F6DC;
+  --glow:95,214,143;
+  --on-accent:#061009;
 }
 
 html,body{ height:100%; }
@@ -158,7 +193,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   padding:8px 15px; border-radius:999px; font-size:12.5px;
   background:var(--bg-2); border:1px solid var(--line); color:var(--mist);
 }
-.seg button.on{ background:var(--flame); border-color:var(--flame); color:#0A0908; font-weight:600; }
+.seg button.on{ background:var(--flame); border-color:var(--flame); color:var(--on-accent); font-weight:600; }
 
 .empty{ text-align:center; padding:50px 24px; color:var(--mist); }
 .empty .art{ font-size:40px; margin-bottom:12px; }
@@ -224,7 +259,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .searchbar input:focus{ border-color:var(--flame); }
 .searchbar button{
   flex:none; width:48px; padding:13px; border-radius:12px;
-  background:linear-gradient(135deg,var(--flame),var(--ember)); color:#0A0908;
+  background:linear-gradient(135deg,var(--flame),var(--ember)); color:var(--on-accent);
 }
 
 /* ============================================================
@@ -371,7 +406,7 @@ body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
   /* Two shadows: the weight of the thing, and the colour it throws
      onto whatever is under it. The second is the whole idea. */
   box-shadow:0 30px 60px -20px rgba(0,0,0,.8),
-             0 20px 56px -14px rgba(var(--lit,224,162,83),.42);
+             0 20px 56px -14px rgba(var(--lit,var(--glow)),.42);
 }
 
 /* ==========================================================
@@ -390,9 +425,9 @@ body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
   pointer-events:none; opacity:0;
   transform:translate(-50%,-50%);
   background:radial-gradient(circle at center,
-    rgba(var(--lit,224,162,83),.30) 0%,
-    rgba(var(--lit,224,162,83),.13) 36%,
-    rgba(var(--lit,224,162,83),0)   68%);
+    rgba(var(--lit,var(--glow)),.30) 0%,
+    rgba(var(--lit,var(--glow)),.13) 36%,
+    rgba(var(--lit,var(--glow)),0)   68%);
   transition:opacity .55s ease;
 }
 .now.open .now-lit{ opacity:1; }
@@ -497,9 +532,9 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   transition:transform .26s var(--spring);
 }
 .act-solid{
-  background:linear-gradient(150deg,var(--flame),var(--ember)); color:#0A0908;
+  background:linear-gradient(150deg,var(--flame),var(--ember)); color:var(--on-accent);
   box-shadow:0 8px 20px -10px rgba(0,0,0,.9),
-             0 4px 18px -6px rgba(var(--lit,224,162,83),.4);
+             0 4px 18px -6px rgba(var(--lit,var(--glow)),.4);
 }
 .act-ghost{ color:var(--ink); border:1px solid var(--line); }
 .act-solid svg, .act-ghost svg{ width:16px; height:16px; flex:none; }
@@ -596,7 +631,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   background:linear-gradient(150deg,
     color-mix(in srgb,var(--flame) 92%,#fff),
     var(--flame) 38%, var(--ember));
-  color:#0A0908;
+  color:var(--on-accent);
   /* A rim catching light at the top, a darker one at the bottom, and
      a shadow on the surface below — the three things that make a
      circle read as a disc rather than a hole. */
@@ -604,7 +639,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
     inset 0 1.5px 0 rgba(255,244,228,.55),
     inset 0 -2px 3px rgba(80,26,12,.35),
     0 10px 22px -8px rgba(0,0,0,.85),
-    0 6px 26px -6px rgba(var(--lit,224,162,83),.45);
+    0 6px 26px -6px rgba(var(--lit,var(--glow)),.45);
   transition:transform .3s var(--spring), box-shadow .3s ease;
 }
 /* Pressed, it goes down into the surface: further than the others,
@@ -615,7 +650,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
     inset 0 1.5px 0 rgba(255,244,228,.4),
     inset 0 -1px 2px rgba(80,26,12,.3),
     0 4px 10px -6px rgba(0,0,0,.9),
-    0 2px 12px -4px rgba(var(--lit,224,162,83),.35);
+    0 2px 12px -4px rgba(var(--lit,var(--glow)),.35);
 }
 
 /* Skip moves the way the track is about to. Two pixels is enough to
@@ -634,7 +669,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 #bRepeat{ position:relative; }
 #bRepeat .one{
   position:absolute; right:4px; bottom:4px; font-size:9px; font-weight:700;
-  background:var(--flame); color:#0A0908; border-radius:50%;
+  background:var(--flame); color:var(--on-accent); border-radius:50%;
   width:13px; height:13px; display:grid; place-items:center;
 }
 
@@ -979,12 +1014,38 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .acc-btn{
   flex:none; padding:8px 14px; border-radius:999px; font-size:12px;
-  background:linear-gradient(135deg,var(--flame),var(--ember)); color:#0A0908; font-weight:600;
+  background:linear-gradient(135deg,var(--flame),var(--ember)); color:var(--on-accent); font-weight:600;
 }
 .account.linked .acc-btn{
   background:transparent; border:1px solid var(--line-lit, var(--line));
   color:var(--mist); font-weight:400;
 }
+
+/* ---------- picking one of the two palettes --------------
+   The swatches are written in literal colour, not in the theme's
+   own names: a chooser that recolours itself with the choice
+   cannot show you what the other one looks like. */
+.themes{ display:flex; align-items:center; gap:9px; margin:0 0 18px; }
+.th-label{ font-size:12px; color:var(--mist); margin-right:auto; padding-left:2px; }
+.th{
+  display:flex; align-items:center; gap:8px;
+  padding:7px 13px 7px 8px; border-radius:999px;
+  border:1px solid var(--line); color:var(--mist); font-size:12px;
+  transition:transform .22s var(--spring), color .25s var(--ease),
+             border-color .25s var(--ease);
+}
+.th i{
+  width:15px; height:15px; border-radius:50%; display:block; flex:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);
+}
+.th-amber i{ background:linear-gradient(140deg,#F7DCA8,#E0A253 42%,#B0553C); }
+.th-green i{ background:linear-gradient(140deg,#C9F6DC,#5FD68F 42%,#2C8F62); }
+.th[aria-pressed="true"]{
+  color:var(--ink);
+  border-color:color-mix(in srgb,var(--flame) 58%,transparent);
+}
+/* Pressed, then released with a little more than it was given. */
+.th:active{ transform:scale(.93); transition-duration:.08s; }
 
 .link-copy{ margin:0 4px 14px; font-size:13px; line-height:1.65; color:var(--mist); }
 .link-wait{ display:flex; justify-content:center; gap:7px; padding:6px 0 16px; }

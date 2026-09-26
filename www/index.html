@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
 <title>Aarti Music</title>
 <meta name="theme-color" content="#0A0908">
+<!-- Before anything is painted. app.js owns the choice; this only
+     puts it on the element early enough that the splash and the
+     first screen are never briefly the other palette. -->
+<script>try{var t=JSON.parse(localStorage.getItem('aarti.v1')||'{}').theme;
+if(t&&t!=='amber')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <link rel="stylesheet" href="app.css">
 <!-- The two weights on screen before anything is scrolled. The rest
      are declared in app.css and fetched when something needs them. -->
@@ -115,6 +120,20 @@ html, body { background:#0A0908; margin:0; }
       <div class="acc-sub" id="accSub">Connect Telegram to keep these if you change phones</div>
     </div>
     <button class="acc-btn" id="accBtn">Connect</button>
+  </div>
+
+  <!-- A theme is a palette on :root and nothing more, so this only
+       writes one attribute. The swatches keep their own colours in
+       either theme — a chooser that changes colour with the choice
+       tells you nothing about what you are choosing. -->
+  <div class="themes" role="group" aria-label="Theme">
+    <span class="th-label">Theme</span>
+    <button class="th th-amber" data-theme="amber" aria-pressed="true">
+      <i aria-hidden="true"></i><span>Amber</span>
+    </button>
+    <button class="th th-green" data-theme="green" aria-pressed="false">
+      <i aria-hidden="true"></i><span>Grove</span>
+    </button>
   </div>
 
   <div class="seg">
