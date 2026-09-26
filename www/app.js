@@ -1757,6 +1757,76 @@
   });
 
   /* ==========================================================
+     WHAT IT IS PLAYING THROUGH
+
+     The WebView cannot know: Chrome on Android does not enumerate
+     audio outputs at all. Android does know, and a small native
+     class asks it — see scripts/android-audio-out.py. Everywhere
+     else there is no such class, nothing is asked, and nothing is
+     shown. A label that guesses would be worse than none.
+
+     The strip only says anything when the sound is going somewhere
+     other than the phone's own speaker, because that is the part
+     worth knowing and the artist's name is worth more than
+     "speaker". The full screen has room, so it says either.
+     ========================================================== */
+
+  const audioOut = nativePlugin("AudioOut");
+  let outNow = { kind: "", name: "" };
+  let outTimer = 0;
+
+  function paintOut() {
+    const named = outNow.name || {
+      bluetooth: "Bluetooth", wired: "Headphones", speaker: "Phone speaker",
+    }[outNow.kind] || "";
+
+    const away = outNow.kind && outNow.kind !== "speaker";
+
+    $("nOut").hidden = !outNow.kind;
+    $("nOut").dataset.kind = outNow.kind;
+    $("nOut").classList.toggle("away", !!away);
+    $("nOutName").textContent = named;
+
+    $("mOut").hidden = !away;
+    $("mOut").dataset.kind = outNow.kind;
+    $("mArtist").hidden = !!away;
+    $("mOutName").textContent = named;
+  }
+
+  async function readOut() {
+    if (!audioOut) return;
+    try {
+      const r = await audioOut.current();
+      if (!r) return;
+      const kind = r.kind || "", name = r.name || "";
+      if (kind === outNow.kind && name === outNow.name) return;
+      outNow = { kind, name };
+      paintOut();
+    } catch (e) {
+      // an older phone, or a plugin that is not there: say nothing
+    }
+  }
+
+  function watchOut() {
+    clearInterval(outTimer);
+    if (!audioOut) return;
+    // Only while there is something to hear and someone to see it.
+    outTimer = setInterval(() => {
+      if (document.visibilityState !== "visible" || audio.paused) return;
+      readOut();
+    }, 5000);
+  }
+
+  if (audioOut) {
+    audio.addEventListener("playing", readOut);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") readOut();
+    });
+    watchOut();
+    readOut();
+  }
+
+  /* ==========================================================
      PLAYLISTS
 
      A playlist is a way of finding songs, not a second kind of

@@ -53,6 +53,10 @@ that has to be in the native project is written by the workflow:
   - `scripts/android-media-app.py` writes the browser service that
     declares this a music player. It does nothing; it exists to be
     found in the manifest.
+  - `scripts/android-audio-out.py` writes the one class the WebView
+    cannot do without: what the sound is actually coming out of.
+    Chrome on Android does not enumerate audio outputs, so earbuds
+    and the phone's speaker are indistinguishable from `www/`.
   - Plugins come from `package.json` and Capacitor wires them in.
 
 Nothing in `www/` needs a build step; these run before Gradle does.

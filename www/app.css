@@ -237,12 +237,12 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .nav{
   position:fixed; left:0; right:0; bottom:0; z-index:40;
   display:grid; grid-template-columns:repeat(3,1fr);
-  background:linear-gradient(180deg,
-    color-mix(in srgb,var(--bg) 34%,transparent),
-    color-mix(in srgb,var(--bg) 76%,transparent));
-  backdrop-filter:blur(24px) saturate(1.25);
-  -webkit-backdrop-filter:blur(24px) saturate(1.25);
-  border-top:1px solid color-mix(in srgb,var(--line) 50%,transparent);
+  /* Nothing of its own: the page shows through and the blur is all
+     that separates them. The labels hold up because everything
+     behind them is already near-black. */
+  background:transparent;
+  backdrop-filter:blur(26px) saturate(1.3);
+  -webkit-backdrop-filter:blur(26px) saturate(1.3);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 .nav button{
@@ -414,6 +414,30 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 .now-ctrls .small{ width:40px; height:40px; padding:9px; color:var(--mist); }
 .now-ctrls .small svg{ fill:none; stroke:currentColor; }
 .now-ctrls .small.on{ color:var(--flame); }
+/* ---------- what it is playing through --------------------
+   One glyph with three shapes in it; the kind of device decides
+   which of them is drawn. Cheaper than three files and it is the
+   right colour without being told.                            */
+
+.out, .out-row{ display:flex; align-items:center; gap:6px; min-width:0; }
+.out[hidden], .out-row[hidden]{ display:none; }
+.out-i{ width:13px; height:13px; flex:none; fill:none; stroke:currentColor;
+        stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+.out-i .bt, .out-i .wire, .out-i .spk{ display:none; }
+[data-kind="bluetooth"] .out-i .bt{ display:inline; }
+[data-kind="wired"] .out-i .wire,
+[data-kind="other"] .out-i .wire{ display:inline; }
+[data-kind="speaker"] .out-i .spk{ display:inline; }
+.out-i .spk:first-of-type{ fill:currentColor; }
+
+.out{ font-size:11px; margin-top:1px; color:var(--flame);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.out span{ overflow:hidden; text-overflow:ellipsis; }
+
+.out-row{ margin-top:12px; font-size:11.5px; color:var(--mist); }
+.out-row.away{ color:var(--flame); }
+.out-row span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
 /* ==========================================================
    A PLAYLIST
 

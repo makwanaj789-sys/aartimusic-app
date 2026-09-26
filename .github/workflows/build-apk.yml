@@ -79,6 +79,13 @@ jobs:
       - name: Say this is a music player
         run: python3 scripts/android-media-app.py
 
+      # The one thing the WebView cannot answer for itself: what the
+      # sound is actually coming out of. Chrome on Android does not
+      # enumerate audio outputs, so this writes the small class that
+      # asks Android and registers it with the bridge.
+      - name: Ask Android what it is playing through
+        run: python3 scripts/android-audio-out.py
+
       # Turns assets/icon.png into every icon size Android wants,
       # including the adaptive pair. Skipped quietly if the folder
       # isn't there, so a missing icon never fails the build.
