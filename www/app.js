@@ -39,6 +39,10 @@
        screen fills itself with what is actually listened to rather
        than staying empty until someone edits config.js. */
     lists: [],
+    /* Which palette. "amber" is what :root already is, so it is
+       stored as the absence of an attribute rather than one that
+       has to be kept in step with the stylesheet. */
+    theme: "amber",
   };
 
   function load() {
@@ -185,7 +189,8 @@
 
   /* ---------- tabs ------------------------------------------ */
 
-  const pages = { Home: $("pHome"), Search: $("pSearch"), Lib: $("pLib") };
+  const pages = { Home: $("pHome"), Search: $("pSearch"),
+                  Lists: $("pLists"), Lib: $("pLib") };
 
   function tab(name) {
     Object.entries(pages).forEach(([k, el]) => (el.hidden = k !== name));
@@ -193,11 +198,53 @@
     if (name === "Home") drawHome();
     if (name === "Lib") drawLib();
     if (name === "Search") drawHistory();
+    if (name === "Lists") drawFinder();
     window.scrollTo(0, 0);
   }
   [...$("nav").children].forEach((b) =>
     b.addEventListener("click", () => { buzzPick(); tab(b.dataset.tab); })
   );
+
+  /* ---------- the palette -----------------------------------
+     Amber and Grove. A theme is eight custom properties on :root,
+     so switching one is one attribute and a repaint — there is no
+     second stylesheet to load and nothing to keep in step.
+
+     Amber is what :root is without the attribute, which is what
+     makes it the one that cannot be got wrong.                */
+
+  const THEMES = ["amber", "green"];
+
+  function paintTheme() {
+    const t = THEMES.indexOf(store.theme) >= 0 ? store.theme : "amber";
+    const root = document.documentElement;
+    if (t === "amber") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", t);
+
+    // The status bar and the notch area, which Android paints from
+    // this and not from the page.
+    const meta = document.querySelector('meta[name="theme-color"]');
+    const bg = getComputedStyle(root).getPropertyValue("--bg").trim();
+    if (meta && bg) meta.setAttribute("content", bg);
+    try { tg.setHeaderColor(bg); tg.setBackgroundColor(bg); } catch (e) {}
+
+    document.querySelectorAll(".th").forEach((b) =>
+      b.setAttribute("aria-pressed", b.dataset.theme === t ? "true" : "false"));
+
+    // The pool of light under the cover is the artwork's colour when
+    // there is one and the palette's when there is not, so it has to
+    // be asked again.
+    relight(queue[index]);
+  }
+
+  document.querySelectorAll(".th").forEach((b) =>
+    b.addEventListener("click", () => {
+      if (store.theme === b.dataset.theme) return;
+      store.theme = b.dataset.theme;
+      save(); buzzPick(); paintTheme();
+    }));
+
+  paintTheme();
 
   /* ---------- rows ------------------------------------------ */
 
@@ -910,6 +957,9 @@
 
     buzz("light");
     $("mini").hidden = false;
+    // The scrim behind the floating controls has to grow to cover
+    // the strip as well, now that there is one.
+    document.body.classList.add("with-mini");
     waiting(true);
     paint(song);
     addRecent(song);
@@ -942,18 +992,23 @@
      used rather than failing. The answer is kept, because the same
      cover comes round again.                                    */
 
-  const AMBER = "224,162,83";
+  /* The cover's own colour when one can be read; otherwise the
+     palette's. Cached as null rather than as a colour, so changing
+     the theme changes the fallback for covers already seen. */
+  const themeGlow = () =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--glow").trim() || "224,162,83";
   const litBy = new Map();
 
   function lightFrom(src) {
-    if (!src) return Promise.resolve(AMBER);
+    if (!src) return Promise.resolve(null);
     if (litBy.has(src)) return Promise.resolve(litBy.get(src));
 
     return new Promise((done) => {
       const finish = (v) => { litBy.set(src, v); done(v); };
       const img = new Image();
       img.crossOrigin = "anonymous";
-      img.onerror = () => finish(AMBER);
+      img.onerror = () => finish(null);
       img.onload = () => {
         try {
           const N = 14;                       // enough to find a colour
@@ -974,7 +1029,7 @@
             const k = sat * sat * (hi / 255);
             r += R * k; gr += G * k; b += B * k; w += k;
           }
-          if (!w) return finish(AMBER);
+          if (!w) return finish(null);
 
           // Lifted to an even brightness, so a dark cover still
           // lights the room and a bright one does not flood it.
@@ -983,7 +1038,7 @@
           out = out.map((n) => Math.min(255, Math.round(n * lift)));
           finish(out.join(","));
         } catch (e) {
-          finish(AMBER);                      // the canvas was tainted
+          finish(null);                       // the canvas was tainted
         }
       };
       img.src = src;
@@ -994,7 +1049,7 @@
     const lit = $("nowLit");
     if (lit) lit.classList.add("dimming");
     lightFrom(song && song.thumb).then((rgb) => {
-      document.documentElement.style.setProperty("--lit", rgb);
+      document.documentElement.style.setProperty("--lit", rgb || themeGlow());
       if (lit) requestAnimationFrame(() => lit.classList.remove("dimming"));
     });
   }
@@ -1260,18 +1315,87 @@
     }
   };
 
+  /* ---------- growing out of the thing you tapped -----------
+     Every full-screen thing in here opens the same way: it starts
+     as the rectangle you touched and grows into the screen. The
+     panel is the one that moves; this only works out where it has
+     to start from and hands the browser two numbers and a
+     translate.
+
+     A source that has scrolled out of sight, or that was never on
+     screen, gives nothing back — and the caller falls through to
+     the slide it always had. Same when the phone is set to reduce
+     motion: there the panel is simply there.
+
+     Reversing it is the same call with the panel already open,
+     which is why the close does not need its own machinery.   */
+
+  const cameFrom = new WeakMap();   // panel -> what it grew out of
+  const growTimer = new WeakMap();
+
+  function onScreen(el) {
+    if (!el || !el.isConnected || !el.getBoundingClientRect) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return null;
+    if (r.bottom <= 0 || r.top >= window.innerHeight) return null;
+    return r;
+  }
+
+  function growFrom(panel, from) {
+    if (REDUCED) return false;
+    const r = onScreen(from);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (!r || !vw || !vh) return false;
+    panel.style.setProperty("--ex-x", r.left.toFixed(1) + "px");
+    panel.style.setProperty("--ex-y", r.top.toFixed(1) + "px");
+    panel.style.setProperty("--ex-sx", (r.width / vw).toFixed(4));
+    panel.style.setProperty("--ex-sy", (r.height / vh).toFixed(4));
+    panel.classList.add("growing");
+    // Left on for the length of the move and then taken off, so a
+    // panel opened any other way is back to the plain slide.
+    clearTimeout(growTimer.get(panel));
+    growTimer.set(panel, setTimeout(() => panel.classList.remove("growing"), 560));
+    return true;
+  }
+
+  /* The rectangle has to become the panel's resting position before
+     it is told to fill the screen — untransitioned, and committed
+     by a forced reflow. Skip either half and the browser animates
+     *into* the rectangle instead of out of it, and what you get is
+     the old slide taking the scenic route.
+
+     Closing needs none of this: the panel is already at rest, at
+     full size, which is exactly the start that move wants.      */
+  function settle(panel) {
+    panel.classList.add("placing");
+    void panel.offsetWidth;
+    panel.classList.remove("placing");
+  }
+
   // full screen
   const now = $("now");
-  const openNow = () => {
+  const openNow = (from) => {
     if (now.classList.contains("open")) return;
+    // The rectangle has to be a painted frame before the panel is
+    // told to fill the screen, or there is nothing to move from.
+    if (growFrom(now, from)) { cameFrom.set(now, from); settle(now); }
+    else cameFrom.delete(now);
     now.classList.add("open");
     now.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
     try { tg.BackButton.show(); } catch (e) {}
     opened(now, closeNow);
   };
-  const closeNow = () => {
+  /* how === "drag" when a finger pulled it down: that one goes back
+     down, because that is where the hand just put it. Everything
+     else — the chevron, Back, the system gesture — collapses into
+     the artwork it came out of. No flush here, on purpose: adding
+     the class and dropping .open in the same breath is what makes
+     the browser read identity as the start of the move. */
+  const closeNow = (how) => {
     if (!now.classList.contains("open")) return;
+    if (how === "drag") now.classList.remove("growing");
+    else growFrom(now, cameFrom.get(now) || $("mArt"));
     now.classList.remove("open");
     now.setAttribute("aria-hidden", "true");
     document.body.classList.remove("locked");
@@ -1281,11 +1405,11 @@
   $("miniOpen").addEventListener("click", () => {
     // A swipe that ended on this element still fires a click.
     if (Date.now() - swipedAt < 400) return;
-    openNow();
+    openNow($("mArt"));
   });
-  $("mArt").addEventListener("click", openNow);
-  $("nowClose").addEventListener("click", closeNow);
-  try { tg.BackButton.onClick(closeNow); } catch (e) {}
+  $("mArt").addEventListener("click", () => openNow($("mArt")));
+  $("nowClose").addEventListener("click", () => closeNow());
+  try { tg.BackButton.onClick(() => closeNow()); } catch (e) {}
 
   /* ---------- dragging the full screen down -----------------
      It used to compare two touch points and close if the second
@@ -1341,6 +1465,10 @@
         if (dy < 6) return;
         live = true;
         gesture = "y";
+        // Whatever the panel was in the middle of, it is being held
+        // now; the per-frame transform below is the only thing that
+        // should be moving it.
+        el.classList.remove("growing");
         el.classList.add("dragging");
       }
       // Upward is resisted rather than blocked — the surface is
@@ -1374,7 +1502,7 @@
     }, { passive: true });
   }
 
-  draggable(now, closeNow, { threshold: 120 });
+  draggable(now, () => closeNow("drag"), { threshold: 120 });
 
   /* ---------- swiping the cover to change song --------------
      Left for the next one, right for the one before. The cover
@@ -1531,7 +1659,7 @@
   swipeToSkip($("mini"), {
     skip: "button",
     onTaken: () => { swipedAt = Date.now(); },
-    onUp: () => { swipedAt = Date.now(); openNow(); },
+    onUp: () => { swipedAt = Date.now(); openNow($("mArt")); },
   });
 
   /* The sheets drag on their own panel rather than the whole
@@ -1854,26 +1982,33 @@
     drawHome();
   }
 
-  function openPl() {
+  function openPl(from) {
     if (plist.classList.contains("open")) return;
+    if (growFrom(plist, from)) { cameFrom.set(plist, from); settle(plist); }
+    else cameFrom.delete(plist);
     plist.classList.add("open");
     plist.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
     opened(plist, closePl);
   }
-  function closePl() {
+  function closePl(how) {
     if (!plist.classList.contains("open")) return;
+    // Back into the card it came out of — unless that card has been
+    // scrolled away or the playlist was opened from a pasted link,
+    // in which case there is nothing to go back into and it slides.
+    if (how === "drag") plist.classList.remove("growing");
+    else growFrom(plist, cameFrom.get(plist));
     plist.classList.remove("open");
     plist.setAttribute("aria-hidden", "true");
     if (!now.classList.contains("open")) document.body.classList.remove("locked");
     closed(plist);
   }
-  $("plClose").addEventListener("click", closePl);
-  draggable(plist, closePl, { threshold: 120 });
+  $("plClose").addEventListener("click", () => closePl());
+  draggable(plist, () => closePl("drag"), { threshold: 120 });
 
-  async function openPlaylist(ref, known) {
+  async function openPlaylist(ref, known, from) {
     const id = listId(ref) || ref;
-    openPl();
+    openPl(from);
 
     $("plRows").innerHTML = "";
     $("plEmpty").hidden = true;
@@ -1972,10 +2107,140 @@
       t.className = "t";
       t.textContent = p.title;                  // arbitrary text — never innerHTML
       card.append(img, t);
-      card.addEventListener("click", () => { buzzPick(); openPlaylist(p.id, p); });
+      card.addEventListener("click", () => { buzzPick(); openPlaylist(p.id, p, card); });
       rail.appendChild(card);
     });
   }
+
+  /* ---------- finding playlists -----------------------------
+     A section of its own, because looking for a playlist is a
+     different errand from looking for a song: you are choosing
+     an hour of listening, not a track.
+
+     What comes back is only the cards — name, who made it, how
+     many songs. Opening one is a second call, and it goes through
+     exactly the same openPlaylist() as a card on the home screen
+     and a pasted link, so there is one playlist screen and one way
+     of playing out of it.                                      */
+
+  const TRY = ["Bhajan", "Aarti", "Arijit Singh", "Krishna", "Old Hindi",
+               "Lofi", "Garba", "Kirtan"];
+  let shown = [];          // the last playlist search
+
+  function tile(p, i) {
+    const el = document.createElement("button");
+    el.className = "tile";
+
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = "";
+    img.src = p.thumb || "";
+
+    const t = document.createElement("div");
+    t.className = "t";
+    t.textContent = p.title || "Playlist";      // arbitrary — never innerHTML
+
+    const sub = document.createElement("div");
+    sub.className = "s";
+    sub.textContent = [p.by, p.count ? p.count + " songs" : ""]
+      .filter(Boolean).join(" · ");
+
+    el.append(img, t, sub);
+    stagger(el, i);
+    // The tile is what the playlist screen grows out of.
+    el.addEventListener("click", () => { buzzPick(); openPlaylist(p.id, p, el); });
+    return el;
+  }
+
+  function paintTiles(box, list) {
+    box.innerHTML = "";
+    list.forEach((p, i) => box.appendChild(tile(p, i)));
+  }
+
+  function drawFinder() {
+    // Somewhere to start: a few words, and whatever has been opened
+    // before. Both disappear once there is a search on screen.
+    const chips = $("lqChips");
+    if (!chips.children.length) {
+      TRY.forEach((term) => {
+        const c = document.createElement("button");
+        c.className = "chip";
+        c.textContent = term;
+        c.addEventListener("click", () => findLists(term));
+        chips.appendChild(c);
+      });
+    }
+
+    const mine = (store.lists || []).slice(0, 6);
+    const idle = !shown.length;
+    $("lqBlock").hidden = !idle;
+    $("lqMineBlock").hidden = !idle || !mine.length;
+    if (idle && mine.length) paintTiles($("lqMine"), mine);
+  }
+
+  function noLists(head, msg) {
+    const box = $("lqEmpty");
+    box.hidden = false;
+    box.querySelector("h3").textContent = head;
+    box.querySelector("p").textContent = msg;
+  }
+
+  async function findLists(term) {
+    term = (term || "").trim();
+    if (!term) return;
+
+    // A link pasted in here means that playlist, not a search for
+    // its address — the same rule the song search follows.
+    const asList = listId(term);
+    if (asList) { $("lq").value = ""; openPlaylist(asList); return; }
+
+    $("lq").value = term;
+    $("lq").blur();
+    $("lqEmpty").hidden = true;
+    $("lqBlock").hidden = true;
+    $("lqMineBlock").hidden = true;
+    $("lqResults").innerHTML = "";
+    $("lqLoading").hidden = false;
+    shown = [];
+
+    try {
+      const r = await api("/api/playlists?q=" + encodeURIComponent(term));
+
+      if (r.status === 401) return noLists("Locked", "This copy can't reach the server.");
+      if (r.status === 404) return noLists("Not yet", "The server doesn't know how to do this.");
+      if (!r.ok) return noLists("Hmm", "That search failed. Try again.");
+
+      shown = (await r.json()).results || [];
+      if (!shown.length) {
+        return noLists("No playlists for that", "Try a shorter word, or paste a playlist link.");
+      }
+      paintTiles($("lqResults"), shown);
+    } catch (err) {
+      noLists("Offline", "Can't reach the server right now.");
+    } finally {
+      $("lqLoading").hidden = true;
+      drawFinder();
+    }
+  }
+
+  $("listForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    findLists($("lq").value);
+  });
+  // Clearing the box puts the starting points back.
+  $("lq").addEventListener("input", () => {
+    if ($("lq").value.trim()) return;
+    shown = [];
+    $("lqResults").innerHTML = "";
+    $("lqEmpty").hidden = true;
+    drawFinder();
+  });
+  $("lqAdd").addEventListener("click", () => {
+    buzz();
+    $("plInput").value = "";
+    sheet($("plSheet"), true);
+    setTimeout(() => $("plInput").focus(), 260);
+  });
 
   /* ---------- whose app this is -----------------------------
      A line at the end of the library rather than a screen of its

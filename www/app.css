@@ -61,16 +61,51 @@
    ============================================================ */
 *,*::before,*::after{ box-sizing:border-box; }
 
+/* ==========================================================
+   THE PALETTE, AND THE OTHER ONE
+
+   Every colour in this file is one of these names. A theme is
+   therefore a swap of eight values on :root and nothing else —
+   no second stylesheet, no duplicated rules, nothing that can
+   fall out of step with the first one.
+
+   Two of them earn their keep specifically:
+
+   --glow is the accent as a bare "r,g,b" triple, because the
+   artwork's own colour arrives as --lit in that shape and every
+   glow in the app is written rgba(var(--lit,var(--glow)),a) —
+   the cover's colour when there is one, the theme's when there
+   is not.
+
+   --on-accent is what text becomes when it sits on the accent.
+   It used to be the literal #0A0908 in six places, which is fine
+   until the accent is a light green and the background is not
+   that exact black any more.
+   ========================================================== */
 :root{
   --bg:#0A0908; --bg-2:#131110; --bg-3:#1C1917;
   --line:#241F1B; --ink:#F7F1E8; --mist:#8C8079;
   --flame:#E0A253; --ember:#B0553C; --hot:#F7DCA8;
+  --glow:224,162,83;
+  --on-accent:#0A0908;
 
   --nav-h:60px; --mini-h:60px;
   --ease:cubic-bezier(.22,.61,.36,1);
   --out:cubic-bezier(.16,1,.3,1);
   --spring:cubic-bezier(.34,1.56,.64,1);   /* overshoots, then settles */
   --snap:cubic-bezier(.2,.9,.3,1);
+}
+
+/* Grove. The same near-black room, lit green instead of amber. The
+   background moves barely at all on purpose: the splash screen is
+   painted before this stylesheet is read, and a background that
+   changed here would show as a flash on every start. */
+:root[data-theme="green"]{
+  --bg:#070A08; --bg-2:#0F1411; --bg-3:#161E19;
+  --line:#1E2922; --ink:#EEF6F0; --mist:#7E8F85;
+  --flame:#5FD68F; --ember:#2C8F62; --hot:#C9F6DC;
+  --glow:95,214,143;
+  --on-accent:#061009;
 }
 
 html,body{ height:100%; }
@@ -158,7 +193,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   padding:8px 15px; border-radius:999px; font-size:12.5px;
   background:var(--bg-2); border:1px solid var(--line); color:var(--mist);
 }
-.seg button.on{ background:var(--flame); border-color:var(--flame); color:#0A0908; font-weight:600; }
+.seg button.on{ background:var(--flame); border-color:var(--flame); color:var(--on-accent); font-weight:600; }
 
 .empty{ text-align:center; padding:50px 24px; color:var(--mist); }
 .empty .art{ font-size:40px; margin-bottom:12px; }
@@ -211,6 +246,44 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 }
 
 /* ============================================================
+   PLAYLIST TILES
+
+   Two to a row, square art, two lines under it. The same card
+   idea as the home rail, laid out down the page instead of
+   across it — and, like everything else here, the thing that the
+   playlist screen grows out of when you tap it.
+   ============================================================ */
+.tiles{
+  display:grid; grid-template-columns:repeat(2,1fr); gap:16px 12px;
+}
+.tiles:empty{ display:none; }
+.tile{ text-align:left; padding:0; min-width:0; cursor:pointer; }
+.tile img{
+  width:100%; aspect-ratio:1; object-fit:cover; display:block;
+  border-radius:10px; background:var(--bg-2);
+  box-shadow:0 10px 26px -14px rgba(0,0,0,.9);
+}
+.tile .t{
+  margin-top:8px; font-size:12.5px; line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.tile .s{ margin-top:3px; font-size:11px; color:var(--mist);
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Skeletons in the shape of the tiles, not of rows. */
+#lqLoading.loading{ display:grid; grid-template-columns:repeat(2,1fr); gap:16px 12px; }
+#lqLoading.loading[hidden]{ display:none; }
+.sk-tile{ display:flex; flex-direction:column; gap:7px; }
+.sk-cover{ width:100%; aspect-ratio:1; border-radius:10px; }
+.sk-tile .sk-t{ width:80%; }
+.sk-tile:nth-child(2) .sk::after{ animation-delay:.08s; }
+.sk-tile:nth-child(3) .sk::after{ animation-delay:.16s; }
+.sk-tile:nth-child(4) .sk::after{ animation-delay:.24s; }
+.sk-tile:nth-child(5) .sk::after{ animation-delay:.32s; }
+.sk-tile:nth-child(6) .sk::after{ animation-delay:.40s; }
+
+/* ============================================================
    SEARCH BAR
    ============================================================ */
 .searchbar{ display:flex; gap:8px; margin-bottom:22px; }
@@ -224,50 +297,78 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .searchbar input:focus{ border-color:var(--flame); }
 .searchbar button{
   flex:none; width:48px; padding:13px; border-radius:12px;
-  background:linear-gradient(135deg,var(--flame),var(--ember)); color:#0A0908;
+  background:linear-gradient(135deg,var(--flame),var(--ember)); color:var(--on-accent);
 }
 
 /* ============================================================
    NAV + MINI
    ============================================================ */
-/* The bar and the strip are one sheet of glass over the page rather
-   than two panels sitting on it: the list runs underneath and is
-   blurred by it, which is what makes the screen feel deep instead of
-   stacked. */
+/* Neither of these is a surface. There is no bar and no strip —
+   no fill, no blur, no border, nothing with an edge. The page runs
+   all the way to the bottom of the screen and stays legible there;
+   the icons, the title and the play button simply float on top of
+   it.
+
+   What keeps them readable is one soft gradient, cast behind both
+   of them from the bottom of the screen upwards. It fades to
+   nothing well before it reaches anything you are reading, so it
+   darkens the pixels under the controls without ever drawing a
+   line across the page. */
 .nav{
-  position:fixed; left:0; right:0; bottom:0; z-index:40;
-  display:grid; grid-template-columns:repeat(3,1fr);
-  /* Nothing of its own: the page shows through and the blur is all
-     that separates them. The labels hold up because everything
-     behind them is already near-black. */
+  position:fixed; left:0; right:0; bottom:0; z-index:39;
+  display:grid; grid-template-columns:repeat(4,1fr);
   background:transparent;
-  backdrop-filter:blur(26px) saturate(1.3);
-  -webkit-backdrop-filter:blur(26px) saturate(1.3);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
+/* The scrim. It lives on the nav, behind it, and reaches up past
+   the mini player — which is why the mini sits one layer above the
+   nav rather than below it, so this passes under both.
+   Its height follows whether there is a mini player to cover. */
+.nav::before{
+  content:''; position:absolute; z-index:-1; pointer-events:none;
+  left:0; right:0; bottom:0;
+  height:calc(100% + var(--scrim,46px));
+  background:linear-gradient(180deg,
+    transparent 0%,
+    color-mix(in srgb,var(--bg) 34%,transparent) 34%,
+    color-mix(in srgb,var(--bg) 72%,transparent) 66%,
+    color-mix(in srgb,var(--bg) 92%,transparent) 100%);
+  transition:height .32s var(--ease);
+}
+body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
 .nav button{
   display:flex; flex-direction:column; align-items:center; gap:4px;
-  padding:9px 0 8px; color:var(--mist); font-size:10px;
+  padding:9px 0 8px; color:var(--mist); font-size:9.5px;
+  white-space:nowrap; letter-spacing:-.01em;
 }
-.nav button svg{ width:21px; height:21px; }
+/* The one concession to floating over a bright cover: the glyph and
+   the word carry their own shadow, so neither needs a panel. */
+.nav button svg{ width:21px; height:21px;
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.75)); }
+.nav button span{ text-shadow:0 1px 3px rgba(0,0,0,.8); }
 .nav button.on{ color:var(--flame); }
 
 .mini{
-  position:fixed; left:0; right:0; z-index:39;
+  position:fixed; left:0; right:0; z-index:40;
   bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px));
-  background:color-mix(in srgb,var(--bg-3) 58%,transparent);
-  backdrop-filter:blur(24px) saturate(1.25);
-  -webkit-backdrop-filter:blur(24px) saturate(1.25);
-  border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent);
+  background:transparent;
   /* Sideways changes the song and up opens the full screen, so the
      strip keeps both axes of its own gestures and hands plain
      scrolling back to the page. */
   touch-action:none; overflow:hidden;
 }
-.bar{ position:relative; height:2px; background:var(--line); overflow:hidden; }
+.mini .t, .mini .a, .mini .out{ text-shadow:0 1px 3px rgba(0,0,0,.8); }
+.mini .icon, .mini .play{ filter:drop-shadow(0 1px 3px rgba(0,0,0,.7)); }
+/* No track behind the progress — a hairline across the whole screen
+   is a border by another name. Only what has played is drawn. */
+.bar{ position:relative; height:2px; background:transparent; overflow:hidden; }
 .mini-in{ display:grid; grid-template-columns:40px 1fr auto auto; gap:10px;
           align-items:center; padding:8px 12px; }
-.mini-in img{ width:40px; height:40px; border-radius:7px; object-fit:cover; background:var(--bg); }
+.mini-in img{ width:40px; height:40px; border-radius:7px; object-fit:cover;
+  background:var(--bg);
+  /* With nothing behind it, the thumbnail has to sit on the page by
+     itself. The shadow is what puts it there. */
+  box-shadow:0 6px 18px -6px rgba(0,0,0,.85); }
 .mini-in .meta{ min-width:0; cursor:pointer; }
 .meta .t{ font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .meta .a{ font-size:11px; color:var(--mist); margin-top:1px;
@@ -309,6 +410,50 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
 .now.dragging{ transition:none; }
 .now.open{ transform:translateY(0); visibility:visible; }
 
+/* ==========================================================
+   THE EXPANSION
+
+   The one motion this app is built around: the thing you tapped
+   becomes the screen. The panel is placed as a rectangle the
+   exact size and position of what was tapped, and grows from
+   there to fill the viewport. It does not cross-fade in over the
+   page and it does not slide up out of nowhere — either of those
+   is a new screen arriving; this is the same object, closer.
+
+   Its contents are held back and brought in over the second half
+   of the move. A full screen's worth of text crushed into a 40px
+   square is exactly what gives a cross-fade away, so for the
+   first half the rectangle holds only the blurred cover — which
+   is what the thumbnail was to begin with.
+
+   Transform and opacity, nothing else. The corner radius is
+   deliberately left alone: rounding it costs a paint every frame,
+   and scaled down to a thumbnail a 14px radius is a pixel and a
+   half. Nobody sees the corner; everybody would feel the frames.
+
+   The same rules run backwards on the way out, and the same
+   block serves the playlist screen, which is a .now as well.
+   ========================================================== */
+.now.growing{
+  visibility:visible;
+  transform-origin:0 0;
+  transform:translate(var(--ex-x,0px),var(--ex-y,0px))
+            scale(var(--ex-sx,1),var(--ex-sy,1));
+  transition:transform .44s var(--out), visibility .44s;
+}
+.now.growing.open{ transform:translate(0px,0px) scale(1,1); }
+.now.growing .now-in{ opacity:0; transition:opacity .14s linear; }
+.now.growing.open .now-in{ opacity:1; transition:opacity .24s linear .13s; }
+/* Putting the panel at the rectangle it starts from is not part of
+   the move — it is where the move starts. Left transitionable, the
+   browser animates *into* the rectangle, and then the expansion
+   starts from wherever that had got to: which is the old slide,
+   with extra steps. This is on for exactly one forced reflow. */
+.now.growing.placing, .now.growing.placing .now-in{ transition:none; }
+/* A finger on it outranks the expansion, the same way it outranks
+   the slide. Three classes, because .now.growing is two. */
+.now.growing.dragging{ transition:none; }
+
 /* the cover, blown up and blurred — the screen takes its colour from
    whatever is playing */
 .now-bg{
@@ -344,7 +489,7 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   /* Two shadows: the weight of the thing, and the colour it throws
      onto whatever is under it. The second is the whole idea. */
   box-shadow:0 30px 60px -20px rgba(0,0,0,.8),
-             0 20px 56px -14px rgba(var(--lit,224,162,83),.42);
+             0 20px 56px -14px rgba(var(--lit,var(--glow)),.42);
 }
 
 /* ==========================================================
@@ -363,9 +508,9 @@ button{ font:inherit; border:0; background:transparent; color:inherit; cursor:po
   pointer-events:none; opacity:0;
   transform:translate(-50%,-50%);
   background:radial-gradient(circle at center,
-    rgba(var(--lit,224,162,83),.30) 0%,
-    rgba(var(--lit,224,162,83),.13) 36%,
-    rgba(var(--lit,224,162,83),0)   68%);
+    rgba(var(--lit,var(--glow)),.30) 0%,
+    rgba(var(--lit,var(--glow)),.13) 36%,
+    rgba(var(--lit,var(--glow)),0)   68%);
   transition:opacity .55s ease;
 }
 .now.open .now-lit{ opacity:1; }
@@ -470,9 +615,9 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   transition:transform .26s var(--spring);
 }
 .act-solid{
-  background:linear-gradient(150deg,var(--flame),var(--ember)); color:#0A0908;
+  background:linear-gradient(150deg,var(--flame),var(--ember)); color:var(--on-accent);
   box-shadow:0 8px 20px -10px rgba(0,0,0,.9),
-             0 4px 18px -6px rgba(var(--lit,224,162,83),.4);
+             0 4px 18px -6px rgba(var(--lit,var(--glow)),.4);
 }
 .act-ghost{ color:var(--ink); border:1px solid var(--line); }
 .act-solid svg, .act-ghost svg{ width:16px; height:16px; flex:none; }
@@ -569,7 +714,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   background:linear-gradient(150deg,
     color-mix(in srgb,var(--flame) 92%,#fff),
     var(--flame) 38%, var(--ember));
-  color:#0A0908;
+  color:var(--on-accent);
   /* A rim catching light at the top, a darker one at the bottom, and
      a shadow on the surface below — the three things that make a
      circle read as a disc rather than a hole. */
@@ -577,7 +722,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
     inset 0 1.5px 0 rgba(255,244,228,.55),
     inset 0 -2px 3px rgba(80,26,12,.35),
     0 10px 22px -8px rgba(0,0,0,.85),
-    0 6px 26px -6px rgba(var(--lit,224,162,83),.45);
+    0 6px 26px -6px rgba(var(--lit,var(--glow)),.45);
   transition:transform .3s var(--spring), box-shadow .3s ease;
 }
 /* Pressed, it goes down into the surface: further than the others,
@@ -588,7 +733,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
     inset 0 1.5px 0 rgba(255,244,228,.4),
     inset 0 -1px 2px rgba(80,26,12,.3),
     0 4px 10px -6px rgba(0,0,0,.9),
-    0 2px 12px -4px rgba(var(--lit,224,162,83),.35);
+    0 2px 12px -4px rgba(var(--lit,var(--glow)),.35);
 }
 
 /* Skip moves the way the track is about to. Two pixels is enough to
@@ -607,7 +752,7 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 #bRepeat{ position:relative; }
 #bRepeat .one{
   position:absolute; right:4px; bottom:4px; font-size:9px; font-weight:700;
-  background:var(--flame); color:#0A0908; border-radius:50%;
+  background:var(--flame); color:var(--on-accent); border-radius:50%;
   width:13px; height:13px; display:grid; place-items:center;
 }
 
@@ -952,12 +1097,39 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
           white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .acc-btn{
   flex:none; padding:8px 14px; border-radius:999px; font-size:12px;
-  background:linear-gradient(135deg,var(--flame),var(--ember)); color:#0A0908; font-weight:600;
+  background:linear-gradient(135deg,var(--flame),var(--ember)); color:var(--on-accent); font-weight:600;
 }
 .account.linked .acc-btn{
   background:transparent; border:1px solid var(--line-lit, var(--line));
   color:var(--mist); font-weight:400;
 }
+
+/* ---------- picking one of the two palettes --------------
+   The swatches are written in literal colour, not in the theme's
+   own names: a chooser that recolours itself with the choice
+   cannot show you what the other one looks like. */
+.themes{ display:flex; align-items:center; gap:9px; margin:0 0 18px; }
+.th-label{ font-size:12px; color:var(--mist); margin-right:auto; padding-left:2px; }
+.th{
+  display:flex; align-items:center; gap:8px;
+  padding:7px 13px 7px 8px; border-radius:999px;
+  border:1px solid var(--line); color:var(--mist); font-size:12px;
+  transition:transform .22s var(--spring), color .25s var(--ease),
+             border-color .25s var(--ease);
+}
+.th i{
+  width:15px; height:15px; border-radius:50%; display:block; flex:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.16);
+}
+.th-amber i{ background:linear-gradient(140deg,#F7DCA8,#E0A253 42%,#B0553C); }
+.th-green i{ background:linear-gradient(140deg,#C9F6DC,#5FD68F 42%,#2C8F62); }
+.th[aria-pressed="true"]{
+  color:var(--ink);
+  border-color:color-mix(in srgb,var(--flame) 58%,transparent);
+}
+/* The press itself is the shared one further up — these are
+   buttons, so they sink, spring and ripple like every other
+   button, and get the reduced-motion handling with them. */
 
 .link-copy{ margin:0 4px 14px; font-size:13px; line-height:1.65; color:var(--mist); }
 .link-wait{ display:flex; justify-content:center; gap:7px; padding:6px 0 16px; }
@@ -1026,16 +1198,32 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
   to  { opacity:1; transform:none; }
 }
 
-/* Going: the whole thing lifts and thins at once. pointer-events is
-   dropped on the same frame the fade starts, so a tap during the
-   handover reaches the app underneath rather than the mark. */
-#boot{ transition:opacity 420ms ease, transform 420ms cubic-bezier(.22,1,.36,1); }
-#boot.gone{ opacity:0; transform:scale(1.06); pointer-events:none; }
+/* Going: the mark opens out into the app. The same expansion as
+   everywhere else in here, with the launcher icon as the thing
+   that was tapped — which, on a phone, it was.
+
+   The arrival animations are fill-forwards, so their end values
+   would otherwise outrank anything a transition tries to do to
+   the same properties; dropping the animation on the way out is
+   what hands transform back to the transition.
+
+   pointer-events goes on the same frame the fade starts, so a tap
+   during the handover reaches the app underneath rather than the
+   mark. */
+#boot{ transition:opacity 380ms ease 60ms; }
+#boot.gone{ opacity:0; pointer-events:none; }
+#boot .boot-mark,#boot .boot-glow,#boot .boot-word{
+  transition:transform 460ms cubic-bezier(.16,1,.3,1), opacity 300ms ease;
+}
+#boot.gone .boot-mark,#boot.gone .boot-glow,#boot.gone .boot-word{ animation:none; }
+#boot.gone .boot-mark{ transform:scale(2.6); }
+#boot.gone .boot-glow{ transform:scale(3.6); opacity:0; }
+#boot.gone .boot-word{ transform:translateY(14px); opacity:0; }
 #boot[hidden]{ display:none; }
 
 @media (prefers-reduced-motion:reduce){
   .boot-glow, .boot-mark, .boot-word{ animation:none; }
   #boot{ transition:opacity 160ms linear; }
-  #boot.gone{ transform:none; }
-}
+  #boot.gone .boot-mark,#boot.gone .boot-glow,#boot.gone .boot-word{
+    transform:none; }
 }
