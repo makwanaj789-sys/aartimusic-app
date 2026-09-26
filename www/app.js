@@ -1967,10 +1967,22 @@
   let plSongs = [];
 
   const listId = (ref) => {
-    const m = /[?&]list=([A-Za-z0-9_-]+)/.exec(ref || "");
-    if (m) return m[1];
-    return /^(PL|UU|OL|RD|FL|LL)[A-Za-z0-9_-]{10,}$/.test((ref || "").trim())
-      ? ref.trim() : "";
+    const raw = (ref || "").trim();
+    if (!raw) return "";
+
+    // Accept every normal YouTube / YouTube Music paste shape:
+    // playlist URL, watch URL, youtu.be?list=..., or a bare ID.
+    try {
+      const u = new URL(raw);
+      const list = u.searchParams.get("list");
+      if (list && /^[A-Za-z0-9_-]{10,}$/.test(list)) return list;
+    } catch (e) {}
+
+    const loose = /(?:[?&])list=([A-Za-z0-9_-]+)/.exec(raw);
+    if (loose && /^[A-Za-z0-9_-]{10,}$/.test(loose[1])) return loose[1];
+
+    if (/^[A-Za-z0-9_-]{10,}$/.test(raw)) return raw;
+    return "";
   };
 
   function rememberList(p) {
@@ -2007,7 +2019,12 @@
   draggable(plist, () => closePl("drag"), { threshold: 120 });
 
   async function openPlaylist(ref, known, from) {
-    const id = listId(ref) || ref;
+    const id = listId(ref);
+    if (!id) {
+      toast("Invalid playlist link");
+      return;
+    }
+
     openPl(from);
 
     $("plRows").innerHTML = "";
@@ -2022,24 +2039,70 @@
 
     try {
       const r = await api("/api/playlist?id=" + encodeURIComponent(id));
-      if (!r.ok) throw new Error("no");
-      const p = await r.json();
 
-      plSongs = p.results || [];
-      $("plTitle").textContent = p.title || "Playlist";
-      $("plBy").textContent = p.by || (plSongs.length + " songs");
-      if (p.thumb) {
-        $("plArt").src = p.thumb;
-        $("plBg").style.backgroundImage = 'url("' + p.thumb + '")';
+      let payload = {};
+      try { payload = await r.json(); } catch (e) {}
+
+      if (r.status === 401) {
+        $("plEmpty").hidden = false;
+        $("plEmpty").querySelector("h3").textContent = "Not authorised";
+        $("plEmpty").querySelector("p").textContent =
+          payload.error || "The app is not authorised to use the music server.";
+        return;
       }
-      $("plEmpty").hidden = plSongs.length > 0;
+      if (r.status === 403) {
+        $("plEmpty").hidden = false;
+        $("plEmpty").querySelector("h3").textContent = "Private playlist";
+        $("plEmpty").querySelector("p").textContent =
+          payload.error || "This playlist is private or needs YouTube login.";
+        return;
+      }
+      if (r.status === 404) {
+        $("plEmpty").hidden = false;
+        $("plEmpty").querySelector("h3").textContent = "Playlist not found";
+        $("plEmpty").querySelector("p").textContent =
+          payload.error || "YouTube could not find that playlist.";
+        return;
+      }
+      if (!r.ok) {
+        $("plEmpty").hidden = false;
+        $("plEmpty").querySelector("h3").textContent = "Couldn't open that";
+        $("plEmpty").querySelector("p").textContent =
+          payload.error || "The server could not read this playlist.";
+        return;
+      }
+
+      plSongs = payload.results || [];
+      $("plTitle").textContent = payload.title || "Playlist";
+      $("plBy").textContent = payload.by ||
+        (plSongs.length ? plSongs.length + " songs" : "Empty playlist");
+
+      if (payload.thumb) {
+        $("plArt").src = payload.thumb;
+        $("plBg").style.backgroundImage = 'url("' + payload.thumb + '")';
+      }
+
+      if (!plSongs.length) {
+        $("plEmpty").hidden = false;
+        $("plEmpty").querySelector("h3").textContent = "Playlist is empty";
+        $("plEmpty").querySelector("p").textContent =
+          payload.error || "No playable tracks were returned.";
+        return;
+      }
+
+      $("plEmpty").hidden = true;
       fill($("plRows"), plSongs);
-      rememberList({ id: p.id || id, title: p.title, thumb: p.thumb, by: p.by });
+      rememberList({
+        id: payload.id || id,
+        title: payload.title || "Playlist",
+        thumb: payload.thumb || "",
+        by: payload.by || "",
+      });
     } catch (e) {
       $("plEmpty").hidden = false;
-      $("plEmpty").querySelector("h3").textContent = "Couldn't open that";
+      $("plEmpty").querySelector("h3").textContent = "Connection failed";
       $("plEmpty").querySelector("p").textContent =
-        "The server couldn't read that playlist.";
+        "Couldn't reach the music server. Try again.";
     } finally {
       $("plLoading").hidden = true;
     }
