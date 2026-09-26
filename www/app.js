@@ -1313,18 +1313,87 @@
     }
   };
 
+  /* ---------- growing out of the thing you tapped -----------
+     Every full-screen thing in here opens the same way: it starts
+     as the rectangle you touched and grows into the screen. The
+     panel is the one that moves; this only works out where it has
+     to start from and hands the browser two numbers and a
+     translate.
+
+     A source that has scrolled out of sight, or that was never on
+     screen, gives nothing back — and the caller falls through to
+     the slide it always had. Same when the phone is set to reduce
+     motion: there the panel is simply there.
+
+     Reversing it is the same call with the panel already open,
+     which is why the close does not need its own machinery.   */
+
+  const cameFrom = new WeakMap();   // panel -> what it grew out of
+  const growTimer = new WeakMap();
+
+  function onScreen(el) {
+    if (!el || !el.isConnected || !el.getBoundingClientRect) return null;
+    const r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) return null;
+    if (r.bottom <= 0 || r.top >= window.innerHeight) return null;
+    return r;
+  }
+
+  function growFrom(panel, from) {
+    if (REDUCED) return false;
+    const r = onScreen(from);
+    const vw = window.innerWidth, vh = window.innerHeight;
+    if (!r || !vw || !vh) return false;
+    panel.style.setProperty("--ex-x", r.left.toFixed(1) + "px");
+    panel.style.setProperty("--ex-y", r.top.toFixed(1) + "px");
+    panel.style.setProperty("--ex-sx", (r.width / vw).toFixed(4));
+    panel.style.setProperty("--ex-sy", (r.height / vh).toFixed(4));
+    panel.classList.add("growing");
+    // Left on for the length of the move and then taken off, so a
+    // panel opened any other way is back to the plain slide.
+    clearTimeout(growTimer.get(panel));
+    growTimer.set(panel, setTimeout(() => panel.classList.remove("growing"), 560));
+    return true;
+  }
+
+  /* The rectangle has to become the panel's resting position before
+     it is told to fill the screen — untransitioned, and committed
+     by a forced reflow. Skip either half and the browser animates
+     *into* the rectangle instead of out of it, and what you get is
+     the old slide taking the scenic route.
+
+     Closing needs none of this: the panel is already at rest, at
+     full size, which is exactly the start that move wants.      */
+  function settle(panel) {
+    panel.classList.add("placing");
+    void panel.offsetWidth;
+    panel.classList.remove("placing");
+  }
+
   // full screen
   const now = $("now");
-  const openNow = () => {
+  const openNow = (from) => {
     if (now.classList.contains("open")) return;
+    // The rectangle has to be a painted frame before the panel is
+    // told to fill the screen, or there is nothing to move from.
+    if (growFrom(now, from)) { cameFrom.set(now, from); settle(now); }
+    else cameFrom.delete(now);
     now.classList.add("open");
     now.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
     try { tg.BackButton.show(); } catch (e) {}
     opened(now, closeNow);
   };
-  const closeNow = () => {
+  /* how === "drag" when a finger pulled it down: that one goes back
+     down, because that is where the hand just put it. Everything
+     else — the chevron, Back, the system gesture — collapses into
+     the artwork it came out of. No flush here, on purpose: adding
+     the class and dropping .open in the same breath is what makes
+     the browser read identity as the start of the move. */
+  const closeNow = (how) => {
     if (!now.classList.contains("open")) return;
+    if (how === "drag") now.classList.remove("growing");
+    else growFrom(now, cameFrom.get(now) || $("mArt"));
     now.classList.remove("open");
     now.setAttribute("aria-hidden", "true");
     document.body.classList.remove("locked");
@@ -1334,11 +1403,11 @@
   $("miniOpen").addEventListener("click", () => {
     // A swipe that ended on this element still fires a click.
     if (Date.now() - swipedAt < 400) return;
-    openNow();
+    openNow($("mArt"));
   });
-  $("mArt").addEventListener("click", openNow);
-  $("nowClose").addEventListener("click", closeNow);
-  try { tg.BackButton.onClick(closeNow); } catch (e) {}
+  $("mArt").addEventListener("click", () => openNow($("mArt")));
+  $("nowClose").addEventListener("click", () => closeNow());
+  try { tg.BackButton.onClick(() => closeNow()); } catch (e) {}
 
   /* ---------- dragging the full screen down -----------------
      It used to compare two touch points and close if the second
@@ -1394,6 +1463,10 @@
         if (dy < 6) return;
         live = true;
         gesture = "y";
+        // Whatever the panel was in the middle of, it is being held
+        // now; the per-frame transform below is the only thing that
+        // should be moving it.
+        el.classList.remove("growing");
         el.classList.add("dragging");
       }
       // Upward is resisted rather than blocked — the surface is
@@ -1427,7 +1500,7 @@
     }, { passive: true });
   }
 
-  draggable(now, closeNow, { threshold: 120 });
+  draggable(now, () => closeNow("drag"), { threshold: 120 });
 
   /* ---------- swiping the cover to change song --------------
      Left for the next one, right for the one before. The cover
@@ -1584,7 +1657,7 @@
   swipeToSkip($("mini"), {
     skip: "button",
     onTaken: () => { swipedAt = Date.now(); },
-    onUp: () => { swipedAt = Date.now(); openNow(); },
+    onUp: () => { swipedAt = Date.now(); openNow($("mArt")); },
   });
 
   /* The sheets drag on their own panel rather than the whole
@@ -1907,26 +1980,33 @@
     drawHome();
   }
 
-  function openPl() {
+  function openPl(from) {
     if (plist.classList.contains("open")) return;
+    if (growFrom(plist, from)) { cameFrom.set(plist, from); settle(plist); }
+    else cameFrom.delete(plist);
     plist.classList.add("open");
     plist.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
     opened(plist, closePl);
   }
-  function closePl() {
+  function closePl(how) {
     if (!plist.classList.contains("open")) return;
+    // Back into the card it came out of — unless that card has been
+    // scrolled away or the playlist was opened from a pasted link,
+    // in which case there is nothing to go back into and it slides.
+    if (how === "drag") plist.classList.remove("growing");
+    else growFrom(plist, cameFrom.get(plist));
     plist.classList.remove("open");
     plist.setAttribute("aria-hidden", "true");
     if (!now.classList.contains("open")) document.body.classList.remove("locked");
     closed(plist);
   }
-  $("plClose").addEventListener("click", closePl);
-  draggable(plist, closePl, { threshold: 120 });
+  $("plClose").addEventListener("click", () => closePl());
+  draggable(plist, () => closePl("drag"), { threshold: 120 });
 
-  async function openPlaylist(ref, known) {
+  async function openPlaylist(ref, known, from) {
     const id = listId(ref) || ref;
-    openPl();
+    openPl(from);
 
     $("plRows").innerHTML = "";
     $("plEmpty").hidden = true;
@@ -2025,7 +2105,7 @@
       t.className = "t";
       t.textContent = p.title;                  // arbitrary text — never innerHTML
       card.append(img, t);
-      card.addEventListener("click", () => { buzzPick(); openPlaylist(p.id, p); });
+      card.addEventListener("click", () => { buzzPick(); openPlaylist(p.id, p, card); });
       rail.appendChild(card);
     });
   }

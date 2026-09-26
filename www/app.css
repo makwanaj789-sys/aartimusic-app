@@ -371,6 +371,50 @@ body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
 .now.dragging{ transition:none; }
 .now.open{ transform:translateY(0); visibility:visible; }
 
+/* ==========================================================
+   THE EXPANSION
+
+   The one motion this app is built around: the thing you tapped
+   becomes the screen. The panel is placed as a rectangle the
+   exact size and position of what was tapped, and grows from
+   there to fill the viewport. It does not cross-fade in over the
+   page and it does not slide up out of nowhere — either of those
+   is a new screen arriving; this is the same object, closer.
+
+   Its contents are held back and brought in over the second half
+   of the move. A full screen's worth of text crushed into a 40px
+   square is exactly what gives a cross-fade away, so for the
+   first half the rectangle holds only the blurred cover — which
+   is what the thumbnail was to begin with.
+
+   Transform and opacity, nothing else. The corner radius is
+   deliberately left alone: rounding it costs a paint every frame,
+   and scaled down to a thumbnail a 14px radius is a pixel and a
+   half. Nobody sees the corner; everybody would feel the frames.
+
+   The same rules run backwards on the way out, and the same
+   block serves the playlist screen, which is a .now as well.
+   ========================================================== */
+.now.growing{
+  visibility:visible;
+  transform-origin:0 0;
+  transform:translate(var(--ex-x,0px),var(--ex-y,0px))
+            scale(var(--ex-sx,1),var(--ex-sy,1));
+  transition:transform .44s var(--out), visibility .44s;
+}
+.now.growing.open{ transform:translate(0px,0px) scale(1,1); }
+.now.growing .now-in{ opacity:0; transition:opacity .14s linear; }
+.now.growing.open .now-in{ opacity:1; transition:opacity .24s linear .13s; }
+/* Putting the panel at the rectangle it starts from is not part of
+   the move — it is where the move starts. Left transitionable, the
+   browser animates *into* the rectangle, and then the expansion
+   starts from wherever that had got to: which is the old slide,
+   with extra steps. This is on for exactly one forced reflow. */
+.now.growing.placing, .now.growing.placing .now-in{ transition:none; }
+/* A finger on it outranks the expansion, the same way it outranks
+   the slide. Three classes, because .now.growing is two. */
+.now.growing.dragging{ transition:none; }
+
 /* the cover, blown up and blurred — the screen takes its colour from
    whatever is playing */
 .now-bg{
@@ -1044,8 +1088,9 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
   color:var(--ink);
   border-color:color-mix(in srgb,var(--flame) 58%,transparent);
 }
-/* Pressed, then released with a little more than it was given. */
-.th:active{ transform:scale(.93); transition-duration:.08s; }
+/* The press itself is the shared one further up — these are
+   buttons, so they sink, spring and ripple like every other
+   button, and get the reduced-motion handling with them. */
 
 .link-copy{ margin:0 4px 14px; font-size:13px; line-height:1.65; color:var(--mist); }
 .link-wait{ display:flex; justify-content:center; gap:7px; padding:6px 0 16px; }
@@ -1114,16 +1159,32 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
   to  { opacity:1; transform:none; }
 }
 
-/* Going: the whole thing lifts and thins at once. pointer-events is
-   dropped on the same frame the fade starts, so a tap during the
-   handover reaches the app underneath rather than the mark. */
-#boot{ transition:opacity 420ms ease, transform 420ms cubic-bezier(.22,1,.36,1); }
-#boot.gone{ opacity:0; transform:scale(1.06); pointer-events:none; }
+/* Going: the mark opens out into the app. The same expansion as
+   everywhere else in here, with the launcher icon as the thing
+   that was tapped — which, on a phone, it was.
+
+   The arrival animations are fill-forwards, so their end values
+   would otherwise outrank anything a transition tries to do to
+   the same properties; dropping the animation on the way out is
+   what hands transform back to the transition.
+
+   pointer-events goes on the same frame the fade starts, so a tap
+   during the handover reaches the app underneath rather than the
+   mark. */
+#boot{ transition:opacity 380ms ease 60ms; }
+#boot.gone{ opacity:0; pointer-events:none; }
+#boot .boot-mark,#boot .boot-glow,#boot .boot-word{
+  transition:transform 460ms cubic-bezier(.16,1,.3,1), opacity 300ms ease;
+}
+#boot.gone .boot-mark,#boot.gone .boot-glow,#boot.gone .boot-word{ animation:none; }
+#boot.gone .boot-mark{ transform:scale(2.6); }
+#boot.gone .boot-glow{ transform:scale(3.6); opacity:0; }
+#boot.gone .boot-word{ transform:translateY(14px); opacity:0; }
 #boot[hidden]{ display:none; }
 
 @media (prefers-reduced-motion:reduce){
   .boot-glow, .boot-mark, .boot-word{ animation:none; }
   #boot{ transition:opacity 160ms linear; }
-  #boot.gone{ transform:none; }
-}
+  #boot.gone .boot-mark,#boot.gone .boot-glow,#boot.gone .boot-word{
+    transform:none; }
 }
