@@ -397,63 +397,39 @@ body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
    ============================================================ */
 .now{
   position:fixed; inset:0; z-index:50; visibility:hidden;
-  transform:translateY(100%);
-  /* A touch of overshoot on the way up, so it arrives rather than
-     just stopping. */
-  transition:transform .46s var(--snap), visibility .46s;
+  transform:translateY(calc((1 - var(--player-p,0)) * 100%));
+  opacity:var(--player-p,0);
   overflow:hidden;
-  will-change:transform;
+  will-change:transform,opacity;
   touch-action:pan-y;
 }
-/* While a finger is on it the transform is written per-frame, so
-   any easing here would fight the finger. */
-.now.dragging{ transition:none; }
-.now.open{ transform:translateY(0); visibility:visible; }
-
-/* ==========================================================
-   THE EXPANSION
-
-   The one motion this app is built around: the thing you tapped
-   becomes the screen. The panel is placed as a rectangle the
-   exact size and position of what was tapped, and grows from
-   there to fill the viewport. It does not cross-fade in over the
-   page and it does not slide up out of nowhere — either of those
-   is a new screen arriving; this is the same object, closer.
-
-   Its contents are held back and brought in over the second half
-   of the move. A full screen's worth of text crushed into a 40px
-   square is exactly what gives a cross-fade away, so for the
-   first half the rectangle holds only the blurred cover — which
-   is what the thumbnail was to begin with.
-
-   Transform and opacity, nothing else. The corner radius is
-   deliberately left alone: rounding it costs a paint every frame,
-   and scaled down to a thumbnail a 14px radius is a pixel and a
-   half. Nobody sees the corner; everybody would feel the frames.
-
-   The same rules run backwards on the way out, and the same
-   block serves the playlist screen, which is a .now as well.
-   ========================================================== */
-.now.growing{
+.now.open{
   visibility:visible;
-  transform-origin:0 0;
-  transform:translate(var(--ex-x,0px),var(--ex-y,0px))
-            scale(var(--ex-sx,1),var(--ex-sy,1));
-  transition:transform .44s var(--out), visibility .44s;
+  transform:translateY(0);
+  opacity:1;
 }
-.now.growing.open{ transform:translate(0px,0px) scale(1,1); }
-.now.growing .now-in{ opacity:0; transition:opacity .14s linear; }
-.now.growing.open .now-in{ opacity:1; transition:opacity .24s linear .13s; }
-/* Putting the panel at the rectangle it starts from is not part of
-   the move — it is where the move starts. Left transitionable, the
-   browser animates *into* the rectangle, and then the expansion
-   starts from wherever that had got to: which is the old slide,
-   with extra steps. This is on for exactly one forced reflow. */
-.now.growing.placing, .now.growing.placing .now-in{ transition:none; }
-/* A finger on it outranks the expansion, the same way it outranks
-   the slide. Three classes, because .now.growing is two. */
-.now.growing.dragging{ transition:none; }
-
+/* The hand owns the frame. No easing/transition while dragging. */
+.now.dragging{ transition:none !important; }
+.now-motion{
+  --player-p:0;
+  position:relative;
+  width:100%;
+  height:100%;
+  transform-origin:50% 0;
+  transform:
+    translateY(calc((1 - var(--player-p)) * 2px))
+    scale(calc(.965 + var(--player-p) * .035));
+  will-change:transform;
+  pointer-events:none;
+}
+.now.open .now-motion{ pointer-events:auto; }
+.now-in{
+  --p:var(--player-p,0);
+  position:relative; height:100%; display:flex; flex-direction:column;
+  user-select:none;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 24px
+          calc(env(safe-area-inset-bottom,0px) + 16px);
+}
 /* the cover, blown up and blurred — the screen takes its colour from
    whatever is playing */
 .now-bg{
@@ -480,18 +456,22 @@ body.with-mini{ --scrim:calc(var(--mini-h) + 54px); }
 
 .cover{ flex:1; display:grid; place-items:center; padding:18px 0; min-height:0;
         touch-action:none; }
-/* Holds the artwork and gives the grid something of its own size to
-   centre. Nothing transforms it — a swipe changes the track, it does
-   not drag the cover about. */
-.cover-swipe{ display:grid; place-items:center; min-height:0; max-height:100%; }
+.cover-swipe{
+  --p:var(--player-p,0);
+  display:grid; place-items:center; min-height:0; max-height:100%;
+  transform:
+    translateY(calc((1 - var(--p)) * 8vh))
+    scale(calc(.54 + var(--p) * .46));
+  opacity:calc(.72 + var(--p) * .28);
+  will-change:transform,opacity;
+  transform-origin:50% 50%;
+}
 .cover img{
   width:min(76vw,44vh); aspect-ratio:1; object-fit:cover; border-radius:14px;
-  /* Two shadows: the weight of the thing, and the colour it throws
-     onto whatever is under it. The second is the whole idea. */
   box-shadow:0 30px 60px -20px rgba(0,0,0,.8),
              0 20px 56px -14px rgba(var(--lit,var(--glow)),.42);
+  will-change:transform,opacity;
 }
-
 /* ==========================================================
    THE LIGHT IN THE ROOM
 
@@ -533,12 +513,12 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
   body.playing .now-lit{ animation:none; }
 }
 
-.now-meta{ display:flex; align-items:center; gap:14px; }
-.nm-text{ flex:1; min-width:0; }
-.now-meta h1{ margin:0; font-size:20px; font-weight:600; line-height:1.3;
-  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-.now-meta p{ margin:6px 0 0; font-size:13.5px; color:var(--mist); }
-
+.now-meta{
+  display:flex; align-items:center; gap:14px;
+  opacity:calc(.25 + var(--p,1) * .75);
+  transform:translateY(calc((1 - var(--p,1)) * 28px));
+  will-change:transform,opacity;
+}
 .seek{ margin-top:20px; }
 .seek-rail{
   position:relative; height:4px; border-radius:2px;
@@ -553,209 +533,17 @@ body.playing .now-lit{ animation:lamp 7s ease-in-out infinite; }
 .times{ display:flex; justify-content:space-between; margin-top:11px;
         font-size:11px; color:var(--mist); font-variant-numeric:tabular-nums; }
 
-.now-ctrls{ display:flex; align-items:center; justify-content:space-between; margin-top:18px; }
+.now-ctrls{
+  display:flex; align-items:center; justify-content:space-between; margin-top:18px;
+  opacity:calc(.45 + var(--p,1) * .55);
+  transform:translateY(calc((1 - var(--p,1)) * 20px));
+  will-change:transform,opacity;
+}
 .now-ctrls button{ width:48px; height:48px; padding:12px; border-radius:50%; }
 .now-ctrls button svg{ fill:currentColor; stroke:none; }
 .now-ctrls .small{ width:40px; height:40px; padding:9px; color:var(--mist); }
 .now-ctrls .small svg{ fill:none; stroke:currentColor; }
 .now-ctrls .small.on{ color:var(--flame); }
-/* ---------- what it is playing through --------------------
-   One glyph with three shapes in it; the kind of device decides
-   which of them is drawn. Cheaper than three files and it is the
-   right colour without being told.                            */
-
-.out, .out-row{ display:flex; align-items:center; gap:6px; min-width:0; }
-.out[hidden], .out-row[hidden]{ display:none; }
-.out-i{ width:13px; height:13px; flex:none; fill:none; stroke:currentColor;
-        stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
-.out-i .bt, .out-i .wire, .out-i .spk{ display:none; }
-[data-kind="bluetooth"] .out-i .bt{ display:inline; }
-[data-kind="wired"] .out-i .wire,
-[data-kind="other"] .out-i .wire{ display:inline; }
-[data-kind="speaker"] .out-i .spk{ display:inline; }
-.out-i .spk:first-of-type{ fill:currentColor; }
-
-.out{ font-size:11px; margin-top:1px; color:var(--flame);
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.out span{ overflow:hidden; text-overflow:ellipsis; }
-
-.out-row{ margin-top:12px; font-size:11.5px; color:var(--mist); }
-.out-row.away{ color:var(--flame); }
-.out-row span{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-
-/* ==========================================================
-   A PLAYLIST
-
-   The same screen as the full-screen player — it comes up the
-   same way, drags down the same way, and Back unwinds it the
-   same way — with a header instead of a cover and a list
-   instead of controls.
-   ========================================================== */
-
-.plist{ z-index:52; }                 /* over the player, not under it */
-.now-top-spacer{ width:36px; flex:none; }
-
-.pl-head{ display:flex; align-items:center; gap:14px; margin:18px 0 16px; }
-.pl-head img{
-  width:96px; height:96px; flex:none; border-radius:12px; object-fit:cover;
-  background:var(--bg-2);
-  box-shadow:0 18px 40px -16px rgba(0,0,0,.85);
-}
-.pl-text{ min-width:0; }
-.pl-text h1{
-  font-size:21px; line-height:1.2; font-weight:700;
-  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
-}
-.pl-text p{ margin-top:6px; font-size:12.5px; color:var(--mist); }
-
-.pl-acts{ display:flex; gap:10px; margin-bottom:6px; }
-.act-solid, .act-ghost{
-  display:inline-flex; align-items:center; gap:8px;
-  padding:11px 18px; border-radius:999px; font-size:13.5px; font-weight:600;
-  transition:transform .26s var(--spring);
-}
-.act-solid{
-  background:linear-gradient(150deg,var(--flame),var(--ember)); color:var(--on-accent);
-  box-shadow:0 8px 20px -10px rgba(0,0,0,.9),
-             0 4px 18px -6px rgba(var(--lit,var(--glow)),.4);
-}
-.act-ghost{ color:var(--ink); border:1px solid var(--line); }
-.act-solid svg, .act-ghost svg{ width:16px; height:16px; flex:none; }
-.act-solid svg{ fill:currentColor; stroke:none; }
-.act-ghost svg{ fill:none; stroke:currentColor; stroke-width:1.9;
-                stroke-linecap:round; stroke-linejoin:round; }
-
-/* The only part of this screen that scrolls, so it is the only part
-   that hands the vertical axis back to the browser. */
-.pl-rows{ flex:1; min-height:0; overflow-y:auto; touch-action:pan-y;
-          margin-inline:-6px; padding-inline:6px; }
-.pl-rows::-webkit-scrollbar{ display:none; }
-
-.pl-form{ display:flex; flex-direction:column; gap:10px; padding:4px 0 2px; }
-.pl-form input{
-  width:100%; height:44px; padding:0 14px; border-radius:12px;
-  border:1px solid var(--line); background:var(--bg-2);
-  color:var(--ink); font:inherit; font-size:14px; outline:none;
-}
-.pl-form input:focus{ border-color:color-mix(in srgb,var(--flame) 55%,transparent); }
-.pl-form .act{ text-align:center; border-bottom:0; }
-
-/* ---------- finding something in the library --------------- */
-
-.find{
-  display:flex; align-items:center; gap:9px;
-  margin:0 0 12px; padding:0 12px; height:40px;
-  border-radius:12px; border:1px solid var(--line);
-  background:color-mix(in srgb,var(--bg-2) 70%,transparent);
-}
-.find[hidden]{ display:none; }
-.find svg{ width:16px; height:16px; flex:none; color:var(--mist);
-           fill:none; stroke:currentColor; stroke-width:1.9;
-           stroke-linecap:round; }
-.find input{
-  flex:1; min-width:0; background:none; border:0; outline:none;
-  color:var(--ink); font:inherit; font-size:13.5px;
-}
-.find input::placeholder{ color:color-mix(in srgb,var(--mist) 75%,transparent); }
-/* Safari and Chrome both draw their own clear button on a search
-   field, and it is not the one below. */
-.find input::-webkit-search-cancel-button{ display:none; }
-.find-x{ width:26px; height:26px; padding:5px; border-radius:50%; color:var(--mist); }
-.find-x[hidden]{ display:none; }
-.find:focus-within{ border-color:color-mix(in srgb,var(--flame) 55%,transparent); }
-
-/* ==========================================================
-   WHOSE APP THIS IS
-
-   A line at the end of the library, not a screen of its own.
-   Quiet until touched — it is a signature, not a banner.
-   ========================================================== */
-
-.made{
-  margin:34px 0 8px; padding-top:20px;
-  border-top:1px solid var(--line);
-  display:flex; flex-direction:column; align-items:center; gap:12px;
-}
-.made-by{
-  font-size:10px; letter-spacing:.3em; text-transform:uppercase;
-  color:color-mix(in srgb,var(--mist) 62%,transparent);
-}
-.handles{ display:flex; gap:10px; }
-.handle{
-  display:inline-flex; align-items:center; gap:7px;
-  padding:8px 13px 8px 10px; border-radius:999px;
-  border:1px solid var(--line);
-  background:color-mix(in srgb,var(--bg-2) 70%,transparent);
-  color:var(--mist); font-size:12.5px; font-weight:500;
-  text-decoration:none; position:relative;
-  transition:transform .26s var(--spring), color .2s ease, border-color .2s ease;
-}
-.handle svg{ width:15px; height:15px; flex:none; }
-/* The Instagram mark is drawn; the Telegram one is filled. */
-.handle svg rect, .handle svg circle{ fill:none; stroke:currentColor; stroke-width:1.7; }
-.handle svg circle.dot{ fill:currentColor; stroke:none; }
-.handle svg path.solid{ fill:currentColor; stroke:none; }
-.handle:active, .handle.pressing{ color:var(--flame); border-color:var(--flame); }
-
-/* ==========================================================
-   CONTROLS WITH WEIGHT
-
-   The transport is the centrepiece, so it is built as objects
-   rather than as flat targets: a disc with a lit rim and a
-   shadow under it, and skip buttons that move the way the music
-   is about to.
-
-   Everything that moves per frame is transform. The shadows and
-   rims are painted once and then left alone.
-   ========================================================== */
-
-.now-ctrls .play{
-  width:68px; height:68px; padding:20px;
-  background:linear-gradient(150deg,
-    color-mix(in srgb,var(--flame) 92%,#fff),
-    var(--flame) 38%, var(--ember));
-  color:var(--on-accent);
-  /* A rim catching light at the top, a darker one at the bottom, and
-     a shadow on the surface below — the three things that make a
-     circle read as a disc rather than a hole. */
-  box-shadow:
-    inset 0 1.5px 0 rgba(255,244,228,.55),
-    inset 0 -2px 3px rgba(80,26,12,.35),
-    0 10px 22px -8px rgba(0,0,0,.85),
-    0 6px 26px -6px rgba(var(--lit,var(--glow)),.45);
-  transition:transform .3s var(--spring), box-shadow .3s ease;
-}
-/* Pressed, it goes down into the surface: further than the others,
-   and the shadow under it shortens as it gets closer. */
-.now-ctrls .play.pressing{
-  transform:scale(.9) translateY(1.5px);
-  box-shadow:
-    inset 0 1.5px 0 rgba(255,244,228,.4),
-    inset 0 -1px 2px rgba(80,26,12,.3),
-    0 4px 10px -6px rgba(0,0,0,.9),
-    0 2px 12px -4px rgba(var(--lit,var(--glow)),.35);
-}
-
-/* Skip moves the way the track is about to. Two pixels is enough to
-   feel and not enough to look like a bug. */
-#nPrev, #nNext{ transition:transform .3s var(--spring); }
-#nPrev.pressing{ transform:scale(.86) translateX(-3px); }
-#nNext.pressing{ transform:scale(.86) translateX(3px); }
-
-/* Shuffle and repeat sit back until they are on, and then they are
-   lit rather than merely coloured. */
-.now-ctrls .small{ transition:transform .3s var(--spring), color .2s ease; }
-.now-ctrls .small.on{
-  color:var(--flame);
-  filter:drop-shadow(0 0 7px color-mix(in srgb,var(--flame) 55%,transparent));
-}
-#bRepeat{ position:relative; }
-#bRepeat .one{
-  position:absolute; right:4px; bottom:4px; font-size:9px; font-weight:700;
-  background:var(--flame); color:var(--on-accent); border-radius:50%;
-  width:13px; height:13px; display:grid; place-items:center;
-}
-
 .queue-open{
   display:flex; align-items:center; justify-content:center; gap:9px;
   margin-top:16px; padding:11px; border-radius:11px;
