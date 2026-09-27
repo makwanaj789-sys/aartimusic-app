@@ -1563,9 +1563,10 @@
   /* The mini is still opened by tapping it. It uses the same progress
      machinery as the drag rather than a different animation path. */
   function openPlayerFromMini(from) {
+    // openNow owns the single progress/spring path. Starting another
+    // spring here reset the same progress to zero and made the mini
+    // tap fight the first animation.
     openNow(from);
-    setPlayerProgress(0);
-    requestAnimationFrame(() => springPlayerTo(1, 0));
   }
 
   bindPlayerGesture();
