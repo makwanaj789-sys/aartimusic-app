@@ -42,6 +42,40 @@ html, body { background:#0A0908; margin:0; }
 </div>
 
 
+<!-- Independent splash failsafe: app.js must never be able to leave a black screen forever. -->
+<script>
+(function () {
+  var finished = false;
+  function releaseSplash(reason) {
+    if (finished) return;
+    finished = true;
+    var boot = document.getElementById("boot");
+    if (boot) {
+      boot.classList.add("gone");
+      window.setTimeout(function () { boot.hidden = true; }, 500);
+    }
+    if (reason) console.error("[Aarti Music] Startup error:", reason);
+  }
+  // app.js has its own dismiss logic; this independent timer also works
+  // if that script fails to load or throws during initialization.
+  window.setTimeout(function () {
+    var boot = document.getElementById("boot");
+    if (boot && !boot.hidden && !boot.classList.contains("gone")) {
+      releaseSplash("Startup did not finish within 3.5 seconds");
+    }
+  }, 3500);
+  window.addEventListener("error", function (event) {
+    // Ignore ordinary image/audio errors; only JS errors and script-load
+    // failures can prevent app initialization.
+    if (event && (event.error || (event.target && event.target.tagName === "SCRIPT"))) {
+      releaseSplash(event.message || "JavaScript failed to load");
+    }
+  }, true);
+  window.addEventListener("unhandledrejection", function (event) {
+    releaseSplash(event && event.reason ? event.reason : "Unhandled startup promise rejection");
+  });
+})();
+</script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <!-- ============ HOME ============ -->
