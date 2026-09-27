@@ -2095,8 +2095,14 @@
     try {
       const r = await api("/api/playlist?id=" + encodeURIComponent(id));
 
-      let payload = {};
-      try { payload = await r.json(); } catch (e) {}
+      let payload = null;
+      try {
+        payload = await r.json();
+      } catch (parseError) {
+        console.error("[AartiMusic] Playlist endpoint returned non-JSON", {
+          playlistId: id, status: r.status, error: parseError,
+        });
+      }
 
       if (r.status === 401) {
         $("plEmpty").hidden = false;
@@ -2119,15 +2125,40 @@
           payload.error || "YouTube could not find that playlist.";
         return;
       }
-      if (!r.ok) {
+      if (r.status === 429) {
         $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Couldn't open that";
+        $("plEmpty").querySelector("h3").textContent = "Please try again";
         $("plEmpty").querySelector("p").textContent =
-          payload.error || "The server could not read this playlist.";
+          (payload && payload.error) || "The music server is rate-limiting requests.";
+        return;
+      }
+      if (!r.ok) {
+        console.error("[AartiMusic] Playlist endpoint failed", {
+          playlistId: id, status: r.status, payload,
+        });
+        $("plEmpty").hidden = false;
+        $("plEmpty").querySelector("h3").textContent =
+          r.status >= 500 ? "Music server error" : "Couldn't open that";
+        $("plEmpty").querySelector("p").textContent =
+          (payload && payload.error) ||
+          (r.status >= 500
+            ? "YouTube or the music server failed. Please try again shortly."
+            : "The server could not read this playlist.");
         return;
       }
 
-      plSongs = payload.results || [];
+      if (!payload || typeof payload !== "object" || !Array.isArray(payload.results)) {
+        console.error("[AartiMusic] Playlist endpoint returned an invalid payload", {
+          playlistId: id, status: r.status, payload,
+        });
+        $("plEmpty").hidden = false;
+        $("plEmpty").querySelector("h3").textContent = "Invalid server response";
+        $("plEmpty").querySelector("p").textContent =
+          "The server replied, but did not return a playlist track list.";
+        return;
+      }
+
+      plSongs = payload.results;
       $("plTitle").textContent = payload.title || "Playlist";
       $("plBy").textContent = payload.by ||
         (plSongs.length ? plSongs.length + " songs" : "Empty playlist");
@@ -2154,10 +2185,15 @@
         by: payload.by || "",
       });
     } catch (e) {
+      // Keep the actual exception in WebView logs; otherwise DNS,
+      // TLS, CORS and offline failures all look like an empty playlist.
+      console.error("[AartiMusic] Playlist request could not complete", {
+        playlistId: id, server: SERVER, error: e,
+      });
       $("plEmpty").hidden = false;
       $("plEmpty").querySelector("h3").textContent = "Connection failed";
       $("plEmpty").querySelector("p").textContent =
-        "Couldn't reach the music server. Try again.";
+        "Couldn't reach the music server. Check your connection and try again.";
     } finally {
       $("plLoading").hidden = true;
     }
