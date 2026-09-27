@@ -935,83 +935,49 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 }
 
 /* ==========================================================
-   THE WAY IN
-
-   What the first second looks like. The markup and the two rules
-   that have to be true on the first frame live inline in
-   index.html; everything that moves is here, because none of it
-   matters until a frame has already been painted.
-
-   The mark is the launcher icon — a solid letterform, so it
-   settles rather than wobbles. What carries the motion is the
-   ember behind it, which is the one thing in the mark's own
-   colour that can move without the shape looking broken.
+   THE WAY IN — a short amber equaliser, never a tap blocker.
+   Bars animate only with transform/opacity and the splash yields
+   to the app as soon as the first screen has painted.
    ========================================================== */
-
-.boot-stage{ position:relative; display:grid; place-items:center; }
-
-.boot-glow{
-  position:absolute; width:320px; height:320px; border-radius:50%;
-  background:radial-gradient(circle, rgba(224,162,83,.42) 0%,
-                                     rgba(224,162,83,.16) 42%,
-                                     rgba(224,162,83,0) 70%);
-  animation:bootBloom 800ms cubic-bezier(.22,1,.36,1) both,
-            bootEmber 2.8s 800ms ease-in-out infinite;
+.boot-eq{
+  display:flex; align-items:center; justify-content:center;
+  gap:7px; height:66px; min-width:112px;
+  color:#F0B45F;
+  filter:drop-shadow(0 0 14px rgba(240,180,95,.18));
 }
-@keyframes bootBloom{
-  from{ opacity:0; transform:scale(.55); }
-  to  { opacity:1; transform:scale(1); }
+.boot-eq i{
+  display:block; width:7px; height:46px; border-radius:99px;
+  transform:scaleY(.18); transform-origin:50% 50%;
+  background:linear-gradient(180deg,#FFE0A0 0%,#F0B45F 48%,#B96B2D 100%);
+  animation:bootBeat 680ms cubic-bezier(.45,0,.55,1) infinite alternate;
+  will-change:transform,opacity;
 }
-@keyframes bootEmber{
-  0%,100%{ transform:scale(1);    opacity:.82; }
-  50%    { transform:scale(1.14); opacity:1; }
+.boot-eq i:nth-child(2),.boot-eq i:nth-child(6){animation-delay:-180ms}
+.boot-eq i:nth-child(3),.boot-eq i:nth-child(5){animation-delay:-340ms}
+.boot-eq i:nth-child(4){animation-delay:-90ms}
+.boot-eq i:nth-child(1),.boot-eq i:nth-child(7){animation-duration:560ms}
+@keyframes bootBeat{
+  0%{transform:scaleY(.16);opacity:.62}
+  45%{transform:scaleY(.58);opacity:.9}
+  100%{transform:scaleY(1);opacity:1}
 }
-
-.boot-mark{
-  position:relative;
-  animation:bootRise 760ms cubic-bezier(.16,1.02,.28,1) both;
-}
-@keyframes bootRise{
-  from{ opacity:0; transform:translateY(16px) scale(.9); }
-  to  { opacity:1; transform:none; }
-}
-
 .boot-word{
   margin:0; font-size:15px; font-weight:600; letter-spacing:.34em;
   text-transform:uppercase; color:var(--mist,#8B7F76);
-  animation:bootWord 900ms 260ms cubic-bezier(.22,1,.36,1) both;
+  animation:bootWord 520ms 80ms cubic-bezier(.22,1,.36,1) both;
 }
 @keyframes bootWord{
-  from{ opacity:0; transform:translateY(10px); }
-  to  { opacity:1; transform:none; }
+  from{opacity:0;transform:translateY(6px)}
+  to{opacity:1;transform:translateY(0)}
 }
-
-/* Going: the mark opens out into the app. The same expansion as
-   everywhere else in here, with the launcher icon as the thing
-   that was tapped — which, on a phone, it was.
-
-   The arrival animations are fill-forwards, so their end values
-   would otherwise outrank anything a transition tries to do to
-   the same properties; dropping the animation on the way out is
-   what hands transform back to the transition.
-
-   pointer-events goes on the same frame the fade starts, so a tap
-   during the handover reaches the app underneath rather than the
-   mark. */
-#boot{ transition:opacity 380ms ease 60ms; }
-#boot.gone{ opacity:0; pointer-events:none; }
-#boot .boot-mark,#boot .boot-glow,#boot .boot-word{
-  transition:transform 460ms cubic-bezier(.16,1,.3,1), opacity 300ms ease;
-}
-#boot.gone .boot-mark,#boot.gone .boot-glow,#boot.gone .boot-word{ animation:none; }
-#boot.gone .boot-mark{ transform:scale(2.6); }
-#boot.gone .boot-glow{ transform:scale(3.6); opacity:0; }
-#boot.gone .boot-word{ transform:translateY(14px); opacity:0; }
-#boot[hidden]{ display:none; }
-
+#boot{transition:opacity 180ms linear}
+#boot.gone{opacity:0;pointer-events:none}
+#boot.gone .boot-eq{animation:none;opacity:0;transform:scale(.96)}
+#boot.gone .boot-word{animation:none;opacity:0;transform:translateY(5px)}
+#boot[hidden]{display:none}
 @media (prefers-reduced-motion:reduce){
-  .boot-glow, .boot-mark, .boot-word{ animation:none; }
-  #boot{ transition:opacity 160ms linear; }
-  #boot.gone .boot-mark,#boot.gone .boot-glow,#boot.gone .boot-word{
-    transform:none; }
+  .boot-eq i,.boot-word{animation:none;will-change:auto}
+  .boot-eq i{transform:scaleY(.42);opacity:.9}
+  #boot{transition:none}
+  #boot.gone .boot-eq,#boot.gone .boot-word{transform:none}
 }
