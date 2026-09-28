@@ -80,7 +80,7 @@ jobs:
       - name: Use a separate package for the review APK
         if: github.ref != 'refs/heads/main'
         run: |
-          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview.v2"; c.appName="Aarti Music Next"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
+          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview.v3"; c.appName="Aarti Music Studio"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
 
       - name: Create the Android project
         run: |
@@ -134,8 +134,17 @@ jobs:
         if: github.ref != 'refs/heads/main'
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: aartimusic-preview-v2-debug-keystore
+          path: .ci-signing/review.keystore
+          key: aartimusic-review-signing-v3
+
+      - name: Prepare explicit review signing
+        if: github.ref != 'refs/heads/main'
+        run: |
+          mkdir -p .ci-signing
+          if [ ! -s .ci-signing/review.keystore ]; then
+            keytool -genkeypair -keystore .ci-signing/review.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          python3 scripts/review-signing.py
 
       - name: Build the APK
         working-directory: android
@@ -143,6 +152,13 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify review signing cache input
+        if: github.ref != 'refs/heads/main'
+        run: |
+          test -s .ci-signing/review.keystore
+          keytool -printcert -jarfile android/app/build/outputs/apk/debug/app-debug.apk
+          python3 scripts/review-signing.py --verify
 
       - name: Hand back the APK
         uses: actions/upload-artifact@v4

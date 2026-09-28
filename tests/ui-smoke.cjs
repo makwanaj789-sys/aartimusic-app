@@ -153,7 +153,9 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   for(const [name,key]of [['Midnight','teal'],['Violet','violet'],['Indigo','indigo'],['Neon','neon'],['Ruby','ruby']]){
    await page.locator('.themes').getByRole('button',{name,exact:true}).click();
    assert.equal(await page.locator('html').getAttribute('data-theme'),key);
+   await page.locator('.settings-drawer').getByRole('button',{name:'Close',exact:true}).click();
    await page.screenshot({path:'test-results/theme-'+key+'.png'});
+   await page.locator('#profileMenu').click();
   }
   assert.equal(await page.locator('.settings-contact svg').count(),2);
   await page.getByRole('button',{name:'Pulse icon',exact:true}).click();
