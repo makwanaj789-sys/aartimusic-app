@@ -380,11 +380,12 @@
     const hasFavs = store.favs.length > 0;
 
     drawLists();
+    discovery.refresh();
     const hasLists = !$("plBlock").hidden;
 
     $("recentBlock").hidden = !hasRecent;
     $("favBlock").hidden = !hasFavs;
-    $("homeEmpty").hidden = hasRecent || hasFavs || hasLists;
+    $("homeEmpty").hidden = true;
     $("greetSub").textContent = hasRecent ? "Pick up where you left off" : "Let's find something";
 
     const rail = $("recentRail");
@@ -1968,6 +1969,20 @@
 
   const listId = (ref) => AartiPlaylists.id(ref);
   const playlistClient = AartiPlaylists.create(api);
+  const discovery = AartiDiscovery({
+    host: $("discovery"),
+    artist: () => (store.recents[0] && store.recents[0].artist || "").split(/[,|&]/)[0].trim().slice(0, 80),
+    playlists: query => playlistClient.search(query),
+    songs: async query => {
+      const r = await api("/api/search?q=" + encodeURIComponent(query));
+      if (!r.ok) throw new Error("Discovery unavailable");
+      const data = await r.json();
+      if (data.error || !Array.isArray(data.results)) throw new Error("Invalid response");
+      return data;
+    },
+    openPlaylist: (id, known, from) => openPlaylist(id, known, from),
+    playSongs: (songs, at) => { queue = songs.slice(); playAt(at); },
+  });
   let playlistRequest = 0, finderRequest = 0;
 
   function playlistMessage(head, message) {
@@ -2193,7 +2208,7 @@
     // A link pasted in here means that playlist, not a search for
     // its address — the same rule the song search follows.
     const asList = listId(term);
-    if (asList) { $("lq").value = ""; openPlaylist(asList); return; }
+    if (asList) { $("lq").value = ""; $("lqLoading").hidden = true; openPlaylist(asList); return; }
 
     $("lq").value = term;
     $("lq").blur();

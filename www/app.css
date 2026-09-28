@@ -1227,3 +1227,30 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
   #boot.gone .boot-mark,#boot.gone .boot-glow,#boot.gone .boot-word{
     transform:none; }
 }
+
+/* Aarti discovery: real playlist results, never invented charts. */
+.brand-kicker{color:var(--flame);font-size:10px;letter-spacing:.18em;font-weight:600;margin-bottom:18px;display:flex;justify-content:space-between;gap:12px}
+.brand-kicker span{color:var(--mist);font-size:8px;letter-spacing:.12em}
+#pHome .head{padding-top:calc(env(safe-area-inset-top,0px) + 30px)}
+#pHome .head h1{font-size:30px;letter-spacing:-1.1px}
+.discovery-chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:0 0 25px;overscroll-behavior-x:contain}
+.discovery-chips .chip{white-space:nowrap;border:1px solid #ffffff12;background:#ffffff08;color:var(--mist);padding:10px 17px}
+.discovery-chips .chip.active{background:var(--flame);color:#15100a;border-color:transparent}
+.discovery-sub{color:var(--mist);font-size:12px;margin:-3px 0 20px}
+.discovery-status{font-size:12px;line-height:1.6;color:var(--mist)}
+.discovery-status:empty{display:none}
+.discovery-rail{gap:16px;padding-bottom:20px;scroll-snap-type:x proximity}
+.discovery-card{flex:0 0 156px;text-align:left;scroll-snap-align:start;min-width:0}
+.discovery-cover{display:block;position:relative;width:156px;height:156px;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#402710,#12100d)}
+.discovery-cover img{width:100%;height:100%;object-fit:cover}
+.cover-play{position:absolute;right:10px;bottom:10px;border-radius:50%;background:#ffbb56;color:#201506;width:32px;height:32px;display:grid;place-items:center;font-size:12px;box-shadow:0 4px 18px #0007}
+.discovery-title{display:block;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:10px;line-height:1.5}
+.discovery-by{display:block;font-size:11px;color:var(--mist);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+.discovery-songs-title{font-size:19px;letter-spacing:-.4px;margin:16px 0}
+.discovery-songs{display:grid;grid-template-columns:1fr;gap:4px}
+.discovery-song{display:flex;align-items:center;gap:12px;padding:9px 0;text-align:left;width:100%;min-width:0}
+.discovery-song img{width:48px;height:48px;border-radius:10px;object-fit:cover;background:#28221b}
+.discovery-song-meta{flex:1;min-width:0}.discovery-song-meta .discovery-title{margin:0}
+.discovery-song-play{color:var(--flame);font-size:12px;margin:0 10px}
+.mini{background:#1e1915ee;backdrop-filter:blur(18px);border-top:1px solid #ffffff10}
+@media(min-width:700px){.discovery-songs{grid-template-columns:1fr 1fr;column-gap:28px}}
