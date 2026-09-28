@@ -1254,3 +1254,32 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 .discovery-song-play{color:var(--flame);font-size:12px;margin:0 10px}
 .mini{background:#1e1915ee;backdrop-filter:blur(18px);border-top:1px solid #ffffff10}
 @media(min-width:700px){.discovery-songs{grid-template-columns:1fr 1fr;column-gap:28px}}
+
+/* The player has one shared cover. Its fixed size never changes per frame. */
+#now{transform:none;transition:none;touch-action:none;background:transparent}
+#now .now-bg,#now .now-lit,#now .now-meta,#now .now-top,#now .seek,#now .out-row,#now .queue-open,#now .now-ctrls{transition:none;will-change:transform,opacity}
+#now .now-meta{transform-origin:0 0}
+#now .now-bg{background-color:var(--bg);filter:blur(45px) saturate(1.25);opacity:0}
+#now .now-bg::after{background:linear-gradient(180deg,#0a0908a8,#0a0908ed 72%,#0a0908)}
+#now .now-lit{opacity:0}
+#fullArtSlot{width:min(80vw,44vh);aspect-ratio:1}
+#sharedArt{position:fixed;left:0;top:0;width:320px;height:320px;z-index:55;transform-origin:0 0;touch-action:none;visibility:hidden;will-change:transform}
+#sharedArt #coverSwipe{width:100%;height:100%;display:block}
+#sharedArt #nArt{width:100%;height:100%;display:block;object-fit:cover;border-radius:18px;box-shadow:0 18px 65px #0005;user-select:none;-webkit-user-drag:none;transition:opacity .16s linear}
+#sharedArt #nArt.swapping{opacity:0;transition:none}
+#mini #mArt{width:40px;height:40px;display:block}
+#mini .meta,#mini button{transition:none}
+#now .now-ctrls{transform-origin:50% 50%}
+@media(prefers-reduced-motion:reduce){#sharedArt #nArt{transition:none}#coverSwipe.came-next,#coverSwipe.came-prev{animation:none}}
+
+#plist{z-index:60}
+#boot{pointer-events:none;animation:bootExit .22s ease .5s forwards;transition:none}
+.boot-equaliser{display:flex;align-items:center;gap:9px;height:80px}
+.boot-equaliser i{display:block;width:10px;height:64px;border-radius:8px;background:linear-gradient(0deg,#c76b23,#ffd68a);transform-origin:center;animation:bootBeat .48s ease-in-out infinite alternate}
+.boot-equaliser i:nth-child(2){animation-delay:-.32s;height:80px}.boot-equaliser i:nth-child(3){animation-delay:-.13s;height:56px}
+.boot-equaliser i:nth-child(4){animation-delay:-.42s;height:76px}.boot-equaliser i:nth-child(5){animation-delay:-.22s;height:60px}
+.boot-equaliser i:nth-child(6){animation-delay:-.36s;height:80px}.boot-equaliser i:nth-child(7){animation-delay:-.08s;height:48px}
+.boot-name{font-weight:600;font-size:20px;letter-spacing:-.5px;color:#f7e9d5;margin:0}
+@keyframes bootBeat{from{transform:scaleY(.23)}to{transform:scaleY(1)}}
+@keyframes bootExit{to{opacity:0}}
+@media(prefers-reduced-motion:reduce){#boot{display:none;animation:none}.boot-equaliser i{animation:none}}

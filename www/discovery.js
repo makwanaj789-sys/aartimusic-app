@@ -3,7 +3,7 @@
   'use strict';
   root.AartiDiscovery = function (options) {
     const host = options.host;
-    const categories = [['For you', 'Hindi Bollywood music'], ['Hindi', 'Hindi hits'], ['Punjabi', 'Punjabi hits'], ['Garba', 'Gujarati garba'], ['Chill', 'Hindi lofi chill']];
+    const categories = [['For you', 'Hindi Bollywood music'], ['Trending', 'India trending songs'], ['Hindi', 'Hindi hits'], ['Punjabi', 'Punjabi hits'], ['Garba', 'Gujarati garba'], ['Chill', 'Hindi lofi chill']];
     let generation = 0, selected = 0, activeKey = '', busy = false;
     const memory = new Map();
     const savedKey = 'aarti.discovery.v1';

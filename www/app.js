@@ -1070,7 +1070,6 @@
   }
 
   function paint(song) {
-    setArt($("mArt"), song.thumb);
     setArt($("nArt"), song.thumb);
     relight(song);
     $("nowBg").style.backgroundImage = 'url("' + song.thumb + '")';
@@ -1373,36 +1372,27 @@
     panel.classList.remove("placing");
   }
 
-  // full screen
+  // The same artwork is continuously mapped between mini and full slots.
   const now = $("now");
-  const openNow = (from) => {
-    if (now.classList.contains("open")) return;
-    // The rectangle has to be a painted frame before the panel is
-    // told to fill the screen, or there is nothing to move from.
-    if (growFrom(now, from)) { cameFrom.set(now, from); settle(now); }
-    else cameFrom.delete(now);
-    now.classList.add("open");
-    now.setAttribute("aria-hidden", "false");
-    document.body.classList.add("locked");
-    try { tg.BackButton.show(); } catch (e) {}
-    opened(now, closeNow);
-  };
-  /* how === "drag" when a finger pulled it down: that one goes back
-     down, because that is where the hand just put it. Everything
-     else — the chevron, Back, the system gesture — collapses into
-     the artwork it came out of. No flush here, on purpose: adding
-     the class and dropping .open in the same breath is what makes
-     the browser read identity as the start of the move. */
-  const closeNow = (how) => {
-    if (!now.classList.contains("open")) return;
-    if (how === "drag") now.classList.remove("growing");
-    else growFrom(now, cameFrom.get(now) || $("mArt"));
-    now.classList.remove("open");
-    now.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("locked");
-    try { tg.BackButton.hide(); } catch (e) {}
-    closed(now);
-  };
+  const playerMotion = AartiPlayerMotion({
+    panel: now, mini: $("mini"), art: $("sharedArt"),
+    miniSlot: $("mArt"), fullSlot: $("fullArtSlot"),
+    canDrag: () => gesture !== "x",
+    onGesture: () => { gesture = "y"; swipedAt = Date.now(); },
+    onGestureEnd: () => { if (gesture === "y") gesture = null; swipedAt = Date.now(); },
+    onOpen: () => {
+      document.body.classList.add("locked");
+      try { tg.BackButton.show(); } catch (_) {}
+      opened(now, () => playerMotion.close());
+    },
+    onClosed: () => {
+      if (!$("plist").classList.contains("open")) document.body.classList.remove("locked");
+      try { tg.BackButton.hide(); } catch (_) {}
+      closed(now);
+    },
+  });
+  const openNow = () => playerMotion.open();
+  const closeNow = () => playerMotion.close();
   $("miniOpen").addEventListener("click", () => {
     // A swipe that ended on this element still fires a click.
     if (Date.now() - swipedAt < 400) return;
@@ -1503,7 +1493,7 @@
     }, { passive: true });
   }
 
-  draggable(now, () => closeNow("drag"), { threshold: 120 });
+  // Player vertical motion is owned exclusively by playerMotion.
 
   /* ---------- swiping the cover to change song --------------
      Left for the next one, right for the one before. The cover
@@ -1520,7 +1510,7 @@
      not the card slide that made this feel slow. */
   function arrived(way) {
     if (REDUCED) return;
-    ["coverSwipe", "mArt"].forEach((id) => {
+    ["coverSwipe"].forEach((id) => {
       const el = $(id);
       if (!el) return;
       el.classList.remove("came-next", "came-prev");
@@ -1649,8 +1639,7 @@
   }
 
   // The cover on the full screen.
-  swipeToSkip($("coverSwipe") && $("coverSwipe").parentElement,
-              { when: () => now.classList.contains("open") });
+  swipeToSkip($("sharedArt"), { onTaken: () => { swipedAt = Date.now(); } });
 
   /* The strip along the bottom. Its buttons are left alone — a
      finger that starts on play or the heart means that button —
@@ -1660,7 +1649,6 @@
   swipeToSkip($("mini"), {
     skip: "button",
     onTaken: () => { swipedAt = Date.now(); },
-    onUp: () => { swipedAt = Date.now(); openNow($("mArt")); },
   });
 
   /* The sheets drag on their own panel rather than the whole
@@ -2297,34 +2285,5 @@
   });
   tab("Home");
 
-  /* ---------- putting the lamp away -------------------------
-     The first screen is drawn by the time this runs, so the only
-     thing worth waiting for is the frame that shows it. A floor of
-     roughly a second keeps the lamp from blinking past on a fast
-     phone; the timeout is a promise that nothing here can ever
-     leave someone staring at it.                                */
-  (function dismissBoot() {
-    const boot = $("boot");
-    if (!boot) return;
-
-    let done = false;
-    const go = () => {
-      if (done) return;
-      done = true;
-      boot.classList.add("gone");                 // taps pass through now
-      setTimeout(() => { boot.hidden = true; }, 500);
-    };
-
-    const LEAST = REDUCED ? 0 : 900;
-    const start = performance.now();
-    const settled = () => setTimeout(go, Math.max(0, LEAST - (performance.now() - start)));
-
-    // Two frames: one to lay the home screen out, one to paint it.
-    requestAnimationFrame(() => requestAnimationFrame(settled));
-    setTimeout(go, 4000);
-
-    // Someone who has already decided what they want should not have
-    // to watch the lamp finish. A touch anywhere skips it.
-    boot.addEventListener("pointerdown", go);
-  })();
+  // Opening visual has its own short timer in HTML and never gates startup.
 })();

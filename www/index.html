@@ -25,7 +25,7 @@ if(t&&t!=='amber')document.documentElement.setAttribute('data-theme',t);}catch(e
 html, body { background:#0A0908; margin:0; }
 #boot { position:fixed; inset:0; z-index:999; display:flex;
         flex-direction:column; align-items:center; justify-content:center;
-        gap:26px; background:#0A0908; }
+        gap:26px; background:#0A0908; pointer-events:none; }
 #boot .boot-mark { display:block; width:min(40vw, 168px); height:auto; }
 </style>
 </head>
@@ -34,14 +34,21 @@ html, body { background:#0A0908; margin:0; }
 <!-- The same mark as the launcher icon, on the same black the
      launch screen uses, so the handover from one to the other is
      invisible. app.js takes it away once the first screen is ready. -->
-<div id="boot">
-  <div class="boot-stage">
-    <span class="boot-glow"></span>
-    <img class="boot-mark" src="boot-mark.png" width="512" height="444" alt="" aria-hidden="true">
-  </div>
-  <p class="boot-word">Aarti Music</p>
+<div id="boot" aria-hidden="true">
+  <div class="boot-equaliser"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <p class="boot-name">Aarti Music</p>
 </div>
-
+<script>
+(function(){
+  const boot=document.getElementById('boot');
+  const dismiss=()=>{boot.hidden=true;};
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) dismiss();
+  else setTimeout(dismiss,750);
+  // The very first interaction dismisses the visual without consuming the tap.
+  window.addEventListener('pointerdown',dismiss,{capture:true,once:true});
+  window.addEventListener('keydown',dismiss,{capture:true,once:true});
+})();
+</script>
 
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
@@ -226,7 +233,7 @@ html, body { background:#0A0908; margin:0; }
 <div class="mini" id="mini" hidden>
   <div class="bar"><i id="miniFill"><span class="fill-in"><span class="shimmer"></span></span></i></div>
   <div class="mini-in" id="miniIn">
-    <img id="mArt" alt="">
+    <span id="mArt" aria-hidden="true"></span>
     <div class="meta" id="miniOpen">
       <div class="t" id="mTitle"></div>
       <div class="a" id="mArtist"></div>
@@ -268,6 +275,8 @@ html, body { background:#0A0908; margin:0; }
   </button>
 </nav>
 
+<div id="sharedArt"><div id="coverSwipe"><img id="nArt" alt="Now playing artwork" draggable="false"></div></div>
+
 <!-- ============ FULL SCREEN ============ -->
 <section class="now" id="now" aria-hidden="true">
   <div class="now-bg" id="nowBg"></div>
@@ -287,7 +296,7 @@ html, body { background:#0A0908; margin:0; }
 
     <!-- The wrapper is what the gesture listens through; the img
          underneath keeps breathing. -->
-    <div class="cover"><div class="cover-swipe" id="coverSwipe"><img id="nArt" alt=""></div></div>
+    <div class="cover"><div id="fullArtSlot" aria-hidden="true"></div></div>
 
     <div class="now-meta">
       <div class="nm-text">
@@ -454,6 +463,7 @@ html, body { background:#0A0908; margin:0; }
 <script src="config.js"></script>
 <script src="playlists.js"></script>
 <script src="discovery.js"></script>
+<script src="player-motion.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
