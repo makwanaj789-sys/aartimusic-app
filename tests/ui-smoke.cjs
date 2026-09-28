@@ -64,10 +64,11 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.locator('.discovery-song').first().click();
   await page.waitForFunction(()=>!document.getElementById('mini').hidden);
   await page.evaluate(()=>{document.getElementById('audio').pause();window.originalArtwork=document.getElementById('nArt');});
-  await page.waitForFunction(()=>document.getElementById('audio').readyState>=1);
-  await page.evaluate(()=>{document.getElementById('audio').currentTime=2;});
+  await page.waitForFunction(()=>document.getElementById('audio').readyState>=4);
+  await page.evaluate(()=>{const a=document.getElementById('audio');a.pause();a.currentTime=2;});
+  await page.waitForFunction(()=>!document.getElementById('audio').seeking);
   await page.locator('#discovery .discovery-song').first().click();
-  assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.15,'Same-song tap must preserve time');
+  assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.15,'Same-song tap must preserve time: '+await page.locator('#audio').evaluate(a=>JSON.stringify({time:a.currentTime,paused:a.paused,src:a.src})));
   await page.waitForFunction(()=>Number(document.getElementById('now').dataset.progress)===1);
   assert(await page.evaluate(()=>window.originalArtwork===document.getElementById('nArt')));
   assert.equal(await page.locator('#nArt').count(),1);
