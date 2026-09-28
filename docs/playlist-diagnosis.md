@@ -66,14 +66,15 @@ Playback/queue handlers and server discovery are unchanged from the APK.
 The timeout releases the UI; it does not cancel an extraction already
 running on the server.
 
-## Backend change requiring owner permission
+## Backend fix authorized and prepared
 
-The owner explicitly forbids changes to the bot repository without prior
-permission. No bot files were modified. Proposed scope: implement and
-register only playlist search in api/search_engine.py and api/webapi.py,
-with bounded flat extraction, existing authentication, bounded caching,
-and explicit logged failures. Investigate the direct-link failure from
-on-server responses before deciding whether additional changes are needed.
+The owner authorized playlist API changes on 28 September 2026. The missing
+search route, bounded workers/cache, explicit errors and 12 passing local
+API tests are prepared in https://github.com/makwanaj789-sys/aarti-music/pull/7.
+The actual app playlist client also passes local HTTP search/detail/auth
+checks against that backend with fixture extraction. No production process
+has been restarted or reconfigured. Live YouTube/server verification remains
+pending; the bot PR includes a read-only curl diagnostic script.
 
 Player animation, opening animation, icon and recommendation changes are
 pending the owner's requested playlist-first gate. This branch is not a
