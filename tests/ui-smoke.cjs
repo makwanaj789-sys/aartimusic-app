@@ -28,7 +28,12 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   if(url.pathname==='/api/playlists'){playlistSearches++;return route.fulfill({status:playlistStatus,json:playlistStatus===200?{results:[{id:'PL1234567890abcdef',title:'Late night Hindi',by:'Evening sessions',thumb:songs[0].thumb}]}:{error:'unauthorised'},headers});}
   if(url.pathname==='/api/playlist')return route.fulfill({json:{id:'PL1234567890abcdef',title:'Late night Hindi',results:songs},headers});
   if(url.pathname==='/api/search')return route.fulfill({json:{results:songs},headers});
-  if(url.pathname.startsWith('/api/stream/'))return route.fulfill({body:wav(),contentType:'audio/wav',headers});
+  if(url.pathname.startsWith('/api/stream/')){
+    const bytes=wav(),range=route.request().headers()['range'];
+    const m=range && /^bytes=(\d+)-(\d*)$/.exec(range);
+    if(m){const start=Number(m[1]),end=m[2]?Math.min(Number(m[2]),bytes.length-1):bytes.length-1;return route.fulfill({status:206,body:bytes.subarray(start,end+1),contentType:'audio/wav',headers:{...headers,'accept-ranges':'bytes','content-range':`bytes ${start}-${end}/${bytes.length}`}});}
+    return route.fulfill({body:bytes,contentType:'audio/wav',headers:{...headers,'accept-ranges':'bytes'}});
+  }
   return route.fulfill({status:404,json:{error:'not configured'},headers});
  });
  try{
@@ -67,8 +72,9 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.waitForFunction(()=>document.getElementById('audio').readyState>=4);
   await page.evaluate(()=>{const a=document.getElementById('audio');a.pause();a.currentTime=2;});
   await page.waitForFunction(()=>!document.getElementById('audio').seeking);
+  console.log('Before same-song tap',await page.locator('#audio').evaluate(a=>({time:a.currentTime,duration:a.duration,paused:a.paused,seekable:Array.from({length:a.seekable.length},(_,i)=>[a.seekable.start(i),a.seekable.end(i)])})));
   await page.locator('#discovery .discovery-song').first().click();
-  assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.15,'Same-song tap must preserve time: '+await page.locator('#audio').evaluate(a=>JSON.stringify({time:a.currentTime,paused:a.paused,src:a.src})));
+  assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.15,'Same-song tap must preserve time: '+await page.locator('#audio').evaluate(a=>JSON.stringify({time:a.currentTime,paused:a.paused,ready:a.readyState})));
   await page.waitForFunction(()=>Number(document.getElementById('now').dataset.progress)===1);
   assert(await page.evaluate(()=>window.originalArtwork===document.getElementById('nArt')));
   assert.equal(await page.locator('#nArt').count(),1);

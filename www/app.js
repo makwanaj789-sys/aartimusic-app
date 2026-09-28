@@ -964,6 +964,7 @@
     if (!song) return;
     if (song.id === mediaId && !audio.ended && !audio.error) {
       if (plist.classList.contains('open')) closePl();
+      if ($('queueSheet').classList.contains('open')) sheet($('queueSheet'),false);
       openNow(); return;
     }
     queue = list.slice(); playAt(at);

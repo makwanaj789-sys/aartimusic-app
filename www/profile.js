@@ -29,7 +29,7 @@
   if(step===0){
    const face=el('div','profile-photo');avatar(face,draft);wrap.append(face);
    const label=el('label','pref-field','Your name');const input=el('input');input.id='profileName';input.autocomplete='nickname';input.maxLength=50;input.value=draft.name;input.required=true;label.append(input);wrap.append(label);
-   input.oninput=()=>{draft.name=input.value;avatar(face,draft);};
+   input.oninput=()=>{draft.name=input.value;err.textContent='';avatar(face,draft);};
    const file=el('input');file.type='file';file.accept='image/*';file.id='profilePhoto';file.hidden=true;
    const pick=button('Choose photo',()=>file.click(),'pref-secondary');
    file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>15*1024*1024){err.textContent='Choose an image under 15 MB.';return;}
