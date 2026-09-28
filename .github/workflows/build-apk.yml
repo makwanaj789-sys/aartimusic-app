@@ -80,7 +80,7 @@ jobs:
       - name: Use a separate package for the review APK
         if: github.ref != 'refs/heads/main'
         run: |
-          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview"; c.appName="Aarti Music Preview"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
+          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview.v2"; c.appName="Aarti Music Next"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
 
       - name: Create the Android project
         run: |
@@ -124,6 +124,15 @@ jobs:
           else
             echo "no assets/icon.png — keeping the default icon"
           fi
+
+      # Keep review-build identity stable across future CI runs.
+      # The earlier preview key was ephemeral; Next installs alongside it.
+      - name: Reuse the review signing key
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: aartimusic-preview-v2-debug-keystore
 
       - name: Build the APK
         working-directory: android

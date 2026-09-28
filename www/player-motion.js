@@ -7,6 +7,7 @@
     const title=panel.querySelector('.now-meta'), top=panel.querySelector('.now-top');
     const controls=panel.querySelector('.now-ctrls'), seek=panel.querySelector('.seek');
     const out=panel.querySelector('.out-row'), queue=panel.querySelector('.queue-open');
+    const surface=panel.querySelector('.now-surface');
     const backdrop=panel.querySelector('.now-bg'), light=panel.querySelector('.now-lit');
     const smallText=mini.querySelector('.meta'), smallButtons=[...mini.querySelectorAll('button')];
     let p=0, speed=0, goal=0, frame=0, last=0, geometry=null, drag=null, shown=false, ignoreClickUntil=0;
@@ -29,6 +30,7 @@
       const scale=(a.width+(b.width-a.width)*p)/320;
       art.style.transform=`translate3d(${x}px,${y}px,0) scale(${scale})`;
       art.style.visibility=mini.hidden?'hidden':'visible';
+      if(surface)surface.style.opacity=String(p);
       backdrop.style.opacity=String(p);light.style.opacity=String(p*.65);
       title.style.transform=`translate3d(${textX*(1-p)}px,${textY*(1-p)}px,0) scale(${.66+.34*p})`;
       title.style.opacity=String(clamp(p*4));

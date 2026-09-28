@@ -1288,3 +1288,5 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 
 /* Keep playlist content opaque over the underlying Home/player. */
 #plist{background:var(--bg)}
+
+.now-surface{position:absolute;inset:0;background:var(--bg);opacity:0;pointer-events:none}

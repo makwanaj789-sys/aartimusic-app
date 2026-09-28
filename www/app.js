@@ -958,7 +958,7 @@
   }
 
   // Track identity belongs to the loaded media, not a newly selected list.
-  let mediaId = null, resumePosition = null, lastCheckpoint = 0;
+  let mediaId = null, resumePosition = null, lastCheckpoint = 0, restoredOnly = false;
   function chooseSong(list, at) {
     const song = list[at];
     if (!song) return;
@@ -1000,7 +1000,7 @@
     await ready;
     if (token !== before || mediaId) return;
     queue = restored; index = saved.index; mediaId = queue[index].id;
-    resumePosition = saved.position;
+    resumePosition = saved.position; restoredOnly = true;
     $('mini').hidden = false; document.body.classList.add('with-mini');
     paint(queue[index]); icons(false); waiting(false);
     $('nCur').textContent = time(resumePosition);
@@ -1014,7 +1014,7 @@
     await ready;
     const mine = ++token;                 // anything older is now stale
     const song = queue[i];
-    mediaId = song.id; resumePosition = null;
+    mediaId = song.id; resumePosition = null; restoredOnly = false;
     index = i;
 
     buzz("light");
@@ -1202,7 +1202,7 @@
     toast("Couldn't play that one");
     // One dead track shouldn't end the session.
     const failedToken = token;
-    if (!audio.paused) setTimeout(() => { if (token === failedToken) next(); }, 800);
+    if (!restoredOnly) setTimeout(() => { if (token === failedToken) next(); }, 800);
   });
 
   function setProgress(p) {
@@ -2356,6 +2356,7 @@
   $("lq").addEventListener("input", () => {
     if ($("lq").value.trim()) return;
     ++finderRequest;
+    $("listDiscovery").hidden=false; listDiscovery.refresh();
     $("lqLoading").hidden = true;
     shown = [];
     $("lqResults").innerHTML = "";
