@@ -56,7 +56,9 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Player and Home interaction tests
-        run: node tests/ui-smoke.cjs
+        run: |
+          node tests/ui-smoke.cjs
+          node tests/capsule-ui.cjs
 
       - name: Save UI screenshots
         if: always()
@@ -66,10 +68,7 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
 
-      # Two lines the media session plugin leaves out, which are what a
-      # phone's own music capsule looks for. Gradle builds the plugin
-      # straight out of node_modules, so this has to land before it.
-      # The script refuses loudly if the plugin has moved on.
+      # Standard media-session launch intent and ongoing notification.
       - name: Two lines the media notification is missing
         run: python3 scripts/media-session-patch.py
 
@@ -96,11 +95,7 @@ jobs:
       - name: Manifest bits the notification needs
         run: python3 scripts/android-manifest.py android/app/src/main/AndroidManifest.xml
 
-      # The one way the whole of Android agrees an app is a music
-      # player: a browser service in the manifest. Phones that draw
-      # their own music capsule ask the same question, and the three
-      # other signals were not enough on a Realme. The service itself
-      # does nothing — it exists to be found.
+      # Publish the existing token to standard Android media-browser clients.
       - name: Say this is a music player
         run: python3 scripts/android-media-app.py
 
@@ -127,6 +122,9 @@ jobs:
 
       - name: Install backup picker and launcher icon choices
         run: python3 scripts/android-personal-library.py
+
+      - name: Install native floating capsule
+        run: python3 scripts/android-capsule.py
 
       # Keep review-build identity stable across future CI runs.
       # The earlier preview key was ephemeral; Next installs alongside it.
