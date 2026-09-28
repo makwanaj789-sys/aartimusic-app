@@ -222,7 +222,7 @@
      Amber is what :root is without the attribute, which is what
      makes it the one that cannot be got wrong.                */
 
-  const THEMES = ["amber", "green"];
+  const THEMES = AartiBackup.themes;
 
   function paintTheme() {
     const t = THEMES.indexOf(store.theme) >= 0 ? store.theme : "amber";
@@ -246,12 +246,10 @@
     relight(queue[index]);
   }
 
-  document.querySelectorAll(".th").forEach((b) =>
-    b.addEventListener("click", () => {
-      if (store.theme === b.dataset.theme) return;
-      store.theme = b.dataset.theme;
-      save(); buzzPick(); paintTheme();
-    }));
+  document.addEventListener("click", e => {
+    const b=e.target.closest('.th[data-theme]');if(!b||!THEMES.includes(b.dataset.theme))return;
+    store.theme=b.dataset.theme;save();buzzPick();paintTheme();
+  });
 
   paintTheme();
 
@@ -1773,6 +1771,7 @@
     const act = e.target.dataset && e.target.dataset.act;
     if (!act) { if (e.target === $("actionSheet")) sheet($("actionSheet"), false); return; }
 
+    if (act === "playlist" && actionSong) { personalLibrary.addSong(actionSong); }
     if (act === "next" && actionSong) {
       queue.splice(index + 1, 0, actionSong);
       paint(queue[index]); buzzDone("success"); toast("Playing next");
@@ -2410,6 +2409,13 @@
   });
   tab("Home");
   AartiProfile.start();
+  const personalLibrary=AartiPersonalLibrary({
+    play: (songs,at)=>chooseSong(songs,at),
+    readStore:()=>store,
+    reload:()=>{load();AartiProfile.reload();paintTheme();paintModes();paintFavButtons();drawHome();drawLib();},
+    native:()=>nativePlugin('PersonalLibrary'),
+    toast
+  });
   restorePlayback();
 
   // Opening visual has its own short timer in HTML and never gates startup.

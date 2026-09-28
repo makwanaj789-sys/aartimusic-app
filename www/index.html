@@ -12,6 +12,7 @@
 if(t&&t!=='amber')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="personal.css">
+<link rel="stylesheet" href="themes.css">
 <!-- The two weights on screen before anything is scrolled. The rest
      are declared in app.css and fetched when something needs them. -->
 <link rel="preload" href="fonts/sora-400-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -186,6 +187,7 @@ html, body { background:#0A0908; margin:0; }
     </button>
   </div>
 
+  <section class="block" id="ownPlaylists"><div class="block-head"><h2>Your playlists</h2><button class="link" id="createPlaylist">Create</button></div><div class="own-grid" id="ownGrid"></div><p id="ownEmpty" class="personal-status">Make a playlist for your own kind of mood.</p></section>
   <div class="seg">
     <button class="on" data-lib="favs">Favourites</button>
     <button data-lib="recents">History</button>
@@ -367,6 +369,7 @@ html, body { background:#0A0908; margin:0; }
   <div class="sheet-in">
     <div class="grab"></div>
     <div class="sheet-song" id="actSong"></div>
+    <button class="act" data-act="playlist">Add to your playlist</button>
     <button class="act" data-act="next">Play next</button>
     <button class="act" data-act="queue">Add to queue</button>
     <button class="act" data-act="fav" id="actFav">Add to favourites</button>
@@ -470,6 +473,8 @@ html, body { background:#0A0908; margin:0; }
 <script src="discovery.js"></script>
 <script src="player-motion.js"></script>
 <script src="profile.js"></script>
+<script src="backup.js"></script>
+<script src="personal-library.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -147,7 +147,53 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.getByRole('button',{name:'Continue',exact:true}).click();
   await page.getByRole('button',{name:'Let’s listen',exact:true}).click();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.profile.v1')).name),'Ajay Music');
+
+  // Seven palettes preserve playback and offer a translucent floating nav.
+  await page.locator('#profileMenu').click();
+  for(const [name,key]of [['Midnight','teal'],['Violet','violet'],['Indigo','indigo'],['Neon','neon'],['Ruby','ruby']]){
+   await page.locator('.themes').getByRole('button',{name,exact:true}).click();
+   assert.equal(await page.locator('html').getAttribute('data-theme'),key);
+   await page.screenshot({path:'test-results/theme-'+key+'.png'});
+  }
+  assert.equal(await page.locator('.settings-contact svg').count(),2);
+  await page.getByRole('button',{name:'Pulse icon',exact:true}).click();
+  assert.equal(await page.evaluate(()=>localStorage.getItem('aarti.icon.v1')),'neon');
+  await page.locator('.settings-drawer').getByRole('button',{name:'Close',exact:true}).click();
+  await page.locator('[data-tab="Lib"]').click();
+  await page.locator('#createPlaylist').click();
+  await page.getByRole('textbox',{name:'Playlist name',exact:true}).fill('Night Drive');
+  await page.locator('.personal-dialog').getByRole('button',{name:'Create',exact:true}).click();
+  await page.locator('.personal-dialog').getByRole('button',{name:'Done',exact:true}).click();
+  assert.equal(await page.locator('#ownGrid .own-card').count(),1);
+  // Add a real library row through its existing three-dot menu.
+  await page.locator('#libRows .row').first().locator('button').last().click();
+  await page.locator('[data-act="playlist"]').click();
+  await page.locator('.personal-dialog').getByRole('button',{name:'Night Drive · 0 songs',exact:true}).click();
+  await page.locator('#ownGrid .own-card').first().click();
+  assert.equal(await page.locator('.personal-dialog .own-row').count(),1);
+  await page.locator('.personal-dialog').getByRole('button',{name:'Done',exact:true}).click();
+  await page.screenshot({path:'test-results/personal-playlists.png'});
+  await page.locator('#profileMenu').click();
+  const downloadPromise=page.waitForEvent('download');
+  await page.getByRole('button',{name:'Save backup',exact:true}).click();
+  const download=await downloadPromise;const downloaded=await download.path();
+  const backup=JSON.parse(fs.readFileSync(downloaded,'utf8'));
+  assert.equal(backup.format,'aartimusic-backup');assert.equal(backup.playlists[0].songs.length,1);
+  assert.equal(backup.library.theme,'ruby');assert(!JSON.stringify(backup).includes('devKey'));assert(!('link' in backup.library));
+  // A merge must preserve current favourites and avoid duplicate playlists.
+  const fileInput=page.locator('.settings-drawer input[type=file]');
+  await fileInput.setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
+  await page.locator('.personal-dialog').getByRole('button',{name:'Merge backup',exact:true}).click();
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.playlists.v1')).length),1);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.playlists.v1'))[0].songs.length),1);
+  assert.equal(await page.locator('#audio').evaluate(a=>a.paused),true);
+  await page.locator('.settings-drawer').getByRole('button',{name:'Close',exact:true}).click();
+  await page.reload();await page.locator('#profileMenu').waitFor();
+  assert.equal(await page.locator('html').getAttribute('data-theme'),'ruby');
+  await page.locator('[data-tab="Lib"]').click();
+  assert.equal(await page.locator('#ownGrid .own-card').count(),1);
   assert.deepEqual(errors,[]);
+
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exit(1)});
