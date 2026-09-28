@@ -109,6 +109,9 @@ jobs:
       # Turns assets/icon.png into every icon size Android wants,
       # including the adaptive pair. Skipped quietly if the folder
       # isn't there, so a missing icon never fails the build.
+      - name: Export premium icon sizes
+        run: node scripts/premium-icon.cjs
+
       - name: Make the icons
         run: |
           if [ -f assets/icon.png ]; then

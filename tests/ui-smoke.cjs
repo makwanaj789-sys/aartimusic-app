@@ -53,7 +53,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   let progress=await page.locator('#now').getAttribute('data-progress');assert(Number(progress)>0&&Number(progress)<1);
   const smaller=await page.locator('#sharedArt').boundingBox();assert(smaller.width<box.width);
   await page.screenshot({path:'test-results/drag.png'});
-  await page.mouse.up();
+  await page.waitForTimeout(150);await page.mouse.up();
   await page.waitForTimeout(900);
   await page.locator('#nowClose').click();await page.waitForFunction(()=>Number(document.getElementById('now').dataset.progress)===0);
   // Upward drag expands the same cover, a slow release settles by distance.
