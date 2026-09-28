@@ -48,7 +48,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Playlist contract tests
-        run: node --test tests/playlists.test.cjs
+        run: node --test tests/playlists.test.cjs tests/backup.test.cjs
 
       - name: Install browser test tools
         run: |
@@ -124,6 +124,9 @@ jobs:
           else
             echo "no assets/icon.png — keeping the default icon"
           fi
+
+      - name: Install backup picker and launcher icon choices
+        run: python3 scripts/android-personal-library.py
 
       # Keep review-build identity stable across future CI runs.
       # The earlier preview key was ephemeral; Next installs alongside it.
