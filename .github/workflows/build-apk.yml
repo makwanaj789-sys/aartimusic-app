@@ -77,6 +77,11 @@ jobs:
       # repo stays small and there is no build output to keep in sync.
       # --yes stops npx pausing to ask whether it may fetch the CLI,
       # which a machine with nobody watching can never answer.
+      - name: Use a separate package for the review APK
+        if: github.ref != 'refs/heads/main'
+        run: |
+          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview"; c.appName="Aarti Music Preview"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
+
       - name: Create the Android project
         run: |
           npx --yes cap add android || true
