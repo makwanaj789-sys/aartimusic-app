@@ -1966,12 +1966,15 @@
   const plist = $("plist");
   let plSongs = [];
 
-  const listId = (ref) => {
-    const m = /[?&]list=([A-Za-z0-9_-]+)/.exec(ref || "");
-    if (m) return m[1];
-    return /^(PL|UU|OL|RD|FL|LL)[A-Za-z0-9_-]{10,}$/.test((ref || "").trim())
-      ? ref.trim() : "";
-  };
+  const listId = (ref) => AartiPlaylists.id(ref);
+  const playlistClient = AartiPlaylists.create(api);
+  let playlistRequest = 0, finderRequest = 0;
+
+  function playlistMessage(head, message) {
+    $("plEmpty").hidden = false;
+    $("plEmpty").querySelector("h3").textContent = head;
+    $("plEmpty").querySelector("p").textContent = message;
+  }
 
   function rememberList(p) {
     if (!p || !p.id) return;
@@ -1993,6 +1996,7 @@
   }
   function closePl(how) {
     if (!plist.classList.contains("open")) return;
+    ++playlistRequest;
     // Back into the card it came out of — unless that card has been
     // scrolled away or the playlist was opened from a pasted link,
     // in which case there is nothing to go back into and it slides.
@@ -2007,41 +2011,37 @@
   draggable(plist, () => closePl("drag"), { threshold: 120 });
 
   async function openPlaylist(ref, known, from) {
-    const id = listId(ref) || ref;
+    const id = AartiPlaylists.id(ref, true);
+    const request = ++playlistRequest;
     openPl(from);
-
     $("plRows").innerHTML = "";
     $("plEmpty").hidden = true;
     $("plLoading").hidden = false;
     plSongs = [];
+    $("plPlay").disabled = $("plShuffle").disabled = true;
     $("plTitle").textContent = (known && known.title) || "Playlist";
     $("plBy").textContent = (known && known.by) || "";
     $("plArt").src = (known && known.thumb) || "";
-    $("plBg").style.backgroundImage = known && known.thumb
-      ? 'url("' + known.thumb + '")' : "";
-
+    $("plBg").style.backgroundImage = known && known.thumb ? 'url("' + known.thumb + '")' : "";
     try {
-      const r = await api("/api/playlist?id=" + encodeURIComponent(id));
-      if (!r.ok) throw new Error("no");
-      const p = await r.json();
-
-      plSongs = p.results || [];
+      const p = await playlistClient.open(id);
+      if (request !== playlistRequest) return;
+      plSongs = p.results;
+      $("plPlay").disabled = $("plShuffle").disabled = !plSongs.length;
       $("plTitle").textContent = p.title || "Playlist";
       $("plBy").textContent = p.by || (plSongs.length + " songs");
       if (p.thumb) {
         $("plArt").src = p.thumb;
         $("plBg").style.backgroundImage = 'url("' + p.thumb + '")';
       }
-      $("plEmpty").hidden = plSongs.length > 0;
+      if (!plSongs.length) playlistMessage("This playlist is empty", "No playable songs were returned for this playlist.");
       fill($("plRows"), plSongs);
       rememberList({ id: p.id || id, title: p.title, thumb: p.thumb, by: p.by });
-    } catch (e) {
-      $("plEmpty").hidden = false;
-      $("plEmpty").querySelector("h3").textContent = "Couldn't open that";
-      $("plEmpty").querySelector("p").textContent =
-        "The server couldn't read that playlist.";
+    } catch (error) {
+      if (request !== playlistRequest) return;
+      playlistMessage(...AartiPlaylists.describe(error));
     } finally {
-      $("plLoading").hidden = true;
+      if (request === playlistRequest) $("plLoading").hidden = true;
     }
   }
 
@@ -2078,7 +2078,7 @@
   $("plForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const ref = $("plInput").value.trim();
-    if (!listId(ref)) { toast("That link has no playlist in it"); return; }
+    if (!AartiPlaylists.id(ref, true)) { toast("Paste a valid YouTube playlist link or ID"); return; }
     sheet($("plSheet"), false);
     openPlaylist(ref);
   });
@@ -2188,6 +2188,7 @@
   async function findLists(term) {
     term = (term || "").trim();
     if (!term) return;
+    const request = ++finderRequest;
 
     // A link pasted in here means that playlist, not a search for
     // its address — the same rule the song search follows.
@@ -2204,22 +2205,21 @@
     shown = [];
 
     try {
-      const r = await api("/api/playlists?q=" + encodeURIComponent(term));
-
-      if (r.status === 401) return noLists("Locked", "This copy can't reach the server.");
-      if (r.status === 404) return noLists("Not yet", "The server doesn't know how to do this.");
-      if (!r.ok) return noLists("Hmm", "That search failed. Try again.");
-
-      shown = (await r.json()).results || [];
+      const data = await playlistClient.search(term);
+      if (request !== finderRequest) return;
+      shown = data.results;
       if (!shown.length) {
         return noLists("No playlists for that", "Try a shorter word, or paste a playlist link.");
       }
       paintTiles($("lqResults"), shown);
     } catch (err) {
-      noLists("Offline", "Can't reach the server right now.");
+      if (request !== finderRequest) return;
+      noLists(...AartiPlaylists.describe(err));
     } finally {
-      $("lqLoading").hidden = true;
-      drawFinder();
+      if (request === finderRequest) {
+        $("lqLoading").hidden = true;
+        drawFinder();
+      }
     }
   }
 
@@ -2230,6 +2230,8 @@
   // Clearing the box puts the starting points back.
   $("lq").addEventListener("input", () => {
     if ($("lq").value.trim()) return;
+    ++finderRequest;
+    $("lqLoading").hidden = true;
     shown = [];
     $("lqResults").innerHTML = "";
     $("lqEmpty").hidden = true;
