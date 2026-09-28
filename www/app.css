@@ -1272,7 +1272,7 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 #now .now-ctrls{transform-origin:50% 50%}
 @media(prefers-reduced-motion:reduce){#sharedArt #nArt{transition:none}#coverSwipe.came-next,#coverSwipe.came-prev{animation:none}}
 
-#plist{z-index:60}
+#plist{z-index:56}
 #boot{pointer-events:none;animation:bootExit .22s ease .5s forwards;transition:none}
 .boot-equaliser{display:flex;align-items:center;gap:9px;height:80px}
 .boot-equaliser i{display:block;width:10px;height:64px;border-radius:8px;background:linear-gradient(0deg,#c76b23,#ffd68a);transform-origin:center;animation:bootBeat .48s ease-in-out infinite alternate}

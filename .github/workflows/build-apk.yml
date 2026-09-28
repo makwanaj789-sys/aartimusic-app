@@ -12,13 +12,14 @@ name: Build APK
 on:
   workflow_dispatch:          # the "Run workflow" button
   push:
-    branches: [main]
+    branches: [main, fix/working-apk-playlists]
     paths:
       - "www/**"
       - "assets/**"
       - "capacitor.config.json"
       - "package.json"
       - "scripts/**"
+      - "tests/**"
       - ".github/workflows/build-apk.yml"
 
 jobs:
@@ -45,6 +46,25 @@ jobs:
 
       - name: Install Capacitor
         run: npm install --no-audit --no-fund
+
+      - name: Playlist contract tests
+        run: node --test tests/playlists.test.cjs
+
+      - name: Install browser test tools
+        run: |
+          npm install --no-save playwright@1.62.1
+          npx playwright install --with-deps chromium
+
+      - name: Player and Home interaction tests
+        run: node tests/ui-smoke.cjs
+
+      - name: Save UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarti-ui-checks
+          path: test-results/
+          if-no-files-found: ignore
 
       # Two lines the media session plugin leaves out, which are what a
       # phone's own music capsule looks for. Gradle builds the plugin
