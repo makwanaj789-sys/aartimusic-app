@@ -192,7 +192,10 @@
   const pages = { Home: $("pHome"), Search: $("pSearch"),
                   Lists: $("pLists"), Lib: $("pLib") };
 
+  let currentTab = "Home";
   function tab(name) {
+    const direction = Object.keys(pages).indexOf(name)>=Object.keys(pages).indexOf(currentTab)?1:-1;
+    const changed = currentTab !== name; currentTab=name;
     Object.entries(pages).forEach(([k, el]) => (el.hidden = k !== name));
     [...$("nav").children].forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
     if (name === "Home") drawHome();
@@ -200,6 +203,12 @@
     if (name === "Search") drawHistory();
     if (name === "Lists") drawFinder();
     window.scrollTo(0, 0);
+    if (changed && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      pages[name].getAnimations().forEach(a=>a.cancel());
+      pages[name].animate([{opacity:.35,transform:`translate3d(${direction*20}px,12px,0) scale(.985)`},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.2,.8,.2,1)'});
+    }
+    if(name==='Search') { $('searchEmpty').hidden=true; searchDiscovery.refresh(); }
+    if(name==='Lists') listDiscovery.refresh();
   }
   [...$("nav").children].forEach((b) =>
     b.addEventListener("click", () => { buzzPick(); tab(b.dataset.tab); })
@@ -374,7 +383,7 @@
   function drawHome() {
     const hour = new Date().getHours();
     $("pHome").querySelector("h1").textContent =
-      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+      (hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening") + (AartiProfile.get() ? ", " + AartiProfile.get().name : "");
 
     const hasRecent = store.recents.length > 0;
     const hasFavs = store.favs.length > 0;
@@ -425,6 +434,7 @@
   });
 
   async function search(term) {
+    hideSuggestions(); $("searchDiscovery").hidden=true;
     // Someone pasting a playlist link into the search box means the
     // playlist, not a search for its address.
     const asList = listId(term);
@@ -2022,20 +2032,66 @@
 
   const listId = (ref) => AartiPlaylists.id(ref);
   const playlistClient = AartiPlaylists.create(api);
-  const discovery = AartiDiscovery({
-    host: $("discovery"),
-    artist: () => (store.recents[0] && store.recents[0].artist || "").split(/[,|&]/)[0].trim().slice(0, 80),
-    playlists: query => playlistClient.search(query),
-    songs: async query => {
-      const r = await api("/api/search?q=" + encodeURIComponent(query));
-      if (!r.ok) throw new Error("Discovery unavailable");
-      const data = await r.json();
-      if (data.error || !Array.isArray(data.results)) throw new Error("Invalid response");
-      return data;
-    },
-    openPlaylist: (id, known, from) => openPlaylist(id, known, from),
-    playSongs: (songs, at) => chooseSong(songs, at),
+  const songRequests = new Map();
+  async function discoverSongs(query) {
+    const key=query.trim().toLocaleLowerCase();const cached=songRequests.get(key);
+    if(cached && Date.now()-cached.at<120000)return cached.promise;
+    const promise=(async()=>{
+      const r=await api('/api/search?q='+encodeURIComponent(query));
+      if(!r.ok)throw new Error('Songs could not load');
+      const data=await r.json();if(data.error||!Array.isArray(data.results))throw new Error('Invalid response');return data;
+    })();
+    songRequests.set(key,{at:Date.now(),promise});
+    while(songRequests.size>32)songRequests.delete(songRequests.keys().next().value);
+    try{return await promise;}catch(e){songRequests.delete(key);throw e;}
+  }
+  const discoveryOptions = {
+    profile: () => AartiProfile.get(),
+    artist: () => (store.recents[0]?.artist || '').split(/[,|&]/)[0].trim().slice(0,80),
+    playlists: query => playlistClient.search(query), songs: discoverSongs,
+    openPlaylist: (id,known,from) => openPlaylist(id,known,from),
+    playSongs: (songs,at) => chooseSong(songs,at)
+  };
+  const discovery=AartiDiscovery({...discoveryOptions,host:$('discovery')});
+  const searchDiscovery=AartiDiscovery({...discoveryOptions,host:$('searchDiscovery'),mode:'songs'});
+  const listDiscovery=AartiDiscovery({...discoveryOptions,host:$('listDiscovery'),mode:'playlists'});
+  addEventListener('aarti-profile-change',()=>{
+    discovery.refresh(true);searchDiscovery.refresh(true);listDiscovery.refresh(true);drawHome();
   });
+
+  // Suggestions reuse the existing search API; no new bot endpoint needed.
+  let suggestSerial=0,suggestTimer=0,composing=false;
+  const suggestions=$('searchSuggestions'),queryInput=$('q');
+  function hideSuggestions(){++suggestSerial;clearTimeout(suggestTimer);suggestions.hidden=true;queryInput.setAttribute('aria-expanded','false');}
+  queryInput.setAttribute('aria-controls','searchSuggestions');queryInput.setAttribute('aria-expanded','false');
+  function suggestionRows(terms){
+    suggestions.replaceChildren();
+    for(const term of [...new Set(terms)].slice(0,7)){
+      const b=document.createElement('button');b.type='button';b.textContent=term;
+      b.addEventListener('click',()=>{hideSuggestions();search(term);});suggestions.append(b);
+    }
+    suggestions.hidden=!suggestions.children.length;queryInput.setAttribute('aria-expanded',String(!suggestions.hidden));
+  }
+  function suggest(){
+    hideSuggestions();const term=queryInput.value.trim();$('searchDiscovery').hidden=!!term;
+    if(!term){$('results').replaceChildren();$('searchEmpty').hidden=true;searchDiscovery.refresh();return;}
+    if(composing||term.length<2||listId(term))return;
+    const mine=suggestSerial;
+    const local=[...store.history,...(AartiProfile.get()?.artists||[])].filter(x=>x.toLocaleLowerCase().includes(term.toLocaleLowerCase()));
+    suggestionRows(local);
+    suggestTimer=setTimeout(async()=>{
+      try{const data=await discoverSongs(term);if(mine!==suggestSerial)return;
+        suggestionRows([...local,...data.results.flatMap(x=>[x.title,x.artist]).filter(Boolean)]);
+      }catch(_){if(mine!==suggestSerial)return;if(!local.length){suggestions.replaceChildren();const p=document.createElement('p');p.className='suggest-status';p.textContent='Suggestions unavailable. You can still submit your search.';suggestions.append(p);suggestions.hidden=false;}}
+    },400);
+  }
+  queryInput.addEventListener('input',suggest);
+  queryInput.addEventListener('compositionstart',()=>{composing=true;hideSuggestions();});
+  queryInput.addEventListener('compositionend',()=>{composing=false;suggest();});
+  queryInput.addEventListener('keydown',e=>{if(e.key==='Escape')hideSuggestions();if(e.key==='ArrowDown'&&!suggestions.hidden){e.preventDefault();suggestions.querySelector('button')?.focus();}});
+  suggestions.addEventListener('keydown',e=>{const items=[...suggestions.querySelectorAll('button')];const at=items.indexOf(document.activeElement);if(e.key==='Escape'){hideSuggestions();queryInput.focus();}if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();(items[at+(e.key==='ArrowDown'?1:-1)]||queryInput).focus();}});
+  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#searchSuggestions,#searchForm'))hideSuggestions();},{passive:true});
+
   let playlistRequest = 0, finderRequest = 0;
 
   function playlistMessage(head, message) {
@@ -2254,6 +2310,7 @@
   }
 
   async function findLists(term) {
+    $("listDiscovery").hidden=!!term;
     term = (term || "").trim();
     if (!term) return;
     const request = ++finderRequest;
@@ -2349,6 +2406,7 @@
     pull().catch(() => {});
   });
   tab("Home");
+  AartiProfile.start();
   restorePlayback();
 
   // Opening visual has its own short timer in HTML and never gates startup.
