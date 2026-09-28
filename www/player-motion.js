@@ -70,6 +70,9 @@
       last=performance.now();frame=requestAnimationFrame(tick);
     }
     function down(e){
+      // A new deliberate press is not the compatibility click of the last drag.
+      ignoreClickUntil=0;
+      if(o.onPress)o.onPress();
       if(e.button!==0||e.isPrimary===false||mini.hidden||drag)return;
       if(e.target.closest('button,input,a,.seek,.queue-open,.sheet'))return;
       if(o.canDrag&&!o.canDrag())return;

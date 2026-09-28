@@ -1454,6 +1454,7 @@
     panel: now, mini: $("mini"), art: $("sharedArt"),
     miniSlot: $("mArt"), fullSlot: $("fullArtSlot"),
     canDrag: () => gesture !== "x",
+    onPress: () => { swipedAt=0; },
     onGesture: () => { gesture = "y"; swipedAt = Date.now(); },
     onGestureEnd: () => { if (gesture === "y") gesture = null; swipedAt = Date.now(); },
     onOpen: () => {
