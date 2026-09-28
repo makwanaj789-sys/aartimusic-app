@@ -192,7 +192,10 @@
   const pages = { Home: $("pHome"), Search: $("pSearch"),
                   Lists: $("pLists"), Lib: $("pLib") };
 
+  let currentTab = "Home";
   function tab(name) {
+    const direction = Object.keys(pages).indexOf(name)>=Object.keys(pages).indexOf(currentTab)?1:-1;
+    const changed = currentTab !== name; currentTab=name;
     Object.entries(pages).forEach(([k, el]) => (el.hidden = k !== name));
     [...$("nav").children].forEach((b) => b.classList.toggle("on", b.dataset.tab === name));
     if (name === "Home") drawHome();
@@ -200,6 +203,12 @@
     if (name === "Search") drawHistory();
     if (name === "Lists") drawFinder();
     window.scrollTo(0, 0);
+    if (changed && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      pages[name].getAnimations().forEach(a=>a.cancel());
+      pages[name].animate([{opacity:.35,transform:`translate3d(${direction*20}px,12px,0) scale(.985)`},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.2,.8,.2,1)'});
+    }
+    if(name==='Search') { $('searchEmpty').hidden=true; searchDiscovery.refresh(); }
+    if(name==='Lists') listDiscovery.refresh();
   }
   [...$("nav").children].forEach((b) =>
     b.addEventListener("click", () => { buzzPick(); tab(b.dataset.tab); })
@@ -336,7 +345,7 @@
 
     row.append(img, eq, info, heart(song), more);
 
-    const play = () => { queue = list.slice(); playAt(i); };
+    const play = () => chooseSong(list, i);
     img.addEventListener("click", play);
     info.addEventListener("click", play);
 
@@ -374,17 +383,18 @@
   function drawHome() {
     const hour = new Date().getHours();
     $("pHome").querySelector("h1").textContent =
-      hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+      (hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening") + (AartiProfile.get() ? ", " + AartiProfile.get().name : "");
 
     const hasRecent = store.recents.length > 0;
     const hasFavs = store.favs.length > 0;
 
     drawLists();
+    discovery.refresh();
     const hasLists = !$("plBlock").hidden;
 
     $("recentBlock").hidden = !hasRecent;
     $("favBlock").hidden = !hasFavs;
-    $("homeEmpty").hidden = hasRecent || hasFavs || hasLists;
+    $("homeEmpty").hidden = true;
     $("greetSub").textContent = hasRecent ? "Pick up where you left off" : "Let's find something";
 
     const rail = $("recentRail");
@@ -399,8 +409,7 @@
       card.append(img, t);
       stagger(card, i);
       card.addEventListener("click", () => {
-        queue = store.recents.slice();
-        playAt(i);
+        chooseSong(store.recents, i);
       });
       rail.appendChild(card);
     });
@@ -425,6 +434,7 @@
   });
 
   async function search(term) {
+    hideSuggestions(); $("searchDiscovery").hidden=true;
     // Someone pasting a playlist link into the search box means the
     // playlist, not a search for its address.
     const asList = listId(term);
@@ -947,12 +957,65 @@
     return auth.length ? url + "?" + auth.join("&") : url;
   }
 
+  // Track identity belongs to the loaded media, not a newly selected list.
+  let mediaId = null, resumePosition = null, lastCheckpoint = 0, restoredOnly = false;
+  function chooseSong(list, at) {
+    const song = list[at];
+    if (!song) return;
+    if (song.id === mediaId && !audio.ended && !audio.error) {
+      if (plist.classList.contains('open')) closePl();
+      if ($('queueSheet').classList.contains('open')) sheet($('queueSheet'),false);
+      openNow(); return;
+    }
+    queue = list.slice(); playAt(at);
+  }
+  function checkpoint() {
+    if (index < 0 || !queue[index] || queue[index].id !== mediaId) return;
+    const position = resumePosition !== null ? resumePosition : audio.currentTime;
+    try { localStorage.setItem('aarti.playback.v1', JSON.stringify({
+      queue: queue.slice(0, 500), index, position: Number.isFinite(position) ? position : 0,
+      at: Date.now()
+    })); } catch (_) {}
+  }
+  audio.addEventListener('timeupdate', () => {
+    if (Date.now() - lastCheckpoint > 2000) { lastCheckpoint = Date.now(); checkpoint(); }
+  });
+  ['pause','seeked'].forEach(event => audio.addEventListener(event, checkpoint));
+  addEventListener('pagehide', checkpoint);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) checkpoint(); });
+  audio.addEventListener('loadedmetadata', () => {
+    if (resumePosition === null || !Number.isFinite(audio.duration)) return;
+    const position = Math.min(resumePosition, Math.max(0, audio.duration - .25));
+    resumePosition = null; audio.currentTime = position;
+    setProgress(position / audio.duration); $('nCur').textContent = time(position);
+    $('nDur').textContent = time(audio.duration);
+  });
+  async function restorePlayback() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem('aarti.playback.v1')); } catch (_) { return; }
+    if (!saved || !Array.isArray(saved.queue) || !Number.isInteger(saved.index) ||
+        !saved.queue[saved.index] || !Number.isFinite(saved.position) || saved.position < 0) return;
+    const restored = saved.queue.slice(0,500);
+    if (restored.some(song => !song || typeof song.id !== 'string' || typeof song.title !== 'string')) return;
+    const before = token;
+    await ready;
+    if (token !== before || mediaId) return;
+    queue = restored; index = saved.index; mediaId = queue[index].id;
+    resumePosition = saved.position; restoredOnly = true;
+    $('mini').hidden = false; document.body.classList.add('with-mini');
+    paint(queue[index]); icons(false); waiting(false);
+    $('nCur').textContent = time(resumePosition);
+    audio.preload = 'metadata'; audio.src = streamUrl(mediaId); audio.load();
+    markRows(); playerMotion.refresh();
+  }
+
   async function playAt(i) {
     if (i < 0 || i >= queue.length) return;
 
     await ready;
     const mine = ++token;                 // anything older is now stale
     const song = queue[i];
+    mediaId = song.id; resumePosition = null; restoredOnly = false;
     index = i;
 
     buzz("light");
@@ -967,6 +1030,7 @@
     setProgress(0);
     audio.src = streamUrl(song.id);
     audio.load();
+    checkpoint();
 
     const go = () => {
       if (mine !== token) return;
@@ -1069,7 +1133,6 @@
   }
 
   function paint(song) {
-    setArt($("mArt"), song.thumb);
     setArt($("nArt"), song.thumb);
     relight(song);
     $("nowBg").style.backgroundImage = 'url("' + song.thumb + '")';
@@ -1139,7 +1202,8 @@
     waiting(false);
     toast("Couldn't play that one");
     // One dead track shouldn't end the session.
-    setTimeout(next, 800);
+    const failedToken = token;
+    if (!restoredOnly) setTimeout(() => { if (token === failedToken) next(); }, 800);
   });
 
   function setProgress(p) {
@@ -1239,20 +1303,32 @@
     setProgress(p);                      // move with the finger
     audio.currentTime = p * d;
   };
-  rail.addEventListener("click", (e) => seekTo(e.clientX));
-  let dragging = false;
-  rail.addEventListener("touchstart", () => {
-    dragging = true;
-    document.body.classList.add("seeking");
-  }, { passive: true });
-  rail.addEventListener("touchmove", (e) => dragging && seekTo(e.touches[0].clientX), { passive: true });
-  rail.addEventListener("touchend", () => {
-    dragging = false;
-    document.body.classList.remove("seeking");
+  // A vertical drag crossing the rail must never change playback time.
+  let seekPointer = null;
+  rail.style.touchAction = 'none';
+  rail.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || playerMotion.progress < .999) return;
+    seekPointer = { id:e.pointerId, x:e.clientX, y:e.clientY, axis:null };
+    rail.setPointerCapture(e.pointerId);
   });
-  rail.addEventListener("touchcancel", () => {
-    dragging = false;
-    document.body.classList.remove("seeking");
+  rail.addEventListener('pointermove', e => {
+    const d = seekPointer; if (!d || d.id !== e.pointerId) return;
+    const dx=e.clientX-d.x, dy=e.clientY-d.y;
+    if (!d.axis && Math.max(Math.abs(dx),Math.abs(dy))>8)
+      d.axis=Math.abs(dx)>Math.abs(dy)*1.3?'x':'y';
+    if (d.axis==='x') { document.body.classList.add('seeking'); seekTo(e.clientX); }
+  });
+  rail.addEventListener('pointerup', e => {
+    const d=seekPointer;seekPointer=null;document.body.classList.remove('seeking');
+    if (d && d.id===e.pointerId && d.axis!=='y' && Date.now()-swipedAt>500) seekTo(e.clientX);
+  });
+  for (const event of ['pointercancel','lostpointercapture']) rail.addEventListener(event, () => {
+    seekPointer=null;document.body.classList.remove('seeking');
+  });
+  rail.setAttribute('role','slider');rail.tabIndex=0;rail.setAttribute('aria-label','Playback position');
+  rail.addEventListener('keydown', e => {
+    if (!['ArrowLeft','ArrowRight'].includes(e.key) || !Number.isFinite(audio.duration)) return;
+    e.preventDefault();audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+(e.key==='ArrowRight'?5:-5)));
   });
 
   /* ---------- what Back means -------------------------------
@@ -1372,214 +1448,150 @@
     panel.classList.remove("placing");
   }
 
-  // full screen
+  // The same artwork is continuously mapped between mini and full slots.
   const now = $("now");
-  const openNow = (from) => {
-    if (now.classList.contains("open")) return;
-    if (growFrom(now, from)) { cameFrom.set(now, from); settle(now); }
-    else cameFrom.delete(now);
-
-    now.classList.add("open");
-    now.setAttribute("aria-hidden", "false");
-    document.body.classList.add("locked");
-    setPlayerProgress(0);
-    requestAnimationFrame(() => springPlayerTo(1, 0));
-    try { tg.BackButton.show(); } catch (e) {}
-    opened(now, closeNow);
-  };
-
-  const closeNow = (how) => {
-    if (!now.classList.contains("open")) return;
-
-    if (how === "drag") {
-      setPlayerProgress(0);
-    } else {
-      springPlayerTo(0, 0);
-    }
-
-    now.classList.remove("open");
-    now.setAttribute("aria-hidden", "true");
-    document.body.classList.remove("locked");
-    try { tg.BackButton.hide(); } catch (e) {}
-    closed(now);
-  };
-
-  $("miniOpen").addEventListener("click", () => {
-    if (Date.now() - swipedAt < 400) return;
-    openPlayerFromMini($("mArt"));
+  const playerMotion = AartiPlayerMotion({
+    panel: now, mini: $("mini"), art: $("sharedArt"),
+    miniSlot: $("mArt"), fullSlot: $("fullArtSlot"),
+    canDrag: () => gesture !== "x",
+    onPress: () => { swipedAt=0; },
+    onGesture: () => { gesture = "y"; swipedAt = Date.now(); },
+    onGestureEnd: () => { if (gesture === "y") gesture = null; swipedAt = Date.now(); },
+    onOpen: () => {
+      document.body.classList.add("locked");
+      try { tg.BackButton.show(); } catch (_) {}
+      opened(now, () => playerMotion.close());
+    },
+    onClosed: () => {
+      if (!$("plist").classList.contains("open")) document.body.classList.remove("locked");
+      try { tg.BackButton.hide(); } catch (_) {}
+      closed(now);
+    },
   });
-  $("mArt").addEventListener("click", () => openPlayerFromMini($("mArt")));
+  const openNow = () => playerMotion.open();
+  const closeNow = () => playerMotion.close();
+  $("miniOpen").addEventListener("click", () => {
+    // A swipe that ended on this element still fires a click.
+    if (Date.now() - swipedAt < 400) return;
+    openNow($("mArt"));
+  });
+  $("mArt").addEventListener("click", () => openNow($("mArt")));
   $("nowClose").addEventListener("click", () => closeNow());
   try { tg.BackButton.onClick(() => closeNow()); } catch (e) {}
 
-  /* ---------- player expansion gesture --------------------
-     One continuous progress value:
-       0 = mini player
-       1 = full player
+  /* ---------- dragging the full screen down -----------------
+     It used to compare two touch points and close if the second
+     was 90px lower — the sheet never moved under the finger, so a
+     drag felt like a gesture being graded rather than a thing
+     being held.
 
-     While the finger is down this value is written directly every
-     frame. No CSS transition is allowed to fight the hand. On release
-     the value springs to either end. Because the mini and full UI share
-     the same artwork element, the cover grows/shrinks with the gesture
-     instead of being swapped for a second image.
-  */
+     Now it follows. Release decides by distance OR by speed, so a
+     short flick closes it and a slow pull most of the way down
+     does too, which is what the hand expects of both.
+
+     Drags that begin on a control are left alone: the seek rail
+     has its own touch handling, and a scrollable list needs its
+     own vertical movement. */
   const DRAG_SKIP = "button,input,.seek-rail,.rows,.rail";
-  let gesture = null; // "player" | "cover" | null
-  let playerProgress = 0;
-  let playerSpring = null;
 
-  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+  /* ---------- one gesture at a time -------------------------
+     The full screen drags down to close and the cover swipes
+     sideways to change song. Both start from the same finger on
+     the same pixels, so whichever recognises its own direction
+     first owns the gesture until that finger lifts, and the other
+     stands down rather than both moving at once.              */
+  let gesture = null;                     // "x" | "y" | null
 
-  function setPlayerProgress(p) {
-    playerProgress = clamp01(p);
-    const root = now;
-    if (!root) return;
-    root.style.setProperty("--player-p", playerProgress.toFixed(4));
-    const motion = $("nowMotion");
-    const cover = $("coverSwipe");
-    if (motion) motion.style.setProperty("--player-p", playerProgress.toFixed(4));
-    if (cover) cover.style.setProperty("--player-p", playerProgress.toFixed(4));
-  }
+  function draggable(el, onClose, opts) {
+    const o = opts || {};
+    const surface = o.surface || el;
+    let id = null, y0 = 0, t0 = 0, dy = 0, live = false;
 
-  function springPlayerTo(target, velocityPx) {
-    target = clamp01(target);
-    if (REDUCED) {
-      setPlayerProgress(target);
-      return;
-    }
-
-    cancelAnimationFrame(playerSpring);
-    const from = playerProgress;
-    const velocity = Math.max(-1.2, Math.min(1.2, (velocityPx || 0) / 1200));
-    const distance = target - from;
-    const duration = Math.max(220, Math.min(480, 300 + Math.abs(distance) * 160));
-    const t0 = performance.now();
-
-    const tick = (nowTime) => {
-      const t = Math.min(1, (nowTime - t0) / duration);
-      // Critically-damped-ish spring feel: quick response, soft settle.
-      const e = 1 - Math.pow(1 - t, 3);
-      const overshoot = Math.sin(t * Math.PI) * velocity * (1 - t) * 0.035;
-      setPlayerProgress(from + distance * e + overshoot);
-      if (t < 1) playerSpring = requestAnimationFrame(tick);
-      else {
-        setPlayerProgress(target);
-        playerSpring = null;
-      }
+    const setY = (v) => { surface.style.transform = "translateY(" + v.toFixed(1) + "px)"; };
+    const clear = () => {
+      el.classList.remove("dragging");
+      surface.style.transform = "";
     };
-    playerSpring = requestAnimationFrame(tick);
-  }
 
-  function playerOpenTarget() {
-    return now.classList.contains("open") ? 1 : 0;
-  }
+    // -webkit-user-drag is not honoured everywhere; refusing the
+    // dragstart outright is what actually keeps the gesture alive.
+    el.addEventListener("dragstart", (e) => e.preventDefault());
 
-  function bindPlayerGesture() {
-    let pointerId = null;
-    let y0 = 0;
-    let t0 = 0;
-    let lastY = 0;
-    let lastT = 0;
-
-    now.addEventListener("pointerdown", (e) => {
-      if (!now.classList.contains("open")) return;
+    el.addEventListener("pointerdown", (e) => {
+      if (!el.classList.contains("open")) return;
       if (e.target.closest && e.target.closest(DRAG_SKIP)) return;
-
-      pointerId = e.pointerId;
-      y0 = e.clientY;
-      lastY = y0;
-      t0 = lastT = performance.now();
-      gesture = null;
-
-      cancelAnimationFrame(playerSpring);
-      playerSpring = null;
-      now.classList.add("dragging");
-      try { now.setPointerCapture(pointerId); } catch (err) {}
+      id = e.pointerId; y0 = e.clientY; t0 = e.timeStamp; dy = 0; live = false;
     }, { passive: true });
 
-    now.addEventListener("pointermove", (e) => {
-      if (e.pointerId !== pointerId) return;
-
-      const y = e.clientY;
-      const dy = y - y0;
-      const dt = Math.max(1, performance.now() - lastT);
-      const vy = (y - lastY) / dt;
-      lastY = y;
-      lastT = performance.now();
-
-      if (!gesture) {
-        if (Math.abs(dy) < 6) return;
-        gesture = Math.abs(dy) >= Math.abs(e.clientX - (e.clientX || 0))
-          ? "player" : "player";
-        // Always own this vertical player gesture once it starts.
+    el.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== id) return;
+      dy = e.clientY - y0;
+      // Wait for a clear vertical intent before taking the gesture,
+      // so a tap that wobbles a pixel is still a tap.
+      if (!live) {
+        if (gesture === "x") return;      // the cover has this one
+        if (dy < 6) return;
+        live = true;
+        gesture = "y";
+        // Whatever the panel was in the middle of, it is being held
+        // now; the per-frame transform below is the only thing that
+        // should be moving it.
+        el.classList.remove("growing");
+        el.classList.add("dragging");
       }
-
-      if (gesture !== "player") return;
-
-      // Pulling down closes: dy=0 -> 1, dy=viewport -> 0.
-      const h = Math.max(1, window.innerHeight);
-      const delta = dy / h;
-      const next = clamp01(1 - delta);
-      setPlayerProgress(next);
-      now.style.setProperty("--player-vy", vy.toFixed(5));
+      // Upward is resisted rather than blocked — the surface is
+      // already as far up as it goes.
+      const shown = dy < 0 ? dy / 4 : dy;
+      setY(shown);
+      if (o.onDrag) o.onDrag(shown);
     }, { passive: true });
 
     const finish = (e) => {
-      if (e.pointerId !== pointerId) return;
-      const dy = e.clientY - y0;
-      const dt = Math.max(1, performance.now() - t0);
-      const vy = dy / dt;
-
-      pointerId = null;
-      now.classList.remove("dragging");
-      try { now.releasePointerCapture(e.pointerId); } catch (err) {}
-
-      if (gesture !== "player") {
-        gesture = null;
-        return;
-      }
-
-      const progress = playerProgress;
-      const far = progress < 0.58;
-      const flingDown = vy > 0.55;
-      const flingUp = vy < -0.55;
-      const target = flingUp ? 1 : (flingDown || far ? 0 : (progress > 0.5 ? 1 : 0));
-
-      springPlayerTo(target, vy * 1000);
-      gesture = null;
-
-      if (target === 0) {
-        setTimeout(() => {
-          if (!now.classList.contains("open") && playerProgress < 0.01) return;
-          closeNow("drag");
-        }, 280);
-      }
+      if (e.pointerId !== id) return;
+      id = null;
+      if (!live) return;
+      const dt = Math.max(1, e.timeStamp - t0);
+      const speed = dy / dt;                      // px per ms
+      const far = dy > (o.threshold || 110);
+      const flung = speed > 0.55 && dy > 24;
+      el.classList.remove("dragging");
+      surface.style.transform = "";
+      if (o.onDrag) o.onDrag(0);
+      live = false;
+      if (gesture === "y") gesture = null;
+      if (far || flung) onClose();
     };
-
-    now.addEventListener("pointerup", finish, { passive: true });
-    now.addEventListener("pointercancel", finish, { passive: true });
+    el.addEventListener("pointerup", finish, { passive: true });
+    el.addEventListener("pointercancel", (e) => {
+      if (e.pointerId !== id) return;
+      id = null; live = false; clear();
+      if (gesture === "y") gesture = null;
+      if (o.onDrag) o.onDrag(0);
+    }, { passive: true });
   }
 
-  /* The mini is still opened by tapping it. It uses the same progress
-     machinery as the drag rather than a different animation path. */
-  function openPlayerFromMini(from) {
-    // openNow owns the single progress/spring path. Starting another
-    // spring here reset the same progress to zero and made the mini
-    // tap fight the first animation.
-    openNow(from);
-  }
+  // Player vertical motion is owned exclusively by playerMotion.
 
-  bindPlayerGesture();
+  /* ---------- swiping the cover to change song --------------
+     Left for the next one, right for the one before. The cover
+     follows the finger, and on release either flies out and the
+     new one comes in from the other side, or springs back.
 
-  /* Cover tap/hold to skip is kept, but its horizontal gesture must
-     never compete with the vertical player expansion. */
+     At the ends of the queue the drag is damped to a quarter
+     instead of being ignored: the edge should be felt rather
+     than just not happening.                                  */
+
+  /* The swipe is acknowledged rather than animated: the new cover
+     comes in from the side the old one went, over a fifth of a
+     second and eighteen pixels. Enough to say the gesture landed;
+     not the card slide that made this feel slow. */
   function arrived(way) {
     if (REDUCED) return;
-    ["coverSwipe", "mArt"].forEach((id) => {
+    ["coverSwipe"].forEach((id) => {
       const el = $(id);
       if (!el) return;
       el.classList.remove("came-next", "came-prev");
-      void el.offsetWidth;
+      void el.offsetWidth;                 // so a second swipe replays it
       el.classList.add("came-" + way);
       el.addEventListener("animationend", function off() {
         el.classList.remove("came-next", "came-prev");
@@ -1633,7 +1645,7 @@
         // The full screen drags down to close from these same
         // pixels. A gesture that is mostly vertical is theirs, and
         // must stay theirs — sideways has to be clearly sideways.
-        if (gesture === "y") { id = null; return; }
+        if (gesture === "y" || (Math.abs(dy)>8 && Math.abs(dy)>Math.abs(dx))) { id = null; return; }
 
         // Up is a way in. The strip is a handle for the screen
         // underneath it, so a clear upward swipe lifts it.
@@ -1704,8 +1716,7 @@
   }
 
   // The cover on the full screen.
-  swipeToSkip($("coverSwipe") && $("coverSwipe").parentElement,
-              { when: () => now.classList.contains("open") });
+  swipeToSkip($("sharedArt"), { onTaken: () => { swipedAt = Date.now(); } });
 
   /* The strip along the bottom. Its buttons are left alone — a
      finger that starts on play or the heart means that button —
@@ -1715,7 +1726,6 @@
   swipeToSkip($("mini"), {
     skip: "button",
     onTaken: () => { swipedAt = Date.now(); },
-    onUp: () => { swipedAt = Date.now(); openNow($("mArt")); },
   });
 
   /* The sheets drag on their own panel rather than the whole
@@ -2022,24 +2032,75 @@
   const plist = $("plist");
   let plSongs = [];
 
-  const listId = (ref) => {
-    const raw = (ref || "").trim();
-    if (!raw) return "";
-
-    // Accept every normal YouTube / YouTube Music paste shape:
-    // playlist URL, watch URL, youtu.be?list=..., or a bare ID.
-    try {
-      const u = new URL(raw);
-      const list = u.searchParams.get("list");
-      if (list && /^[A-Za-z0-9_-]{10,}$/.test(list)) return list;
-    } catch (e) {}
-
-    const loose = /(?:[?&])list=([A-Za-z0-9_-]+)/.exec(raw);
-    if (loose && /^[A-Za-z0-9_-]{10,}$/.test(loose[1])) return loose[1];
-
-    if (/^[A-Za-z0-9_-]{10,}$/.test(raw)) return raw;
-    return "";
+  const listId = (ref) => AartiPlaylists.id(ref);
+  const playlistClient = AartiPlaylists.create(api);
+  const songRequests = new Map();
+  async function discoverSongs(query) {
+    const key=query.trim().toLocaleLowerCase();const cached=songRequests.get(key);
+    if(cached && Date.now()-cached.at<120000)return cached.promise;
+    const promise=(async()=>{
+      const r=await api('/api/search?q='+encodeURIComponent(query));
+      if(!r.ok)throw new Error('Songs could not load');
+      const data=await r.json();if(data.error||!Array.isArray(data.results))throw new Error('Invalid response');return data;
+    })();
+    songRequests.set(key,{at:Date.now(),promise});
+    while(songRequests.size>32)songRequests.delete(songRequests.keys().next().value);
+    try{return await promise;}catch(e){songRequests.delete(key);throw e;}
+  }
+  const discoveryOptions = {
+    profile: () => AartiProfile.get(),
+    artist: () => (store.recents[0]?.artist || '').split(/[,|&]/)[0].trim().slice(0,80),
+    playlists: query => playlistClient.search(query), songs: discoverSongs,
+    openPlaylist: (id,known,from) => openPlaylist(id,known,from),
+    playSongs: (songs,at) => chooseSong(songs,at)
   };
+  const discovery=AartiDiscovery({...discoveryOptions,host:$('discovery')});
+  const searchDiscovery=AartiDiscovery({...discoveryOptions,host:$('searchDiscovery'),mode:'songs'});
+  const listDiscovery=AartiDiscovery({...discoveryOptions,host:$('listDiscovery'),mode:'playlists'});
+  addEventListener('aarti-profile-change',()=>{
+    discovery.refresh(true);searchDiscovery.refresh(true);listDiscovery.refresh(true);drawHome();
+  });
+
+  // Suggestions reuse the existing search API; no new bot endpoint needed.
+  let suggestSerial=0,suggestTimer=0,composing=false;
+  const suggestions=$('searchSuggestions'),queryInput=$('q');
+  function hideSuggestions(){++suggestSerial;clearTimeout(suggestTimer);suggestions.hidden=true;queryInput.setAttribute('aria-expanded','false');}
+  queryInput.setAttribute('aria-controls','searchSuggestions');queryInput.setAttribute('aria-expanded','false');
+  function suggestionRows(terms){
+    suggestions.replaceChildren();
+    for(const term of [...new Set(terms)].slice(0,7)){
+      const b=document.createElement('button');b.type='button';b.textContent=term;
+      b.addEventListener('click',()=>{hideSuggestions();search(term);});suggestions.append(b);
+    }
+    suggestions.hidden=!suggestions.children.length;queryInput.setAttribute('aria-expanded',String(!suggestions.hidden));
+  }
+  function suggest(){
+    hideSuggestions();const term=queryInput.value.trim();$('searchDiscovery').hidden=!!term;
+    if(!term){$('results').replaceChildren();$('searchEmpty').hidden=true;searchDiscovery.refresh();return;}
+    if(composing||term.length<2||listId(term))return;
+    const mine=suggestSerial;
+    const local=[...store.history,...(AartiProfile.get()?.artists||[])].filter(x=>x.toLocaleLowerCase().includes(term.toLocaleLowerCase()));
+    suggestionRows(local);
+    suggestTimer=setTimeout(async()=>{
+      try{const data=await discoverSongs(term);if(mine!==suggestSerial)return;
+        suggestionRows([...local,...data.results.flatMap(x=>[x.title,x.artist]).filter(Boolean)]);
+      }catch(_){if(mine!==suggestSerial)return;if(!local.length){suggestions.replaceChildren();const p=document.createElement('p');p.className='suggest-status';p.textContent='Suggestions unavailable. You can still submit your search.';suggestions.append(p);suggestions.hidden=false;}}
+    },400);
+  }
+  queryInput.addEventListener('input',suggest);
+  queryInput.addEventListener('compositionstart',()=>{composing=true;hideSuggestions();});
+  queryInput.addEventListener('compositionend',()=>{composing=false;suggest();});
+  queryInput.addEventListener('keydown',e=>{if(e.key==='Escape')hideSuggestions();if(e.key==='ArrowDown'&&!suggestions.hidden){e.preventDefault();suggestions.querySelector('button')?.focus();}});
+  suggestions.addEventListener('keydown',e=>{const items=[...suggestions.querySelectorAll('button')];const at=items.indexOf(document.activeElement);if(e.key==='Escape'){hideSuggestions();queryInput.focus();}if(['ArrowDown','ArrowUp'].includes(e.key)){e.preventDefault();(items[at+(e.key==='ArrowDown'?1:-1)]||queryInput).focus();}});
+  document.addEventListener('pointerdown',e=>{if(!e.target.closest('#searchSuggestions,#searchForm'))hideSuggestions();},{passive:true});
+
+  let playlistRequest = 0, finderRequest = 0;
+
+  function playlistMessage(head, message) {
+    $("plEmpty").hidden = false;
+    $("plEmpty").querySelector("h3").textContent = head;
+    $("plEmpty").querySelector("p").textContent = message;
+  }
 
   function rememberList(p) {
     if (!p || !p.id) return;
@@ -2061,6 +2122,7 @@
   }
   function closePl(how) {
     if (!plist.classList.contains("open")) return;
+    ++playlistRequest;
     // Back into the card it came out of — unless that card has been
     // scrolled away or the playlist was opened from a pasted link,
     // in which case there is nothing to go back into and it slides.
@@ -2075,128 +2137,37 @@
   draggable(plist, () => closePl("drag"), { threshold: 120 });
 
   async function openPlaylist(ref, known, from) {
-    const id = listId(ref);
-    if (!id) {
-      toast("Invalid playlist link");
-      return;
-    }
-
+    const id = AartiPlaylists.id(ref, true);
+    const request = ++playlistRequest;
     openPl(from);
-
     $("plRows").innerHTML = "";
     $("plEmpty").hidden = true;
     $("plLoading").hidden = false;
     plSongs = [];
+    $("plPlay").disabled = $("plShuffle").disabled = true;
     $("plTitle").textContent = (known && known.title) || "Playlist";
     $("plBy").textContent = (known && known.by) || "";
     $("plArt").src = (known && known.thumb) || "";
-    $("plBg").style.backgroundImage = known && known.thumb
-      ? 'url("' + known.thumb + '")' : "";
-
+    $("plBg").style.backgroundImage = known && known.thumb ? 'url("' + known.thumb + '")' : "";
     try {
-      const r = await api("/api/playlist?id=" + encodeURIComponent(id));
-
-      let payload = null;
-      try {
-        payload = await r.json();
-      } catch (parseError) {
-        console.error("[AartiMusic] Playlist endpoint returned non-JSON", {
-          playlistId: id, status: r.status, error: parseError,
-        });
+      const p = await playlistClient.open(id);
+      if (request !== playlistRequest) return;
+      plSongs = p.results;
+      $("plPlay").disabled = $("plShuffle").disabled = !plSongs.length;
+      $("plTitle").textContent = p.title || "Playlist";
+      $("plBy").textContent = p.by || (plSongs.length + " songs");
+      if (p.thumb) {
+        $("plArt").src = p.thumb;
+        $("plBg").style.backgroundImage = 'url("' + p.thumb + '")';
       }
-
-      if (r.status === 401) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Not authorised";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "The app is not authorised to use the music server.";
-        return;
-      }
-      if (r.status === 403) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Private playlist";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "This playlist is private or needs YouTube login.";
-        return;
-      }
-      if (r.status === 404) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Playlist not found";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "YouTube could not find that playlist.";
-        return;
-      }
-      if (r.status === 429) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Please try again";
-        $("plEmpty").querySelector("p").textContent =
-          (payload && payload.error) || "The music server is rate-limiting requests.";
-        return;
-      }
-      if (!r.ok) {
-        console.error("[AartiMusic] Playlist endpoint failed", {
-          playlistId: id, status: r.status, payload,
-        });
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent =
-          r.status >= 500 ? "Music server error" : "Couldn't open that";
-        $("plEmpty").querySelector("p").textContent =
-          (payload && payload.error) ||
-          (r.status >= 500
-            ? "YouTube or the music server failed. Please try again shortly."
-            : "The server could not read this playlist.");
-        return;
-      }
-
-      if (!payload || typeof payload !== "object" || !Array.isArray(payload.results)) {
-        console.error("[AartiMusic] Playlist endpoint returned an invalid payload", {
-          playlistId: id, status: r.status, payload,
-        });
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Invalid server response";
-        $("plEmpty").querySelector("p").textContent =
-          "The server replied, but did not return a playlist track list.";
-        return;
-      }
-
-      plSongs = payload.results;
-      $("plTitle").textContent = payload.title || "Playlist";
-      $("plBy").textContent = payload.by ||
-        (plSongs.length ? plSongs.length + " songs" : "Empty playlist");
-
-      if (payload.thumb) {
-        $("plArt").src = payload.thumb;
-        $("plBg").style.backgroundImage = 'url("' + payload.thumb + '")';
-      }
-
-      if (!plSongs.length) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Playlist is empty";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "No playable tracks were returned.";
-        return;
-      }
-
-      $("plEmpty").hidden = true;
+      if (!plSongs.length) playlistMessage("This playlist is empty", "No playable songs were returned for this playlist.");
       fill($("plRows"), plSongs);
-      rememberList({
-        id: payload.id || id,
-        title: payload.title || "Playlist",
-        thumb: payload.thumb || "",
-        by: payload.by || "",
-      });
-    } catch (e) {
-      // Keep the actual exception in WebView logs; otherwise DNS,
-      // TLS, CORS and offline failures all look like an empty playlist.
-      console.error("[AartiMusic] Playlist request could not complete", {
-        playlistId: id, server: SERVER, error: e,
-      });
-      $("plEmpty").hidden = false;
-      $("plEmpty").querySelector("h3").textContent = "Connection failed";
-      $("plEmpty").querySelector("p").textContent =
-        "Couldn't reach the music server. Check your connection and try again.";
+      rememberList({ id: p.id || id, title: p.title, thumb: p.thumb, by: p.by });
+    } catch (error) {
+      if (request !== playlistRequest) return;
+      playlistMessage(...AartiPlaylists.describe(error));
     } finally {
-      $("plLoading").hidden = true;
+      if (request === playlistRequest) $("plLoading").hidden = true;
     }
   }
 
@@ -2233,7 +2204,7 @@
   $("plForm").addEventListener("submit", (e) => {
     e.preventDefault();
     const ref = $("plInput").value.trim();
-    if (!listId(ref)) { toast("That link has no playlist in it"); return; }
+    if (!AartiPlaylists.id(ref, true)) { toast("Paste a valid YouTube playlist link or ID"); return; }
     sheet($("plSheet"), false);
     openPlaylist(ref);
   });
@@ -2341,13 +2312,15 @@
   }
 
   async function findLists(term) {
+    $("listDiscovery").hidden=!!term;
     term = (term || "").trim();
     if (!term) return;
+    const request = ++finderRequest;
 
     // A link pasted in here means that playlist, not a search for
     // its address — the same rule the song search follows.
     const asList = listId(term);
-    if (asList) { $("lq").value = ""; openPlaylist(asList); return; }
+    if (asList) { $("lq").value = ""; $("lqLoading").hidden = true; openPlaylist(asList); return; }
 
     $("lq").value = term;
     $("lq").blur();
@@ -2359,22 +2332,21 @@
     shown = [];
 
     try {
-      const r = await api("/api/playlists?q=" + encodeURIComponent(term));
-
-      if (r.status === 401) return noLists("Locked", "This copy can't reach the server.");
-      if (r.status === 404) return noLists("Not yet", "The server doesn't know how to do this.");
-      if (!r.ok) return noLists("Hmm", "That search failed. Try again.");
-
-      shown = (await r.json()).results || [];
+      const data = await playlistClient.search(term);
+      if (request !== finderRequest) return;
+      shown = data.results;
       if (!shown.length) {
         return noLists("No playlists for that", "Try a shorter word, or paste a playlist link.");
       }
       paintTiles($("lqResults"), shown);
     } catch (err) {
-      noLists("Offline", "Can't reach the server right now.");
+      if (request !== finderRequest) return;
+      noLists(...AartiPlaylists.describe(err));
     } finally {
-      $("lqLoading").hidden = true;
-      drawFinder();
+      if (request === finderRequest) {
+        $("lqLoading").hidden = true;
+        drawFinder();
+      }
     }
   }
 
@@ -2385,6 +2357,9 @@
   // Clearing the box puts the starting points back.
   $("lq").addEventListener("input", () => {
     if ($("lq").value.trim()) return;
+    ++finderRequest;
+    $("listDiscovery").hidden=false; listDiscovery.refresh();
+    $("lqLoading").hidden = true;
     shown = [];
     $("lqResults").innerHTML = "";
     $("lqEmpty").hidden = true;
@@ -2434,35 +2409,8 @@
     pull().catch(() => {});
   });
   tab("Home");
+  AartiProfile.start();
+  restorePlayback();
 
-  /* ---------- putting the lamp away -------------------------
-     The first screen is drawn by the time this runs, so the only
-     thing worth waiting for is the frame that shows it. A floor of
-     roughly a second keeps the lamp from blinking past on a fast
-     phone; the timeout is a promise that nothing here can ever
-     leave someone staring at it.                                */
-  (function dismissBoot() {
-    const boot = $("boot");
-    if (!boot) return;
-
-    let done = false;
-    const go = () => {
-      if (done) return;
-      done = true;
-      boot.classList.add("gone");                 // taps pass through now
-      setTimeout(() => { boot.hidden = true; }, 500);
-    };
-
-    const LEAST = REDUCED ? 0 : 900;
-    const start = performance.now();
-    const settled = () => setTimeout(go, Math.max(0, LEAST - (performance.now() - start)));
-
-    // Two frames: one to lay the home screen out, one to paint it.
-    requestAnimationFrame(() => requestAnimationFrame(settled));
-    setTimeout(go, 4000);
-
-    // Someone who has already decided what they want should not have
-    // to watch the lamp finish. A touch anywhere skips it.
-    boot.addEventListener("pointerdown", go);
-  })();
+  // Opening visual has its own short timer in HTML and never gates startup.
 })();

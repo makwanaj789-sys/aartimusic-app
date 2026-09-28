@@ -12,13 +12,14 @@ name: Build APK
 on:
   workflow_dispatch:          # the "Run workflow" button
   push:
-    branches: [main]
+    branches: [main, fix/working-apk-playlists]
     paths:
       - "www/**"
       - "assets/**"
       - "capacitor.config.json"
       - "package.json"
       - "scripts/**"
+      - "tests/**"
       - ".github/workflows/build-apk.yml"
 
 jobs:
@@ -46,6 +47,25 @@ jobs:
       - name: Install Capacitor
         run: npm install --no-audit --no-fund
 
+      - name: Playlist contract tests
+        run: node --test tests/playlists.test.cjs
+
+      - name: Install browser test tools
+        run: |
+          npm install --no-save playwright@1.62.1
+          npx playwright install --with-deps chromium
+
+      - name: Player and Home interaction tests
+        run: node tests/ui-smoke.cjs
+
+      - name: Save UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aarti-ui-checks
+          path: test-results/
+          if-no-files-found: ignore
+
       # Two lines the media session plugin leaves out, which are what a
       # phone's own music capsule looks for. Gradle builds the plugin
       # straight out of node_modules, so this has to land before it.
@@ -57,6 +77,11 @@ jobs:
       # repo stays small and there is no build output to keep in sync.
       # --yes stops npx pausing to ask whether it may fetch the CLI,
       # which a machine with nobody watching can never answer.
+      - name: Use a separate package for the review APK
+        if: github.ref != 'refs/heads/main'
+        run: |
+          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview.v2"; c.appName="Aarti Music Next"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
+
       - name: Create the Android project
         run: |
           npx --yes cap add android || true
@@ -89,6 +114,9 @@ jobs:
       # Turns assets/icon.png into every icon size Android wants,
       # including the adaptive pair. Skipped quietly if the folder
       # isn't there, so a missing icon never fails the build.
+      - name: Export premium icon sizes
+        run: node scripts/premium-icon.cjs
+
       - name: Make the icons
         run: |
           if [ -f assets/icon.png ]; then
@@ -96,6 +124,15 @@ jobs:
           else
             echo "no assets/icon.png — keeping the default icon"
           fi
+
+      # Keep review-build identity stable across future CI runs.
+      # The earlier preview key was ephemeral; Next installs alongside it.
+      - name: Reuse the review signing key
+        if: github.ref != 'refs/heads/main'
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: aartimusic-preview-v2-debug-keystore
 
       - name: Build the APK
         working-directory: android

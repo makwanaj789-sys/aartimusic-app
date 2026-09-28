@@ -11,6 +11,7 @@
 <script>try{var t=JSON.parse(localStorage.getItem('aarti.v1')||'{}').theme;
 if(t&&t!=='amber')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="personal.css">
 <!-- The two weights on screen before anything is scrolled. The rest
      are declared in app.css and fetched when something needs them. -->
 <link rel="preload" href="fonts/sora-400-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -25,7 +26,7 @@ if(t&&t!=='amber')document.documentElement.setAttribute('data-theme',t);}catch(e
 html, body { background:#0A0908; margin:0; }
 #boot { position:fixed; inset:0; z-index:999; display:flex;
         flex-direction:column; align-items:center; justify-content:center;
-        gap:26px; background:#0A0908; }
+        gap:26px; background:#0A0908; pointer-events:none; }
 #boot .boot-mark { display:block; width:min(40vw, 168px); height:auto; }
 </style>
 </head>
@@ -34,56 +35,33 @@ html, body { background:#0A0908; margin:0; }
 <!-- The same mark as the launcher icon, on the same black the
      launch screen uses, so the handover from one to the other is
      invisible. app.js takes it away once the first screen is ready. -->
-<div id="boot" aria-label="Aarti Music">
-  <div class="boot-eq" aria-hidden="true">
-    <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-  </div>
-  <span class="boot-word">Aarti Music</span>
+<div id="boot" aria-hidden="true">
+  <div class="boot-equaliser"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <p class="boot-name">Aarti Music</p>
 </div>
-
-
-<!-- Independent splash failsafe: app.js must never be able to leave a black screen forever. -->
 <script>
-(function () {
-  var finished = false;
-  function releaseSplash(reason) {
-    if (finished) return;
-    finished = true;
-    var boot = document.getElementById("boot");
-    if (boot) {
-      boot.classList.add("gone");
-      window.setTimeout(function () { boot.hidden = true; }, 500);
-    }
-    if (reason) console.error("[Aarti Music] Startup error:", reason);
-  }
-  // app.js has its own dismiss logic; this independent timer also works
-  // if that script fails to load or throws during initialization.
-  window.setTimeout(function () {
-    var boot = document.getElementById("boot");
-    if (boot && !boot.hidden && !boot.classList.contains("gone")) {
-      releaseSplash("Startup did not finish within 3.5 seconds");
-    }
-  }, 3500);
-  window.addEventListener("error", function (event) {
-    // Ignore ordinary image/audio errors; only JS errors and script-load
-    // failures can prevent app initialization.
-    if (event && (event.error || (event.target && event.target.tagName === "SCRIPT"))) {
-      releaseSplash(event.message || "JavaScript failed to load");
-    }
-  }, true);
-  window.addEventListener("unhandledrejection", function (event) {
-    releaseSplash(event && event.reason ? event.reason : "Unhandled startup promise rejection");
-  });
+(function(){
+  const boot=document.getElementById('boot');
+  const dismiss=()=>{boot.hidden=true;};
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches) dismiss();
+  else setTimeout(dismiss,750);
+  // The very first interaction dismisses the visual without consuming the tap.
+  window.addEventListener('pointerdown',dismiss,{capture:true,once:true});
+  window.addEventListener('keydown',dismiss,{capture:true,once:true});
 })();
 </script>
+
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <!-- ============ HOME ============ -->
 <section class="page" id="pHome">
   <header class="head">
+    <div class="brand-kicker"><img class="brand-icon" src="brand-icon.png" alt="">AARTI MUSIC <span>YOUR DAILY SOUND</span></div>
     <h1>Good evening</h1>
     <p id="greetSub">Pick up where you left off</p>
   </header>
+
+  <section class="block discovery" id="discovery" aria-label="Music discovery"></section>
 
   <div class="block" id="recentBlock" hidden>
     <div class="block-head"><h2>Recently played</h2></div>
@@ -132,6 +110,8 @@ html, body { background:#0A0908; margin:0; }
     <div class="chips" id="histChips"></div>
   </div>
 
+  <div id="searchSuggestions" class="search-suggestions block" aria-label="Search suggestions" hidden></div>
+  <section class="block discovery" id="searchDiscovery" aria-label="Suggested songs"></section>
   <div class="rows" id="results"></div>
 
   <div class="loading" id="loading" hidden aria-hidden="true"><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div><div class="sk-row"><span class="sk sk-art"></span><span class="sk-lines"><span class="sk sk-t"></span><span class="sk sk-s"></span></span></div></div>
@@ -167,6 +147,7 @@ html, body { background:#0A0908; margin:0; }
     <div class="tiles" id="lqMine"></div>
   </div>
 
+  <section class="block discovery" id="listDiscovery" aria-label="Suggested playlists"></section>
   <div class="tiles" id="lqResults"></div>
 
   <div class="loading" id="lqLoading" hidden aria-hidden="true"><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div><div class="sk-tile"><span class="sk sk-cover"></span><span class="sk sk-t"></span><span class="sk sk-s"></span></div></div>
@@ -256,7 +237,7 @@ html, body { background:#0A0908; margin:0; }
 <div class="mini" id="mini" hidden>
   <div class="bar"><i id="miniFill"><span class="fill-in"><span class="shimmer"></span></span></i></div>
   <div class="mini-in" id="miniIn">
-    <img id="mArt" alt="">
+    <span id="mArt" aria-hidden="true"></span>
     <div class="meta" id="miniOpen">
       <div class="t" id="mTitle"></div>
       <div class="a" id="mArtist"></div>
@@ -298,12 +279,16 @@ html, body { background:#0A0908; margin:0; }
   </button>
 </nav>
 
+<div id="sharedArt"><div id="coverSwipe"><img id="nArt" alt="Now playing artwork" draggable="false"></div></div>
+
 <!-- ============ FULL SCREEN ============ -->
 <section class="now" id="now" aria-hidden="true">
+  <div class="now-surface" aria-hidden="true"></div>
   <div class="now-bg" id="nowBg"></div>
+  <!-- The pool of light the artwork throws into the room. Its colour
+       comes from the cover; only its opacity and scale ever move. -->
   <div class="now-lit" id="nowLit" aria-hidden="true"></div>
-  <div class="now-motion" id="nowMotion">
-    <div class="now-in">
+  <div class="now-in">
     <header class="now-top">
       <button id="nowClose" aria-label="Close">
         <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
@@ -316,7 +301,7 @@ html, body { background:#0A0908; margin:0; }
 
     <!-- The wrapper is what the gesture listens through; the img
          underneath keeps breathing. -->
-    <div class="cover"><div class="cover-swipe" id="coverSwipe"><img id="nArt" alt=""></div></div>
+    <div class="cover"><div id="fullArtSlot" aria-hidden="true"></div></div>
 
     <div class="now-meta">
       <div class="nm-text">
@@ -362,7 +347,6 @@ html, body { background:#0A0908; margin:0; }
       <svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h10M4 17h7"/><path d="M17 8l3 4-3 4"/></svg>
       <span id="upNextLabel">Queue</span>
     </button>
-    </div>
   </div>
 </section>
 
@@ -482,6 +466,10 @@ html, body { background:#0A0908; margin:0; }
 
 <audio id="audio" preload="none"></audio>
 <script src="config.js"></script>
+<script src="playlists.js"></script>
+<script src="discovery.js"></script>
+<script src="player-motion.js"></script>
+<script src="profile.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
