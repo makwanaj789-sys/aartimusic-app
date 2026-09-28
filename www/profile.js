@@ -58,9 +58,15 @@
   settings=el('dialog','settings-drawer');settings.setAttribute('aria-label','Settings');settings.innerHTML='<div class="settings-heading"><h2>Settings</h2></div><p id="settingsName"></p><p class="pref-copy">Make Aarti Music feel like you.</p>';
   settings.querySelector('.settings-heading').append(button('Close',()=>closeModal(settings),'pref-secondary'));
   settings.append(button('Edit profile & music preferences',()=>{closeModal(settings);edit();}));
-  const theme=document.querySelector('.themes');if(theme)settings.append(theme);
+  const theme=document.querySelector('.themes');if(theme){
+   for(const [id,name,color] of [["teal","Midnight","#77ccdb"],["violet","Violet","#d1a0ff"],["indigo","Indigo","#a6a2ff"],["neon","Neon","#ff70c6"],["ruby","Ruby","#ff9aaa"]]){const b=el('button','th');b.type='button';b.dataset.theme=id;b.setAttribute('aria-pressed',String(document.documentElement.dataset.theme===id));b.style.setProperty('--swatch',color);b.append(el('i'),el('span','',name));theme.append(b);}
+   settings.append(theme);
+  }
   settings.append(el('h3','','Contact us'));
-  for(const [text,url] of [['Instagram · @h81t6','https://instagram.com/h81t6'],['Telegram · @umclon','https://t.me/umclon']]){const a=el('a','settings-contact',text);a.href=url;a.target='_blank';a.rel='noopener noreferrer';settings.append(a);}
+  for(const [text,url,mark] of [
+   ['@h81t6','https://instagram.com/h81t6','<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle class="dot" cx="17.5" cy="6.5" r="1"/>'],
+   ['@umclon','https://t.me/umclon','<path class="solid" d="M3 11l17-7-3 16-6-5-3 3 1-5 8-6-10 5z"/>']
+  ]){const a=el('a','settings-contact');a.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+mark+'</svg>';a.append(el('span','',text));a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.setAttribute('aria-label',(text==='@h81t6'?'Instagram ':'Telegram ')+text);settings.append(a);}
   settings.append(el('p','pref-copy','Your photo and preferences stay on this device.'));document.body.append(settings);updateBadge();
   settings.addEventListener('click',e=>{if(e.target===settings){const b=settings.getBoundingClientRect();if(e.clientX>b.right)closeModal(settings);}});
   let edge=null;document.addEventListener('pointerdown',e=>{edge=e.clientX<24&&!document.body.classList.contains('locked')&&!dialog.open&&!settings.open?{x:e.clientX,y:e.clientY}:null;},{passive:true});
@@ -69,5 +75,5 @@
   let startX=null;settings.addEventListener('pointerdown',e=>{startX=e.clientX;});settings.addEventListener('pointerup',e=>{if(startX!==null&&startX-e.clientX>90)closeModal(settings);startX=null;});
   if(!profile)edit();
  }
- root.AartiProfile={get:()=>profile,start,languages:()=>languages.map(x=>x[0]),edit};
+ root.AartiProfile={get:()=>profile,start,languages:()=>languages.map(x=>x[0]),edit,reload:()=>{try{profile=JSON.parse(localStorage.getItem(KEY));updateBadge();root.dispatchEvent(new Event('aarti-profile-change'));}catch(_){}}};
 })(window);
