@@ -33,7 +33,30 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
  });
  try{
   await page.goto('http://127.0.0.1:'+server.address().port);
-  await page.locator('.discovery-card').first().waitFor();
+  await page.locator('.profile-dialog[open]').waitFor();
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  assert(await page.locator('.pref-error').textContent(),'Name cannot be skipped');
+  await page.locator('#profileName').fill('Ajay');
+  await page.screenshot({path:'test-results/profile.png'});
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.locator('.language-choice').filter({hasText:'Japanese'}).click();
+  await page.locator('.language-choice').filter({hasText:'Punjabi'}).click();
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'YOASOBI',exact:true}).click();
+  await page.getByRole('button',{name:'Let’s listen',exact:true}).click();
+  await page.locator('#discovery .discovery-card').first().waitFor();
+  await page.waitForTimeout(2000);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.profile.v1')).name),'Ajay');
+  await page.locator('[data-tab="Search"]').click();
+  await page.locator('#searchDiscovery .discovery-song').first().waitFor();
+  await page.locator('#q').fill('Dho');
+  await page.locator('#searchSuggestions button').first().waitFor();
+  await page.screenshot({path:'test-results/search-suggestions.png'});
+  await page.locator('#q').fill('');
+  await page.locator('[data-tab="Lists"]').click();
+  await page.locator('#listDiscovery .discovery-card').first().waitFor();
+  await page.screenshot({path:'test-results/playlist-suggestions.png'});
+  await page.locator('[data-tab="Home"]').click();
   assert(playlistSearches>0,'Home automatically requests playlists');
   await page.waitForFunction(()=>document.getElementById('boot').hidden);
   assert.equal(await page.locator('#boot').evaluate(e=>getComputedStyle(e).pointerEvents),'none');
@@ -41,11 +64,19 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.locator('.discovery-song').first().click();
   await page.waitForFunction(()=>!document.getElementById('mini').hidden);
   await page.evaluate(()=>{document.getElementById('audio').pause();window.originalArtwork=document.getElementById('nArt');});
-  await page.locator('#miniOpen').click();
+  await page.waitForFunction(()=>document.getElementById('audio').readyState>=1);
+  await page.evaluate(()=>{document.getElementById('audio').currentTime=2;});
+  await page.locator('#discovery .discovery-song').first().click();
+  assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.15,'Same-song tap must preserve time');
   await page.waitForFunction(()=>Number(document.getElementById('now').dataset.progress)===1);
   assert(await page.evaluate(()=>window.originalArtwork===document.getElementById('nArt')));
   assert.equal(await page.locator('#nArt').count(),1);
   await page.screenshot({path:'test-results/player.png'});
+  // Vertical movement starting on the seeker is not a seek.
+  const seekBox=await page.locator('#seekRail').boundingBox();
+  await page.mouse.move(seekBox.x+seekBox.width*.8,seekBox.y+seekBox.height/2);await page.mouse.down();
+  await page.mouse.move(seekBox.x+seekBox.width*.85,seekBox.y-140,{steps:12});await page.mouse.up();
+  assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.15,'Vertical seeker gesture must preserve time');
   // A partial drag must move the cover continuously before release.
   let box=await page.locator('#sharedArt').boundingBox();
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
@@ -91,8 +122,24 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.locator('#miniOpen').click();assert.equal(await page.locator('#now').getAttribute('data-progress'),'1.0000');
   await page.locator('#nowClose').click();assert.equal(await page.locator('#now').getAttribute('data-progress'),'0.0000');
   // No silent discovery error on an uncached mood.
-  playlistStatus=401;await page.getByRole('button',{name:'Punjabi',exact:true}).click();
+  playlistStatus=401;await page.locator('#discovery').getByRole('button',{name:'Punjabi',exact:true}).click();
   await page.waitForFunction(()=>document.querySelector('.discovery-status').textContent.includes('Access denied'));
+  // Cold start restores the queue and paused position without autoplay.
+  await page.evaluate(()=>{const a=document.getElementById('audio');a.pause();a.currentTime=2;a.dispatchEvent(new Event('seeked'));});
+  await page.reload();
+  await page.waitForFunction(()=>document.getElementById('audio').readyState>=1 && document.getElementById('audio').currentTime>1.8);
+  assert(await page.locator('#audio').evaluate(a=>a.paused),'Restored audio must wait for Play');
+  assert.equal(await page.locator('.profile-dialog[open]').count(),0,'Onboarding must only run once');
+  await page.locator('#profileMenu').click();await page.locator('.settings-drawer[open]').waitFor();
+  await page.getByRole('button',{name:'Grove',exact:true}).click();
+  assert.equal(await page.locator('html').getAttribute('data-theme'),'green');
+  await page.screenshot({path:'test-results/settings.png'});
+  await page.getByRole('button',{name:'Edit profile & music preferences',exact:true}).click();
+  await page.locator('#profileName').fill('Ajay Music');
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'Let’s listen',exact:true}).click();
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.profile.v1')).name),'Ajay Music');
   assert.deepEqual(errors,[]);
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');
  }finally{await browser.close();server.close();}
