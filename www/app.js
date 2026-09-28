@@ -1376,210 +1376,154 @@
   const now = $("now");
   const openNow = (from) => {
     if (now.classList.contains("open")) return;
+    // The rectangle has to be a painted frame before the panel is
+    // told to fill the screen, or there is nothing to move from.
     if (growFrom(now, from)) { cameFrom.set(now, from); settle(now); }
     else cameFrom.delete(now);
-
     now.classList.add("open");
     now.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
-    setPlayerProgress(0);
-    requestAnimationFrame(() => springPlayerTo(1, 0));
     try { tg.BackButton.show(); } catch (e) {}
     opened(now, closeNow);
   };
-
+  /* how === "drag" when a finger pulled it down: that one goes back
+     down, because that is where the hand just put it. Everything
+     else — the chevron, Back, the system gesture — collapses into
+     the artwork it came out of. No flush here, on purpose: adding
+     the class and dropping .open in the same breath is what makes
+     the browser read identity as the start of the move. */
   const closeNow = (how) => {
     if (!now.classList.contains("open")) return;
-
-    if (how === "drag") {
-      setPlayerProgress(0);
-    } else {
-      springPlayerTo(0, 0);
-    }
-
+    if (how === "drag") now.classList.remove("growing");
+    else growFrom(now, cameFrom.get(now) || $("mArt"));
     now.classList.remove("open");
     now.setAttribute("aria-hidden", "true");
     document.body.classList.remove("locked");
     try { tg.BackButton.hide(); } catch (e) {}
     closed(now);
   };
-
   $("miniOpen").addEventListener("click", () => {
+    // A swipe that ended on this element still fires a click.
     if (Date.now() - swipedAt < 400) return;
-    openPlayerFromMini($("mArt"));
+    openNow($("mArt"));
   });
-  $("mArt").addEventListener("click", () => openPlayerFromMini($("mArt")));
+  $("mArt").addEventListener("click", () => openNow($("mArt")));
   $("nowClose").addEventListener("click", () => closeNow());
   try { tg.BackButton.onClick(() => closeNow()); } catch (e) {}
 
-  /* ---------- player expansion gesture --------------------
-     One continuous progress value:
-       0 = mini player
-       1 = full player
+  /* ---------- dragging the full screen down -----------------
+     It used to compare two touch points and close if the second
+     was 90px lower — the sheet never moved under the finger, so a
+     drag felt like a gesture being graded rather than a thing
+     being held.
 
-     While the finger is down this value is written directly every
-     frame. No CSS transition is allowed to fight the hand. On release
-     the value springs to either end. Because the mini and full UI share
-     the same artwork element, the cover grows/shrinks with the gesture
-     instead of being swapped for a second image.
-  */
+     Now it follows. Release decides by distance OR by speed, so a
+     short flick closes it and a slow pull most of the way down
+     does too, which is what the hand expects of both.
+
+     Drags that begin on a control are left alone: the seek rail
+     has its own touch handling, and a scrollable list needs its
+     own vertical movement. */
   const DRAG_SKIP = "button,input,.seek-rail,.rows,.rail";
-  let gesture = null; // "player" | "cover" | null
-  let playerProgress = 0;
-  let playerSpring = null;
 
-  function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+  /* ---------- one gesture at a time -------------------------
+     The full screen drags down to close and the cover swipes
+     sideways to change song. Both start from the same finger on
+     the same pixels, so whichever recognises its own direction
+     first owns the gesture until that finger lifts, and the other
+     stands down rather than both moving at once.              */
+  let gesture = null;                     // "x" | "y" | null
 
-  function setPlayerProgress(p) {
-    playerProgress = clamp01(p);
-    const root = now;
-    if (!root) return;
-    root.style.setProperty("--player-p", playerProgress.toFixed(4));
-    const motion = $("nowMotion");
-    const cover = $("coverSwipe");
-    if (motion) motion.style.setProperty("--player-p", playerProgress.toFixed(4));
-    if (cover) cover.style.setProperty("--player-p", playerProgress.toFixed(4));
-  }
+  function draggable(el, onClose, opts) {
+    const o = opts || {};
+    const surface = o.surface || el;
+    let id = null, y0 = 0, t0 = 0, dy = 0, live = false;
 
-  function springPlayerTo(target, velocityPx) {
-    target = clamp01(target);
-    if (REDUCED) {
-      setPlayerProgress(target);
-      return;
-    }
-
-    cancelAnimationFrame(playerSpring);
-    const from = playerProgress;
-    const velocity = Math.max(-1.2, Math.min(1.2, (velocityPx || 0) / 1200));
-    const distance = target - from;
-    const duration = Math.max(220, Math.min(480, 300 + Math.abs(distance) * 160));
-    const t0 = performance.now();
-
-    const tick = (nowTime) => {
-      const t = Math.min(1, (nowTime - t0) / duration);
-      // Critically-damped-ish spring feel: quick response, soft settle.
-      const e = 1 - Math.pow(1 - t, 3);
-      const overshoot = Math.sin(t * Math.PI) * velocity * (1 - t) * 0.035;
-      setPlayerProgress(from + distance * e + overshoot);
-      if (t < 1) playerSpring = requestAnimationFrame(tick);
-      else {
-        setPlayerProgress(target);
-        playerSpring = null;
-      }
+    const setY = (v) => { surface.style.transform = "translateY(" + v.toFixed(1) + "px)"; };
+    const clear = () => {
+      el.classList.remove("dragging");
+      surface.style.transform = "";
     };
-    playerSpring = requestAnimationFrame(tick);
-  }
 
-  function playerOpenTarget() {
-    return now.classList.contains("open") ? 1 : 0;
-  }
+    // -webkit-user-drag is not honoured everywhere; refusing the
+    // dragstart outright is what actually keeps the gesture alive.
+    el.addEventListener("dragstart", (e) => e.preventDefault());
 
-  function bindPlayerGesture() {
-    let pointerId = null;
-    let y0 = 0;
-    let t0 = 0;
-    let lastY = 0;
-    let lastT = 0;
-
-    now.addEventListener("pointerdown", (e) => {
-      if (!now.classList.contains("open")) return;
+    el.addEventListener("pointerdown", (e) => {
+      if (!el.classList.contains("open")) return;
       if (e.target.closest && e.target.closest(DRAG_SKIP)) return;
-
-      pointerId = e.pointerId;
-      y0 = e.clientY;
-      lastY = y0;
-      t0 = lastT = performance.now();
-      gesture = null;
-
-      cancelAnimationFrame(playerSpring);
-      playerSpring = null;
-      now.classList.add("dragging");
-      try { now.setPointerCapture(pointerId); } catch (err) {}
+      id = e.pointerId; y0 = e.clientY; t0 = e.timeStamp; dy = 0; live = false;
     }, { passive: true });
 
-    now.addEventListener("pointermove", (e) => {
-      if (e.pointerId !== pointerId) return;
-
-      const y = e.clientY;
-      const dy = y - y0;
-      const dt = Math.max(1, performance.now() - lastT);
-      const vy = (y - lastY) / dt;
-      lastY = y;
-      lastT = performance.now();
-
-      if (!gesture) {
-        if (Math.abs(dy) < 6) return;
-        gesture = Math.abs(dy) >= Math.abs(e.clientX - (e.clientX || 0))
-          ? "player" : "player";
-        // Always own this vertical player gesture once it starts.
+    el.addEventListener("pointermove", (e) => {
+      if (e.pointerId !== id) return;
+      dy = e.clientY - y0;
+      // Wait for a clear vertical intent before taking the gesture,
+      // so a tap that wobbles a pixel is still a tap.
+      if (!live) {
+        if (gesture === "x") return;      // the cover has this one
+        if (dy < 6) return;
+        live = true;
+        gesture = "y";
+        // Whatever the panel was in the middle of, it is being held
+        // now; the per-frame transform below is the only thing that
+        // should be moving it.
+        el.classList.remove("growing");
+        el.classList.add("dragging");
       }
-
-      if (gesture !== "player") return;
-
-      // Pulling down closes: dy=0 -> 1, dy=viewport -> 0.
-      const h = Math.max(1, window.innerHeight);
-      const delta = dy / h;
-      const next = clamp01(1 - delta);
-      setPlayerProgress(next);
-      now.style.setProperty("--player-vy", vy.toFixed(5));
+      // Upward is resisted rather than blocked — the surface is
+      // already as far up as it goes.
+      const shown = dy < 0 ? dy / 4 : dy;
+      setY(shown);
+      if (o.onDrag) o.onDrag(shown);
     }, { passive: true });
 
     const finish = (e) => {
-      if (e.pointerId !== pointerId) return;
-      const dy = e.clientY - y0;
-      const dt = Math.max(1, performance.now() - t0);
-      const vy = dy / dt;
-
-      pointerId = null;
-      now.classList.remove("dragging");
-      try { now.releasePointerCapture(e.pointerId); } catch (err) {}
-
-      if (gesture !== "player") {
-        gesture = null;
-        return;
-      }
-
-      const progress = playerProgress;
-      const far = progress < 0.58;
-      const flingDown = vy > 0.55;
-      const flingUp = vy < -0.55;
-      const target = flingUp ? 1 : (flingDown || far ? 0 : (progress > 0.5 ? 1 : 0));
-
-      springPlayerTo(target, vy * 1000);
-      gesture = null;
-
-      if (target === 0) {
-        setTimeout(() => {
-          if (!now.classList.contains("open") && playerProgress < 0.01) return;
-          closeNow("drag");
-        }, 280);
-      }
+      if (e.pointerId !== id) return;
+      id = null;
+      if (!live) return;
+      const dt = Math.max(1, e.timeStamp - t0);
+      const speed = dy / dt;                      // px per ms
+      const far = dy > (o.threshold || 110);
+      const flung = speed > 0.55 && dy > 24;
+      el.classList.remove("dragging");
+      surface.style.transform = "";
+      if (o.onDrag) o.onDrag(0);
+      live = false;
+      if (gesture === "y") gesture = null;
+      if (far || flung) onClose();
     };
-
-    now.addEventListener("pointerup", finish, { passive: true });
-    now.addEventListener("pointercancel", finish, { passive: true });
+    el.addEventListener("pointerup", finish, { passive: true });
+    el.addEventListener("pointercancel", (e) => {
+      if (e.pointerId !== id) return;
+      id = null; live = false; clear();
+      if (gesture === "y") gesture = null;
+      if (o.onDrag) o.onDrag(0);
+    }, { passive: true });
   }
 
-  /* The mini is still opened by tapping it. It uses the same progress
-     machinery as the drag rather than a different animation path. */
-  function openPlayerFromMini(from) {
-    // openNow owns the single progress/spring path. Starting another
-    // spring here reset the same progress to zero and made the mini
-    // tap fight the first animation.
-    openNow(from);
-  }
+  draggable(now, () => closeNow("drag"), { threshold: 120 });
 
-  bindPlayerGesture();
+  /* ---------- swiping the cover to change song --------------
+     Left for the next one, right for the one before. The cover
+     follows the finger, and on release either flies out and the
+     new one comes in from the other side, or springs back.
 
-  /* Cover tap/hold to skip is kept, but its horizontal gesture must
-     never compete with the vertical player expansion. */
+     At the ends of the queue the drag is damped to a quarter
+     instead of being ignored: the edge should be felt rather
+     than just not happening.                                  */
+
+  /* The swipe is acknowledged rather than animated: the new cover
+     comes in from the side the old one went, over a fifth of a
+     second and eighteen pixels. Enough to say the gesture landed;
+     not the card slide that made this feel slow. */
   function arrived(way) {
     if (REDUCED) return;
     ["coverSwipe", "mArt"].forEach((id) => {
       const el = $(id);
       if (!el) return;
       el.classList.remove("came-next", "came-prev");
-      void el.offsetWidth;
+      void el.offsetWidth;                 // so a second swipe replays it
       el.classList.add("came-" + way);
       el.addEventListener("animationend", function off() {
         el.classList.remove("came-next", "came-prev");
@@ -2023,22 +1967,10 @@
   let plSongs = [];
 
   const listId = (ref) => {
-    const raw = (ref || "").trim();
-    if (!raw) return "";
-
-    // Accept every normal YouTube / YouTube Music paste shape:
-    // playlist URL, watch URL, youtu.be?list=..., or a bare ID.
-    try {
-      const u = new URL(raw);
-      const list = u.searchParams.get("list");
-      if (list && /^[A-Za-z0-9_-]{10,}$/.test(list)) return list;
-    } catch (e) {}
-
-    const loose = /(?:[?&])list=([A-Za-z0-9_-]+)/.exec(raw);
-    if (loose && /^[A-Za-z0-9_-]{10,}$/.test(loose[1])) return loose[1];
-
-    if (/^[A-Za-z0-9_-]{10,}$/.test(raw)) return raw;
-    return "";
+    const m = /[?&]list=([A-Za-z0-9_-]+)/.exec(ref || "");
+    if (m) return m[1];
+    return /^(PL|UU|OL|RD|FL|LL)[A-Za-z0-9_-]{10,}$/.test((ref || "").trim())
+      ? ref.trim() : "";
   };
 
   function rememberList(p) {
@@ -2075,12 +2007,7 @@
   draggable(plist, () => closePl("drag"), { threshold: 120 });
 
   async function openPlaylist(ref, known, from) {
-    const id = listId(ref);
-    if (!id) {
-      toast("Invalid playlist link");
-      return;
-    }
-
+    const id = listId(ref) || ref;
     openPl(from);
 
     $("plRows").innerHTML = "";
@@ -2095,106 +2022,24 @@
 
     try {
       const r = await api("/api/playlist?id=" + encodeURIComponent(id));
+      if (!r.ok) throw new Error("no");
+      const p = await r.json();
 
-      let payload = null;
-      try {
-        payload = await r.json();
-      } catch (parseError) {
-        console.error("[AartiMusic] Playlist endpoint returned non-JSON", {
-          playlistId: id, status: r.status, error: parseError,
-        });
+      plSongs = p.results || [];
+      $("plTitle").textContent = p.title || "Playlist";
+      $("plBy").textContent = p.by || (plSongs.length + " songs");
+      if (p.thumb) {
+        $("plArt").src = p.thumb;
+        $("plBg").style.backgroundImage = 'url("' + p.thumb + '")';
       }
-
-      if (r.status === 401) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Not authorised";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "The app is not authorised to use the music server.";
-        return;
-      }
-      if (r.status === 403) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Private playlist";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "This playlist is private or needs YouTube login.";
-        return;
-      }
-      if (r.status === 404) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Playlist not found";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "YouTube could not find that playlist.";
-        return;
-      }
-      if (r.status === 429) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Please try again";
-        $("plEmpty").querySelector("p").textContent =
-          (payload && payload.error) || "The music server is rate-limiting requests.";
-        return;
-      }
-      if (!r.ok) {
-        console.error("[AartiMusic] Playlist endpoint failed", {
-          playlistId: id, status: r.status, payload,
-        });
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent =
-          r.status >= 500 ? "Music server error" : "Couldn't open that";
-        $("plEmpty").querySelector("p").textContent =
-          (payload && payload.error) ||
-          (r.status >= 500
-            ? "YouTube or the music server failed. Please try again shortly."
-            : "The server could not read this playlist.");
-        return;
-      }
-
-      if (!payload || typeof payload !== "object" || !Array.isArray(payload.results)) {
-        console.error("[AartiMusic] Playlist endpoint returned an invalid payload", {
-          playlistId: id, status: r.status, payload,
-        });
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Invalid server response";
-        $("plEmpty").querySelector("p").textContent =
-          "The server replied, but did not return a playlist track list.";
-        return;
-      }
-
-      plSongs = payload.results;
-      $("plTitle").textContent = payload.title || "Playlist";
-      $("plBy").textContent = payload.by ||
-        (plSongs.length ? plSongs.length + " songs" : "Empty playlist");
-
-      if (payload.thumb) {
-        $("plArt").src = payload.thumb;
-        $("plBg").style.backgroundImage = 'url("' + payload.thumb + '")';
-      }
-
-      if (!plSongs.length) {
-        $("plEmpty").hidden = false;
-        $("plEmpty").querySelector("h3").textContent = "Playlist is empty";
-        $("plEmpty").querySelector("p").textContent =
-          payload.error || "No playable tracks were returned.";
-        return;
-      }
-
-      $("plEmpty").hidden = true;
+      $("plEmpty").hidden = plSongs.length > 0;
       fill($("plRows"), plSongs);
-      rememberList({
-        id: payload.id || id,
-        title: payload.title || "Playlist",
-        thumb: payload.thumb || "",
-        by: payload.by || "",
-      });
+      rememberList({ id: p.id || id, title: p.title, thumb: p.thumb, by: p.by });
     } catch (e) {
-      // Keep the actual exception in WebView logs; otherwise DNS,
-      // TLS, CORS and offline failures all look like an empty playlist.
-      console.error("[AartiMusic] Playlist request could not complete", {
-        playlistId: id, server: SERVER, error: e,
-      });
       $("plEmpty").hidden = false;
-      $("plEmpty").querySelector("h3").textContent = "Connection failed";
+      $("plEmpty").querySelector("h3").textContent = "Couldn't open that";
       $("plEmpty").querySelector("p").textContent =
-        "Couldn't reach the music server. Check your connection and try again.";
+        "The server couldn't read that playlist.";
     } finally {
       $("plLoading").hidden = true;
     }
