@@ -61,6 +61,22 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.mouse.move(box.x+20,box.y+20);await page.mouse.down();await page.mouse.move(box.x+20,box.y-360,{steps:18});
   assert(Number(await page.locator('#now').getAttribute('data-progress'))>.5);
   await page.mouse.up();await page.waitForFunction(()=>Number(document.getElementById('now').dataset.progress)===1);
+  // Grabbing a closing spring freezes the progress until the finger moves.
+  await page.locator('#nowClose').click();await page.waitForTimeout(80);
+  box=await page.locator('#sharedArt').boundingBox();
+  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+  const held=Number(await page.locator('#now').getAttribute('data-progress'));
+  await page.waitForTimeout(120);
+  assert.equal(Number(await page.locator('#now').getAttribute('data-progress')),held);
+  await page.mouse.move(box.x+box.width/2,Math.max(20,box.y-240),{steps:12});await page.mouse.up();
+  await page.waitForFunction(()=>Number(document.getElementById('now').dataset.progress)===1);
+  // Portrait screens with less vertical space must keep artwork above metadata.
+  await page.setViewportSize({width:360,height:640});await page.waitForTimeout(100);
+  box=await page.locator('#sharedArt').boundingBox();
+  const meta=await page.locator('#now .now-meta').boundingBox();
+  assert(box.y+box.height<=meta.y,'Cover must not overlap title on short screens');
+  await page.screenshot({path:'test-results/player-small.png'});
+  await page.setViewportSize({width:390,height:844});
   // Existing favourites / shuffle / repeat / queue retain their handlers.
   await page.locator('#nFav').click();assert(await page.locator('#nFav').evaluate(e=>e.classList.contains('fav')));
   await page.locator('#bShuffle').click();assert(await page.locator('#bShuffle').evaluate(e=>e.classList.contains('on')));
