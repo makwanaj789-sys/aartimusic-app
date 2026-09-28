@@ -13,8 +13,9 @@
     const clamp=n=>Math.max(0,Math.min(1,n));
     function measure(){
       const a=o.miniSlot.getBoundingClientRect(), b=o.fullSlot.getBoundingClientRect();
-      const m=smallText.getBoundingClientRect(), t=title.getBoundingClientRect();
-      geometry={a,b,textX:m.left-t.left,textY:m.top-t.top,travel:Math.max(240,innerHeight*.72)};
+      const m=smallText.getBoundingClientRect(), parent=title.offsetParent.getBoundingClientRect();
+      const textLeft=parent.left+title.offsetLeft, textTop=parent.top+title.offsetTop;
+      geometry={a,b,textX:m.left-textLeft,textY:m.top-textTop,travel:Math.max(240,innerHeight*.72)};
     }
     function reveal(){
       if(shown)return;
