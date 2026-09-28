@@ -1,24 +1,7 @@
 #!/usr/bin/env python3
-"""
-Declares a MediaBrowserService, which is how an app says "I am a
-music player" in the one way the whole of Android agrees on.
-
-Three other signals are already sent — appCategory="audio", a media
-session with somewhere to send a tap, and an ongoing notification —
-and on a Realme phone they were not enough for its status-bar music
-capsule. This is the last standard one left, and the only structural
-difference from a player like Spotify: they all publish a browser
-service, and it is what Android's own media resumption looks for when
-deciding which apps count as players.
-
-The service itself does nothing. It hands back an empty root and an
-empty list, and no session token, so nothing offers a control that
-cannot work. It exists to be found in the manifest.
-
-The android/ folder is generated on every build, so the file is
-written into it here rather than kept in the repo. Idempotent, and it
-refuses loudly rather than guessing if the project is not laid out the
-way it expects.
+"""Publish the existing playback session through Android's media browser API.
+This improves standard controller discovery; OEM Live Alerts eligibility is still
+firmware-dependent. It does not create another player or start playback.
 """
 
 import json
@@ -30,33 +13,41 @@ SERVICE = "AartiMediaBrowserService"
 JAVA = '''package {pkg};
 
 import android.media.browse.MediaBrowser;
+import android.media.session.MediaSession;
 import android.os.Bundle;
 import android.service.media.MediaBrowserService;
-
+import io.github.jofr.capacitor.mediasessionplugin.FloatingCapsule;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Says this is a music player, and nothing else.
- *
- * Android decides which apps are media players partly by looking for
- * a service with this intent filter. Phones that draw their own music
- * capsule or island tend to ask the same question. Answering it costs
- * one class.
- *
- * There is deliberately nothing to browse. The player's queue lives in
- * the WebView and cannot be handed over from here, and no session
- * token is published, so nothing shows a control this cannot serve.
- */
 public class {name} extends MediaBrowserService {{
-
-    @Override
-    public BrowserRoot onGetRoot(String clientPackageName, int clientUid, Bundle rootHints) {{
+    private FloatingCapsule playback;
+    private MediaSession.Token published;
+    private final Runnable sessionChanged = () -> {{
+        android.support.v4.media.session.MediaSessionCompat.Token current = playback.sessionToken();
+        if (current == null) {{
+            if (published != null) stopSelf();
+            return;
+        }}
+        MediaSession.Token token = (MediaSession.Token) current.getToken();
+        if (published == null) {{ published = token; setSessionToken(token); }}
+        // A browser service may publish its session token only once.
+        else if (!published.equals(token)) stopSelf();
+    }};
+    @Override public void onCreate() {{
+        super.onCreate();
+        playback = FloatingCapsule.get(this);
+        playback.watchSession(sessionChanged);
+    }}
+    @Override public void onDestroy() {{
+        playback.unwatchSession(sessionChanged);
+        super.onDestroy();
+    }}
+    @Override public BrowserRoot onGetRoot(String client, int uid, Bundle hints) {{
         return new BrowserRoot("aarti-root", null);
     }}
-
-    @Override
-    public void onLoadChildren(String parentId, Result<List<MediaBrowser.MediaItem>> result) {{
+    @Override public void onLoadChildren(String parent, Result<List<MediaBrowser.MediaItem>> result) {{
+        // Browsing a library is not implemented; active playback controls use the real token.
         result.sendResult(new ArrayList<MediaBrowser.MediaItem>());
     }}
 }}
