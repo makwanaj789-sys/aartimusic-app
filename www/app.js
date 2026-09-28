@@ -336,7 +336,7 @@
 
     row.append(img, eq, info, heart(song), more);
 
-    const play = () => { queue = list.slice(); playAt(i); };
+    const play = () => chooseSong(list, i);
     img.addEventListener("click", play);
     info.addEventListener("click", play);
 
@@ -400,8 +400,7 @@
       card.append(img, t);
       stagger(card, i);
       card.addEventListener("click", () => {
-        queue = store.recents.slice();
-        playAt(i);
+        chooseSong(store.recents, i);
       });
       rail.appendChild(card);
     });
@@ -948,12 +947,64 @@
     return auth.length ? url + "?" + auth.join("&") : url;
   }
 
+  // Track identity belongs to the loaded media, not a newly selected list.
+  let mediaId = null, resumePosition = null, lastCheckpoint = 0;
+  function chooseSong(list, at) {
+    const song = list[at];
+    if (!song) return;
+    if (song.id === mediaId && !audio.ended && !audio.error) {
+      if (plist.classList.contains('open')) closePl();
+      openNow(); return;
+    }
+    queue = list.slice(); playAt(at);
+  }
+  function checkpoint() {
+    if (index < 0 || !queue[index] || queue[index].id !== mediaId) return;
+    const position = resumePosition !== null ? resumePosition : audio.currentTime;
+    try { localStorage.setItem('aarti.playback.v1', JSON.stringify({
+      queue: queue.slice(0, 500), index, position: Number.isFinite(position) ? position : 0,
+      at: Date.now()
+    })); } catch (_) {}
+  }
+  audio.addEventListener('timeupdate', () => {
+    if (Date.now() - lastCheckpoint > 2000) { lastCheckpoint = Date.now(); checkpoint(); }
+  });
+  ['pause','seeked'].forEach(event => audio.addEventListener(event, checkpoint));
+  addEventListener('pagehide', checkpoint);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) checkpoint(); });
+  audio.addEventListener('loadedmetadata', () => {
+    if (resumePosition === null || !Number.isFinite(audio.duration)) return;
+    const position = Math.min(resumePosition, Math.max(0, audio.duration - .25));
+    resumePosition = null; audio.currentTime = position;
+    setProgress(position / audio.duration); $('nCur').textContent = time(position);
+    $('nDur').textContent = time(audio.duration);
+  });
+  async function restorePlayback() {
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem('aarti.playback.v1')); } catch (_) { return; }
+    if (!saved || !Array.isArray(saved.queue) || !Number.isInteger(saved.index) ||
+        !saved.queue[saved.index] || !Number.isFinite(saved.position) || saved.position < 0) return;
+    const restored = saved.queue.slice(0,500);
+    if (restored.some(song => !song || typeof song.id !== 'string' || typeof song.title !== 'string')) return;
+    const before = token;
+    await ready;
+    if (token !== before || mediaId) return;
+    queue = restored; index = saved.index; mediaId = queue[index].id;
+    resumePosition = saved.position;
+    $('mini').hidden = false; document.body.classList.add('with-mini');
+    paint(queue[index]); icons(false); waiting(false);
+    $('nCur').textContent = time(resumePosition);
+    audio.preload = 'metadata'; audio.src = streamUrl(mediaId); audio.load();
+    markRows(); playerMotion.refresh();
+  }
+
   async function playAt(i) {
     if (i < 0 || i >= queue.length) return;
 
     await ready;
     const mine = ++token;                 // anything older is now stale
     const song = queue[i];
+    mediaId = song.id; resumePosition = null;
     index = i;
 
     buzz("light");
@@ -968,6 +1019,7 @@
     setProgress(0);
     audio.src = streamUrl(song.id);
     audio.load();
+    checkpoint();
 
     const go = () => {
       if (mine !== token) return;
@@ -1139,7 +1191,8 @@
     waiting(false);
     toast("Couldn't play that one");
     // One dead track shouldn't end the session.
-    setTimeout(next, 800);
+    const failedToken = token;
+    if (!audio.paused) setTimeout(() => { if (token === failedToken) next(); }, 800);
   });
 
   function setProgress(p) {
@@ -1239,20 +1292,32 @@
     setProgress(p);                      // move with the finger
     audio.currentTime = p * d;
   };
-  rail.addEventListener("click", (e) => seekTo(e.clientX));
-  let dragging = false;
-  rail.addEventListener("touchstart", () => {
-    dragging = true;
-    document.body.classList.add("seeking");
-  }, { passive: true });
-  rail.addEventListener("touchmove", (e) => dragging && seekTo(e.touches[0].clientX), { passive: true });
-  rail.addEventListener("touchend", () => {
-    dragging = false;
-    document.body.classList.remove("seeking");
+  // A vertical drag crossing the rail must never change playback time.
+  let seekPointer = null;
+  rail.style.touchAction = 'none';
+  rail.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || playerMotion.progress < .999) return;
+    seekPointer = { id:e.pointerId, x:e.clientX, y:e.clientY, axis:null };
+    rail.setPointerCapture(e.pointerId);
   });
-  rail.addEventListener("touchcancel", () => {
-    dragging = false;
-    document.body.classList.remove("seeking");
+  rail.addEventListener('pointermove', e => {
+    const d = seekPointer; if (!d || d.id !== e.pointerId) return;
+    const dx=e.clientX-d.x, dy=e.clientY-d.y;
+    if (!d.axis && Math.max(Math.abs(dx),Math.abs(dy))>8)
+      d.axis=Math.abs(dx)>Math.abs(dy)*1.3?'x':'y';
+    if (d.axis==='x') { document.body.classList.add('seeking'); seekTo(e.clientX); }
+  });
+  rail.addEventListener('pointerup', e => {
+    const d=seekPointer;seekPointer=null;document.body.classList.remove('seeking');
+    if (d && d.id===e.pointerId && d.axis!=='y' && Date.now()-swipedAt>500) seekTo(e.clientX);
+  });
+  for (const event of ['pointercancel','lostpointercapture']) rail.addEventListener(event, () => {
+    seekPointer=null;document.body.classList.remove('seeking');
+  });
+  rail.setAttribute('role','slider');rail.tabIndex=0;rail.setAttribute('aria-label','Playback position');
+  rail.addEventListener('keydown', e => {
+    if (!['ArrowLeft','ArrowRight'].includes(e.key) || !Number.isFinite(audio.duration)) return;
+    e.preventDefault();audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+(e.key==='ArrowRight'?5:-5)));
   });
 
   /* ---------- what Back means -------------------------------
@@ -1568,7 +1633,7 @@
         // The full screen drags down to close from these same
         // pixels. A gesture that is mostly vertical is theirs, and
         // must stay theirs — sideways has to be clearly sideways.
-        if (gesture === "y") { id = null; return; }
+        if (gesture === "y" || (Math.abs(dy)>8 && Math.abs(dy)>Math.abs(dx))) { id = null; return; }
 
         // Up is a way in. The strip is a handle for the screen
         // underneath it, so a clear upward swipe lifts it.
@@ -1969,7 +2034,7 @@
       return data;
     },
     openPlaylist: (id, known, from) => openPlaylist(id, known, from),
-    playSongs: (songs, at) => { queue = songs.slice(); playAt(at); },
+    playSongs: (songs, at) => chooseSong(songs, at),
   });
   let playlistRequest = 0, finderRequest = 0;
 
@@ -2284,6 +2349,7 @@
     pull().catch(() => {});
   });
   tab("Home");
+  restorePlayback();
 
   // Opening visual has its own short timer in HTML and never gates startup.
 })();

@@ -1285,3 +1285,6 @@ body.playing .cover img{ animation:breathe 6s ease-in-out infinite; }
 @media(prefers-reduced-motion:reduce){#boot{display:none;animation:none}.boot-equaliser i{animation:none}}
 
 .brand-icon{width:25px;height:25px;border-radius:7px;object-fit:cover;margin-right:7px}.brand-kicker{align-items:center;justify-content:flex-start}.brand-kicker span{margin-left:auto}
+
+/* Keep playlist content opaque over the underlying Home/player. */
+#plist{background:var(--bg)}

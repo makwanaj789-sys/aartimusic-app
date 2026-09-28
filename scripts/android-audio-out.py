@@ -191,6 +191,19 @@ public class MainActivity extends BridgeActivity {{
     public void onCreate(Bundle savedInstanceState) {{
         registerPlugin({name}.class);
         super.onCreate(savedInstanceState);
+        getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.rgb(10,9,8)));
+    }}
+
+    @Override
+    public void onResume() {{
+        super.onResume();
+        // Repaint the existing surface after Android restores the activity.
+        // Never reload the page: that would interrupt background audio.
+        if (getBridge() != null && getBridge().getWebView() != null) {{
+            android.webkit.WebView view = getBridge().getWebView();
+            view.setBackgroundColor(android.graphics.Color.rgb(10,9,8));
+            view.postOnAnimation(() -> {{ view.requestLayout(); view.invalidate(); }});
+        }}
     }}
 }}
 '''

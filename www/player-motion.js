@@ -112,6 +112,7 @@
     art.addEventListener('click',()=>{if(p<.05)spring(1);});
     const resize=()=>{measure();paint();};
     addEventListener('resize',resize);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden){drag=null;stop();settle();requestAnimationFrame(resize);}});
     if(window.visualViewport)visualViewport.addEventListener('resize',resize);
     new MutationObserver(resize).observe(mini,{attributes:true,attributeFilter:['hidden']});
     media.addEventListener('change',()=>{if(frame){stop();settle();}});
