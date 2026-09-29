@@ -79,7 +79,7 @@ jobs:
       - name: Use a separate package for the review APK
         if: github.ref != 'refs/heads/main'
         run: |
-          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview.v3"; c.appName="Aarti Music Studio"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
+          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview.v3"; c.appName="AartiMusic"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
 
       - name: Create the Android project
         run: |

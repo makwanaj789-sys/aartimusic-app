@@ -31,7 +31,8 @@ const path=require('node:path');
   await page.waitForFunction(()=>document.querySelector('input').disabled);
   await page.evaluate(()=>{testState.permitted=true;window.failConfigure=true;dispatchEvent(new Event('focus'));});
   await page.waitForFunction(()=>!document.querySelector('input').disabled);
-  await checkbox.uncheck();
+  // Failed native writes intentionally restore the checked state before the click resolves.
+  await checkbox.click();
   await page.getByRole('status').filter({hasText:'Could not save floating preference'}).waitFor();
   assert(await checkbox.isChecked(),'Failed preference is not presented as saved');
   const web=await browser.newPage();await web.setContent('<dialog class="settings-drawer" open></dialog>');

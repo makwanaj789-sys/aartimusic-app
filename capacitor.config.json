@@ -1,6 +1,6 @@
 {
   "appId": "com.aartimusic.player",
-  "appName": "Aarti Music",
+  "appName": "AartiMusic",
   "webDir": "www",
   "android": {
     "allowMixedContent": false,
