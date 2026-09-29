@@ -66,6 +66,15 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.waitForFunction(()=>document.getElementById('boot').hidden);
   assert.equal(await page.locator('#boot').evaluate(e=>getComputedStyle(e).pointerEvents),'none');
   await page.screenshot({path:'test-results/home.png',fullPage:true});
+  await page.locator('#discovery').getByRole('button',{name:'Trending',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('discovery').dataset.mood==='Trending');
+  const trendingColor=await page.locator('#discovery .discovery-ambience').evaluateAll(nodes=>nodes.find(n=>n.style.opacity==='.7'||n.style.opacity==='0.7').style.getPropertyValue('--room'));
+  await page.locator('#discovery').getByRole('button',{name:'Garba',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('discovery').dataset.mood==='Garba');
+  const garbaColor=await page.locator('#discovery .discovery-ambience').evaluateAll(nodes=>nodes.find(n=>n.style.opacity==='.7'||n.style.opacity==='0.7').style.getPropertyValue('--room'));
+  assert.notEqual(trendingColor,garbaColor,'Categories need distinct backgrounds');
+  await page.screenshot({path:'test-results/garba.png'});
+  await page.locator('#discovery').getByRole('button',{name:'For you',exact:true}).click();
   await page.locator('.discovery-song').first().click();
   await page.waitForFunction(()=>!document.getElementById('mini').hidden);
   await page.evaluate(()=>{document.getElementById('audio').pause();window.originalArtwork=document.getElementById('nArt');});
@@ -90,6 +99,10 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.mouse.move(box.x+box.width/2,box.y+box.height/2+120,{steps:8});
   let progress=await page.locator('#now').getAttribute('data-progress');assert(Number(progress)>0&&Number(progress)<1);
   const smaller=await page.locator('#sharedArt').boundingBox();assert(smaller.width<box.width);
+  const sheet=await page.locator('#now .now-surface').boundingBox();
+  assert(sheet.y>0,'Background sheet must physically follow a downward drag');
+  assert.equal(await page.locator('#now .now-surface').evaluate(e=>getComputedStyle(e).opacity),'1','Sheet must not cross-fade away');
+  assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.15,'Player drag must never seek');
   await page.screenshot({path:'test-results/drag.png'});
   await page.waitForTimeout(150);await page.mouse.up();
   await page.waitForTimeout(900);
@@ -194,6 +207,15 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert.equal(await page.locator('html').getAttribute('data-theme'),'ruby');
   await page.locator('[data-tab="Lib"]').click();
   assert.equal(await page.locator('#ownGrid .own-card').count(),1);
+  // Drawer opens from a comfortable left-side swipe, closes to the left, and ignores vertical scrolling.
+  await page.locator('[data-tab="Home"]').click();
+  await page.locator('#greetSub').scrollIntoViewIfNeeded();const greeting=await page.locator('#greetSub').boundingBox(),gy=greeting.y+greeting.height/2;
+  await page.mouse.move(65,gy);await page.mouse.down();await page.mouse.move(285,gy+3,{steps:12});await page.mouse.up();
+  await page.waitForFunction(()=>{const d=document.querySelector('.settings-drawer');return d.open&&d.getBoundingClientRect().x>-.1;});
+  const name=await page.locator('#settingsName').boundingBox(),ny=name.y+name.height/2;await page.mouse.move(275,ny);await page.mouse.down();await page.mouse.move(35,ny-3,{steps:12});await page.mouse.up();
+  await page.waitForFunction(()=>!document.querySelector('.settings-drawer').open);
+  await page.mouse.move(65,gy);await page.mouse.down();await page.mouse.move(70,gy+100,{steps:10});await page.mouse.up();
+  assert.equal(await page.locator('.settings-drawer').evaluate(d=>d.open),false);
   assert.deepEqual(errors,[]);
 
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');

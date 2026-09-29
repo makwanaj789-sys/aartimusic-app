@@ -13,6 +13,24 @@
     } catch (_) {}
     function el(tag, className, text) { const n = document.createElement(tag); n.className = className || ''; if (text) n.textContent = text; return n; }
     const chips = el('div', 'discovery-chips');
+    host.classList.add('discovery-room');
+    const rooms=[el('div','discovery-ambience'),el('div','discovery-ambience')];
+    rooms.forEach(n=>{n.setAttribute('aria-hidden','true');host.append(n);});
+    let roomIndex=0,roomName='',roomAnimations=[];
+    function changeRoom(name){
+      if(name===roomName)return;roomName=name;
+      const colors={'For you':'#60418a','Trending':'#963958','Hindi':'#9b562c','Punjabi':'#316e82','Garba':'#a33660','Chill':'#28696b'};
+      let hash=0;for(const c of name)hash=(hash*31+c.charCodeAt(0))>>>0;
+      const palette=['#53438c','#296d79','#8e3c68','#87602e','#356b59'];
+      roomAnimations.forEach(a=>a.cancel());roomAnimations=[];
+      const previous=rooms[roomIndex];roomIndex=1-roomIndex;const next=rooms[roomIndex];
+      next.style.setProperty('--room',colors[name]||palette[hash%palette.length]);
+      previous.style.opacity='0';next.style.opacity='.7';
+      if(!matchMedia('(prefers-reduced-motion: reduce)').matches){
+        roomAnimations=[previous.animate([{opacity:.7},{opacity:0}],{duration:260}),next.animate([{opacity:0},{opacity:.7}],{duration:260})];
+      }
+      host.dataset.mood=name;
+    }
     const head = el('div', 'block-head');
     const title = el('h2', '', 'Made for your mood');
     const retry = el('button', 'link', 'Refresh'); retry.type = 'button';
@@ -43,7 +61,7 @@
       list.slice(0, 10).forEach(p => {
         const card = el('button', 'discovery-card'); card.type = 'button';
         const cover = el('span', 'discovery-cover');
-        const img = el('img'); img.alt = ''; img.loading = 'lazy';
+        const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
         if (p.thumb) img.src = p.thumb;
         img.addEventListener('error', () => { img.hidden = true; });
         cover.append(img, el('span', 'cover-play', '▶'));
@@ -55,7 +73,7 @@
       songs.replaceChildren();
       list.slice(0, 6).forEach((song, i) => {
         const row = el('button', 'discovery-song'); row.type = 'button';
-        const img = el('img'); img.alt = ''; img.loading = 'lazy'; if (song.thumb) img.src = song.thumb;
+        const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; if (song.thumb) img.src = song.thumb;
         const meta = el('span', 'discovery-song-meta');
         meta.append(el('span', 'discovery-title', song.title), el('span', 'discovery-by', song.artist || 'Music for you'));
         row.append(img, meta, el('span', 'discovery-song-play', '▶'));
@@ -71,13 +89,14 @@
         const language=profile.languages[0]||'English';
         categories=[['For you',profile.artists[0]+' songs'],['Trending',language+' trending music'],
           ...profile.languages.map(x=>[x,x+' music hits']),
-          ...profile.artists.map(x=>[x,x+' songs']),['Chill',language+' chill music']];
+          ...profile.artists.map(x=>[x,x+' songs']),['Garba','Gujarati garba'],['Chill',language+' chill music']];
         drawChips();
       }
       const recent = options.artist();
       const query = categories[selected][1];
       if (!force && activeKey === query) return;
       const current = ++generation; activeKey = query; busy = true;
+      changeRoom(categories[selected][0]);
       [...chips.children].forEach((b, i) => { b.classList.toggle('active', selected === i); b.setAttribute('aria-pressed', String(selected === i)); });
       title.textContent = selected === 0 ? (options.mode==='songs'?'Songs for you':options.mode==='playlists'?'Your next mix':'Made for you') : categories[selected][0];
       sub.textContent = profile ? 'Inspired by '+(selected===0?profile.artists[0]:categories[selected][0])+' · Your music preferences' : 'Music picked for your next listen';

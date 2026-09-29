@@ -28,3 +28,5 @@ body.locked .profile-badge{visibility:hidden}.head{padding-right:70px}.searchbar
 .search-suggestions{display:grid;gap:4px;margin:0 0 20px}.search-suggestions button{text-align:left;background:#ffffff06;border-radius:12px;padding:13px;font-size:14px}.search-suggestions small{display:block;color:var(--mist);margin-top:3px;font-size:11px}.search-suggestions .suggest-status{color:var(--mist);font-size:12px;padding:8px}
 #searchDiscovery,#listDiscovery{margin-top:12px}.page{animation:none}
 @media(prefers-reduced-motion:reduce){.welcome-wave,.welcome-wave span,.welcome-wave strong,.settings-drawer[open]{animation:none}}
+
+.settings-drawer[open]{animation:none;will-change:transform}

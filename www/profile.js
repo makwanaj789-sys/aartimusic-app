@@ -11,8 +11,8 @@
  let dialog,previousFocus,draft,step=0,editing=false,photoBusy=false;
  function initials(name){return name.trim().split(/\s+/).slice(0,2).map(x=>Array.from(x)[0]).join('').toUpperCase();}
  function avatar(node,p){node.replaceChildren();if(p&&p.photo&&p.photo.startsWith('data:image/')){const img=el('img');img.src=p.photo;img.alt='';node.append(img);}else node.textContent=p?initials(p.name):'♪';}
- function showModal(node){previousFocus=document.activeElement;node.showModal();}
- function closeModal(node){node.close();previousFocus?.focus();}
+ function showModal(node){if(node===settings){drawerTo(1);return;}previousFocus=document.activeElement;node.showModal();}
+ function closeModal(node){if(node===settings){drawerTo(0);return;}node.close();previousFocus?.focus();}
  function finish(){
   const p={name:draft.name.trim().slice(0,50),photo:draft.photo||'',languages:[...draft.languages],artists:[...draft.artists]};
   if(!p.name||!p.languages.length||!p.artists.length)return;
@@ -50,7 +50,44 @@
   if(dialog.open)(dialog.querySelector('input:not([hidden]),button'))?.focus();
  }
  function edit(){editing=!!profile;draft=profile?JSON.parse(JSON.stringify(profile)):{name:'',photo:'',languages:[],artists:[]};step=0;render();showModal(dialog);}
- let badge,settings;
+ let badge,settings,drawerProgress=0,drawerAnimation;
+ function drawerFrame(p){drawerProgress=Math.max(0,Math.min(1,p));settings.style.transform=`translate3d(${(drawerProgress-1)*100}%,0,0)`;}
+ function drawerTo(p){
+  drawerAnimation?.cancel();drawerAnimation=null;
+  if(p&&!settings.open){previousFocus=document.activeElement;settings.showModal();drawerFrame(0);}
+  if(!settings.open)return;
+  const start=drawerProgress;drawerFrame(p);
+  const finish=()=>{if(!p){settings.close();previousFocus?.focus();}};
+  if(reduced()){finish();return;}
+  const animation=settings.animate([{transform:`translate3d(${(start-1)*100}%,0,0)`},{transform:`translate3d(${(p-1)*100}%,0,0)`}],{duration:240,easing:'cubic-bezier(.2,.8,.2,1)'});drawerAnimation=animation;
+  animation.finished.then(()=>{if(drawerAnimation===animation){drawerAnimation=null;finish();}}).catch(()=>{});
+ }
+ function drawerGestures(){
+  let gesture=null,suppressClick=false;
+  function begin(x,y,target,time){
+   suppressClick=false;
+   if(dialog.open||document.body.classList.contains('locked')||document.querySelector('dialog[open]:not(.settings-drawer)'))return;
+   if(target.closest('input,textarea,select,button,a,.rail,.discovery-chips,[role="slider"]'))return;
+   if(!settings.open&&x>Math.min(110,innerWidth*.3))return;
+   if(settings.open&&!settings.contains(target))return;
+   gesture={x,y,time,lastX:x,lastTime:time,velocity:0,p:settings.open?1:0,locked:false};
+  }
+  function move(x,y,time,event){if(!gesture)return;const dx=x-gesture.x,dy=y-gesture.y;
+   if(!gesture.locked){if(Math.abs(dy)>18&&Math.abs(dy)>Math.abs(dx)){gesture=null;return;}if(Math.abs(dx)<12||Math.abs(dx)<Math.abs(dy)*1.3)return;if((gesture.p===0&&dx<0)||(gesture.p===1&&dx>0)){gesture=null;return;}
+    gesture.locked=true;drawerAnimation?.cancel();drawerAnimation=null;if(!settings.open){updateBadge();previousFocus=document.activeElement;settings.showModal();} }
+   if(event.cancelable)event.preventDefault();gesture.velocity=(x-gesture.lastX)/Math.max(1,time-gesture.lastTime);gesture.lastX=x;gesture.lastTime=time;
+   drawerFrame(gesture.p+dx/settings.getBoundingClientRect().width);
+  }
+  function end(cancel=false){if(!gesture)return;const g=gesture;gesture=null;if(!g.locked)return;suppressClick=true;const target=cancel?g.p:Math.abs(g.velocity)>.45?(g.velocity>0?1:0):(drawerProgress>.5?1:0);drawerTo(target);}
+  // Pointer Events + declared pan-y leave vertical scrolling on the compositor.
+  const edge=el('div','drawer-swipe-edge');edge.setAttribute('aria-hidden','true');document.body.append(edge);
+  document.addEventListener('pointerdown',e=>{if(e.isPrimary!==false&&e.button===0)begin(e.clientX,e.clientY,e.target,e.timeStamp);},true);
+  document.addEventListener('pointermove',e=>move(e.clientX,e.clientY,e.timeStamp,e),true);
+  document.addEventListener('pointerup',()=>end(),true);document.addEventListener('pointercancel',()=>end(true),true);
+  document.addEventListener('click',e=>{if(suppressClick&&e.detail){suppressClick=false;e.preventDefault();e.stopImmediatePropagation();}},true);
+  settings.addEventListener('cancel',e=>{e.preventDefault();drawerTo(0);});
+ }
+
  function updateBadge(){avatar(badge,profile);const name=document.getElementById('settingsName');if(name)name.textContent=profile?.name||'Your profile';}
  function start(){
   dialog=el('dialog','profile-dialog');dialog.setAttribute('aria-label','Music profile setup');dialog.addEventListener('cancel',e=>{if(!profile)e.preventDefault();});document.body.append(dialog);
@@ -69,10 +106,7 @@
   ]){const a=el('a','settings-contact');a.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+mark+'</svg>';a.append(el('span','',text));a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.setAttribute('aria-label',(text==='@h81t6'?'Instagram ':'Telegram ')+text);settings.append(a);}
   settings.append(el('p','pref-copy','Your photo and preferences stay on this device.'));document.body.append(settings);updateBadge();
   settings.addEventListener('click',e=>{if(e.target===settings){const b=settings.getBoundingClientRect();if(e.clientX>b.right)closeModal(settings);}});
-  let edge=null;document.addEventListener('pointerdown',e=>{edge=e.clientX<24&&!document.body.classList.contains('locked')&&!dialog.open&&!settings.open?{x:e.clientX,y:e.clientY}:null;},{passive:true});
-  document.addEventListener('pointerup',e=>{if(edge&&e.clientX-edge.x>70&&Math.abs(e.clientY-edge.y)<50){updateBadge();showModal(settings);}edge=null;},{passive:true});
-  // Also support a leftward dismissal of the open settings panel.
-  let startX=null;settings.addEventListener('pointerdown',e=>{startX=e.clientX;});settings.addEventListener('pointerup',e=>{if(startX!==null&&startX-e.clientX>90)closeModal(settings);startX=null;});
+  drawerGestures();
   if(!profile)edit();
  }
  root.AartiProfile={get:()=>profile,start,languages:()=>languages.map(x=>x[0]),edit,reload:()=>{try{profile=JSON.parse(localStorage.getItem(KEY));updateBadge();root.dispatchEvent(new Event('aarti-profile-change'));}catch(_){}}};

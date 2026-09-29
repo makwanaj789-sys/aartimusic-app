@@ -10,13 +10,13 @@
     const surface=panel.querySelector('.now-surface');
     const backdrop=panel.querySelector('.now-bg'), light=panel.querySelector('.now-lit');
     const smallText=mini.querySelector('.meta'), smallButtons=[...mini.querySelectorAll('button')];
-    let p=0, speed=0, goal=0, frame=0, last=0, geometry=null, drag=null, shown=false, ignoreClickUntil=0;
+    let p=0, speed=0, goal=0, frame=0, paintFrame=0, last=0, geometry=null, drag=null, shown=false, ignoreClickUntil=0;
     const clamp=n=>Math.max(0,Math.min(1,n));
     function measure(){
       const a=o.miniSlot.getBoundingClientRect(), b=o.fullSlot.getBoundingClientRect();
       const m=smallText.getBoundingClientRect(), parent=title.offsetParent.getBoundingClientRect();
       const textLeft=parent.left+title.offsetLeft, textTop=parent.top+title.offsetTop;
-      geometry={a,b,textX:m.left-textLeft,textY:m.top-textTop,travel:Math.max(240,innerHeight*.72)};
+      geometry={a,b,textX:m.left-textLeft,textY:m.top-textTop,sheetY:mini.getBoundingClientRect().top,travel:Math.max(240,a.top-b.top)};
     }
     function reveal(){
       if(shown)return;
@@ -25,21 +25,23 @@
     }
     function paint(){
       if(!geometry)return;
-      const {a,b,textX,textY}=geometry;
+      const {a,b,textX,textY,sheetY}=geometry;
+      const offset=sheetY*(1-p);
       const x=a.left+(b.left-a.left)*p, y=a.top+(b.top-a.top)*p;
       const scale=(a.width+(b.width-a.width)*p)/320;
       art.style.transform=`translate3d(${x}px,${y}px,0) scale(${scale})`;
       art.style.visibility=mini.hidden?'hidden':'visible';
-      if(surface)surface.style.opacity=String(p);
-      backdrop.style.opacity=String(p);light.style.opacity=String(p*.65);
+      if(surface){surface.style.transform=`translate3d(0,${offset}px,0)`;surface.style.opacity="1";}
+      backdrop.style.transform=`translate3d(0,${offset}px,0)`;backdrop.style.opacity=String(p);
+      light.style.transform=`translate3d(-50%,calc(-50% + ${offset}px),0)`;light.style.opacity=String(p*.65);
       title.style.transform=`translate3d(${textX*(1-p)}px,${textY*(1-p)}px,0) scale(${.66+.34*p})`;
       title.style.opacity=String(clamp(p*4));
       smallText.style.opacity=String(1-clamp(p*4));
       for(const item of [top,seek,out,queue]){
-        item.style.transform=`translate3d(0,${(1-p)*80}px,0)`;
+        item.style.transform=`translate3d(0,${offset}px,0)`;
         item.style.opacity=String(clamp((p-.2)/.8));
       }
-      controls.style.transform=`translate3d(0,${(1-p)*100}px,0) scale(${.65+.35*p})`;
+      controls.style.transform=`translate3d(0,${offset}px,0) scale(${.65+.35*p})`;
       controls.style.opacity=String(p);
       smallButtons.forEach(b=>{b.style.opacity=String(1-p);b.style.transform=`scale(${1-.2*p})`;});
       // Attribute updates aid accessibility/tests; they do not affect layout.
@@ -54,12 +56,14 @@
       }
       if(p===1){mini.inert=true;}else{mini.inert=false;}
     }
-    function stop(){if(frame)cancelAnimationFrame(frame);frame=0;last=0;}
+    function stop(){if(frame)cancelAnimationFrame(frame);if(paintFrame)cancelAnimationFrame(paintFrame);frame=paintFrame=0;last=0;}
+    function schedulePaint(){if(!paintFrame)paintFrame=requestAnimationFrame(()=>{paintFrame=0;paint();});}
     function tick(now){
-      const dt=Math.min((now-last)/1000||1/60,.032);last=now;
-      // Critically damped: avoid a cover overshoot at either endpoint.
-      speed+=(310*(goal-p)-35*speed)*dt;
-      p=clamp(p+speed*dt);paint();
+      const dt=Math.min((now-last)/1000||1/60,.064);last=now;
+      // Exact critically damped solution: identical response at 60/90/120 Hz.
+      const omega=19, displacement=p-goal, c=speed+omega*displacement, decay=Math.exp(-omega*dt);
+      p=clamp(goal+(displacement+c*dt)*decay);
+      speed=(speed-omega*c*dt)*decay;paint();
       if(Math.abs(goal-p)<.0005&&Math.abs(speed)<.006){settle();return;}
       frame=requestAnimationFrame(tick);
     }
@@ -90,9 +94,10 @@
       }
       e.preventDefault();
       const dt=Math.max(1,e.timeStamp-drag.lastTime);
-      drag.velocity=-(e.clientY-drag.lastY)/dt*1000/geometry.travel;
+      const velocity=-(e.clientY-drag.lastY)/dt*1000/geometry.travel;
+      drag.velocity=drag.velocity*.25+Math.max(-5,Math.min(5,velocity))*.75;
       drag.lastY=e.clientY;drag.lastTime=e.timeStamp;
-      p=clamp(drag.start-dy/geometry.travel);paint();
+      p=clamp(drag.start-dy/geometry.travel);schedulePaint();
     }
     function end(e,cancelled){
       if(!drag||e.pointerId!==drag.id)return;
