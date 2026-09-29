@@ -5,7 +5,7 @@ const server=http.createServer((req,res)=>{let file=path.join(root,new URL(req.u
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port,browser=await chromium.launch({headless:true});
  try{
   const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.emulateMedia({reducedMotion:'reduce'});await page.goto(base);await page.setContent('<dialog class="settings-drawer" open></dialog>');
-  await page.addStyleTag({path:path.resolve('www/capsule.css')});
+  for(const css of ['app.css','personal.css','themes.css','capsule.css'])await page.addStyleTag({path:path.resolve('www/'+css)});
   await page.evaluate(()=>{
    window.testState={enabled:false,permitted:false,sessionActive:true,error:'',appearance:{media:'sunset'}};window.calls=[];window.saved=null;
    const api={status:async()=>({...testState}),requestPermission:async()=>{calls.push('permission');return {permitted:testState.permitted};},configure:async o=>{calls.push(o);if(window.failConfigure)throw Error('Could not save floating preference');testState.enabled=o.enabled;},setAppearance:async o=>{saved=o.appearance;testState.appearance=o.appearance;return saved;},pickMedia:async()=>window.picked||({cancelled:true}),syncModes:async()=>{}};

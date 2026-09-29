@@ -54,3 +54,5 @@ html body{background-attachment:scroll}
 .head,.block-head,.discovery-sub,.discovery-songs-title,.settings-drawer{touch-action:pan-y pinch-zoom}
 body.locked .drawer-swipe-edge{pointer-events:none}
 @media(prefers-reduced-motion:reduce){.discovery-chips .chip::before{transition:none}}
+
+.discovery-ambience{mask-image:linear-gradient(transparent,#000 18%);-webkit-mask-image:linear-gradient(transparent,#000 18%)}

@@ -73,7 +73,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.waitForFunction(()=>document.getElementById('discovery').dataset.mood==='Garba');
   const garbaColor=await page.locator('#discovery .discovery-ambience').evaluateAll(nodes=>nodes.find(n=>n.style.opacity==='.7'||n.style.opacity==='0.7').style.getPropertyValue('--room'));
   assert.notEqual(trendingColor,garbaColor,'Categories need distinct backgrounds');
-  await page.screenshot({path:'test-results/garba.png'});
+  await page.waitForTimeout(300);await page.screenshot({path:'test-results/garba.png'});
   await page.locator('#discovery').getByRole('button',{name:'For you',exact:true}).click();
   await page.locator('.discovery-song').first().click();
   await page.waitForFunction(()=>!document.getElementById('mini').hidden);
