@@ -74,7 +74,7 @@
   }
   function move(x,y,time,event){if(!gesture)return;const dx=x-gesture.x,dy=y-gesture.y;
    if(!gesture.locked){if(Math.abs(dy)>18&&Math.abs(dy)>Math.abs(dx)){gesture=null;return;}if(Math.abs(dx)<12||Math.abs(dx)<Math.abs(dy)*1.3)return;if((gesture.p===0&&dx<0)||(gesture.p===1&&dx>0)){gesture=null;return;}
-    gesture.locked=true;drawerAnimation?.cancel();drawerAnimation=null;if(!settings.open){updateBadge();previousFocus=document.activeElement;settings.showModal();} }
+    gesture.locked=true;drawerAnimation?.cancel();drawerAnimation=null;if(!settings.open){updateBadge();previousFocus=document.activeElement;settings.showModal();}try{settings.setPointerCapture(event.pointerId);}catch(_){} }
    if(event.cancelable)event.preventDefault();gesture.velocity=(x-gesture.lastX)/Math.max(1,time-gesture.lastTime);gesture.lastX=x;gesture.lastTime=time;
    drawerFrame(gesture.p+dx/settings.getBoundingClientRect().width);
   }

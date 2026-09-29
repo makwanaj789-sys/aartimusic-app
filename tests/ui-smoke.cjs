@@ -216,6 +216,23 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.waitForFunction(()=>!document.querySelector('.settings-drawer').open);
   await page.mouse.move(65,gy);await page.mouse.down();await page.mouse.move(70,gy+100,{steps:10});await page.mouse.up();
   assert.equal(await page.locator('.settings-drawer').evaluate(d=>d.open),false);
+  // Real touch input must allow native vertical scrolling and the edge drawer.
+  const touch=await page.context().newCDPSession(page);
+  await touch.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:1});
+  async function swipe(x,y,toX,toY){
+   await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+   for(let i=1;i<=12;i++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+(toX-x)*i/12,y:y+(toY-y)*i/12}]});
+   await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  }
+  await page.evaluate(()=>scrollTo(0,0));
+  await swipe(8,220,280,222);
+  await page.waitForFunction(()=>document.querySelector('.settings-drawer').open);
+  await swipe(270,210,30,212);
+  await page.waitForFunction(()=>!document.querySelector('.settings-drawer').open);
+  await swipe(350,620,350,230);
+  await page.waitForFunction(()=>scrollY>30);
+  assert.equal(await page.locator('.settings-drawer').evaluate(d=>d.open),false);
+  await touch.detach();
   assert.deepEqual(errors,[]);
 
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');

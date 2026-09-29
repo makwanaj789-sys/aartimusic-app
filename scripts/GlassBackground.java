@@ -68,7 +68,8 @@ final class GlassBackground extends FrameLayout implements TextureView.SurfaceTe
    surface=new Surface(st);video=new MediaPlayer();video.setVolume(0,0);video.setSurface(surface);
    if(a.media.equals("custom"))video.setDataSource(custom().getPath());
    else {try(AssetFileDescriptor fd=getContext().getAssets().openFd("public/capsule-media/"+a.media+".mp4")){video.setDataSource(fd.getFileDescriptor(),fd.getStartOffset(),fd.getLength());}}
-   video.setOnPreparedListener(p->{if(released)return;prepared=true;videoWidth=Math.max(1,p.getVideoWidth());videoHeight=Math.max(1,p.getVideoHeight());cropVideo();p.setVolume(0,0);p.setLooping(true);p.seekTo((int)Math.min(a.start*1000,Math.max(0,p.getDuration()-1000)));if(!reduced&&active){p.start();main.post(loop);}});
+   video.setOnPreparedListener(p->{if(released)return;prepared=true;videoWidth=Math.max(1,p.getVideoWidth());videoHeight=Math.max(1,p.getVideoHeight());cropVideo();p.setVolume(0,0);p.setLooping(false);p.seekTo((int)Math.min(a.start*1000,Math.max(0,p.getDuration()-1000)));if(!reduced&&active){p.start();main.post(loop);}});
+   video.setOnCompletionListener(p->{if(!released&&prepared){p.seekTo((int)Math.min(a.start*1000,Math.max(0,p.getDuration()-1000)));if(!reduced&&active)p.start();}});
    video.setOnVideoSizeChangedListener((p,vw,vh)->{videoWidth=Math.max(1,vw);videoHeight=Math.max(1,vh);cropVideo();});
    video.setOnErrorListener((p,what,extra)->{Log.w("AartiCapsule","Unsupported background video: "+what+"/"+extra);releaseVideo();return true;});
    video.prepareAsync();
