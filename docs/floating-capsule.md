@@ -5,17 +5,30 @@ playback service. It does not change the app ID, stream implementation, queue,
 notification handlers, or server. It is disabled by default. No notification-listener
 or accessibility permission is requested.
 
-Settings → Floating player → Allow display over other apps → return → Show when
-minimized. Start music and press Home. The compact capsule enters with a short
-scale/translation/opacity animation. The OS owns the launcher minimize animation;
-this does not morph the actual app window into an overlay. Tap the arrow for
-previous/play-pause/next/open/dismiss; long-press the background to dismiss. Returning
-to the app removes the overlay. Dismissal lasts until the next app visit. Screen
-lock removes it; unlocking can restore it only during active playback. A stopped
-session, permission loss or disabled preference removes it. Paused playback keeps
-an already-visible capsule, but a restored paused track does not create one.
-Android's disabled animator setting and prefers-reduced-motion suppress motion.
-The overlay stays below Android's protected status bar, unlike OEM Live Alerts.
+On first use, an introductory dialog offers Allow floating player and Not now.
+Android's overlay settings is opened only by Allow. On return, a granted permission
+enables the player automatically; denial or Skip both advance into the app. The
+choice is not repeated every launch. Settings retains the enable switch and permission action.
+
+Settings → Customize glass player opens a live preview with width (260–380 dp),
+height (170–260 dp), visibility, spatial crop (focal x/y and zoom), and video loop
+start/end seconds. Both supplied default clips are packaged locally, resized,
+and stripped of audio. Custom media is chosen with Android's document picker,
+validated and copied into private app storage (100 MB limit). No storage-wide
+permission is needed. Cancelling the editor leaves the saved appearance unchanged.
+Personal library JSON backups do not include these local media files.
+
+The expanded overlay has cover/title/artist, real session seek controls, and vector
+shuffle/previous/play-pause/next/repeat controls. Shuffle/repeat invoke the existing
+app handlers and reflect their resulting mode. The overlay background is a muted
+TextureView video or sampled photo, with translucent tint and rounded glass border;
+it is not a screen capture or guaranteed hardware blur of other apps. It releases
+video/surface resources on hide, locks, dismissal or app return. Android's disabled
+animations and reduced-motion preference show still backgrounds by default.
+
+The OS owns the launcher minimize animation; the overlay has its own short entry
+animation. It stays below protected system windows. The original playback service
+and audio player remain responsible for music. The app's identity is AartiMusic.
 
 The browser service now publishes the actual existing session token instead of
 being only an empty service declaration. Its browse list remains empty. This is a
