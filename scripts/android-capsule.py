@@ -11,7 +11,8 @@ import xml.etree.ElementTree as ET
 root=Path('.')
 app_id=json.loads((root/'capacitor.config.json').read_text())['appId']
 plugin_dir=root/'node_modules/@jofr/capacitor-media-session/android/src/main/java/io/github/jofr/capacitor/mediasessionplugin'
-(plugin_dir/'FloatingCapsule.java').write_text((root/'scripts/FloatingCapsule.java').read_text())
+for source in ['FloatingCapsule.java','CapsuleAppearance.java','GlassBackground.java','CapsuleIcon.java']:
+ (plugin_dir/source).write_text((root/'scripts'/source).read_text())
 service=plugin_dir/'MediaSessionService.java'
 src=service.read_text()
 def insert(old,new,marker):
