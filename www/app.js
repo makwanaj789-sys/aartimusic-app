@@ -1001,26 +1001,52 @@
     return [album && album + ' songs', core && 'songs like ' + core, artist && artist + ' hits']
       .filter(Boolean);
   }
+  // Searches return gameplay, trailers and talk as readily as songs.
+  const NOT_MUSIC = /\b(gameplay|trailer|teaser|wwe|2k\d\d|episode|interview|podcast|reaction|tutorial|news|full movie|scene|vlog|unboxing)\b/i;
+  const MOODS = ['hit songs', 'new songs', 'romantic songs', 'party songs', 'sad songs', 'top songs', 'best songs', 'love songs'];
+  let moodTurn = 0;
+  // Where the next batch can come from, best first: the song playing,
+  // the songs radio already chose (newest first), then the listener's
+  // own artists and languages, and finally plain hits so it never
+  // runs dry.
+  function radioSeeds() {
+    const seeds = [];
+    for (let i = index; i >= 0 && seeds.length < 4; i--) if (queue[i]) seeds.push(radioQueries(queue[i]));
+    const profile = AartiProfile.get();
+    const artists = (profile && profile.artists) || [];
+    const languages = (profile && profile.languages && profile.languages.length) ? profile.languages : ['Hindi'];
+    const mood = () => MOODS[moodTurn++ % MOODS.length];
+    const artist = artists.length ? artists[Math.floor(Math.random() * artists.length)] : '';
+    seeds.push([artist && artist + ' songs', languages[0] + ' ' + mood()].filter(Boolean));
+    seeds.push(languages.map(l => l + ' ' + mood()));
+    return seeds;
+  }
   function extendRadio() {
     if (!radio) return Promise.resolve();
     if (radioBusy && radioBusy.gen === radioGen) return radioBusy.done;
-    const seed = queue[index], mine = radioGen;
-    if (!seed) return Promise.resolve();
+    const mine = radioGen;
+    if (!queue[index]) return Promise.resolve();
     const done = (async () => {
-      const lists = await Promise.all(radioQueries(seed).map(q =>
-        discoverSongs(q).then(d => d.results, () => [])));
-      if (!radio || radioGen !== mine) return;
-      const ids = new Set(queue.map(s => s.id)), keys = new Set(queue.flatMap(s => keysOf(s.title)));
+      const ids = new Set(queue.map(s => s.id));
+      // Only recent songs count as repeats, so a long session does not
+      // slowly rule out every title there is.
+      const keys = new Set(queue.slice(-25).flatMap(s => keysOf(s.title)).filter(k => k.length > 5));
       const picked = [];
-      for (let i = 0; picked.length < 8 && lists.some(l => l.length > i); i++) {
-        for (const list of lists) {
-          const song = list[i], own = song ? keysOf(song.title) : [];
-          if (!song || !song.id || ids.has(song.id) || !own.length ||
-              own.some(key => [...keys].some(k => sameSong(k, key)))) continue;
-          // Jukeboxes and shorts are not songs.
-          if (song.duration && (song.duration < 60 || song.duration > 900)) continue;
-          ids.add(song.id); own.forEach(key => keys.add(key)); picked.push(song);
-          if (picked.length >= 8) break;
+      for (const queries of radioSeeds()) {
+        if (picked.length >= 8) break;
+        const lists = await Promise.all(queries.map(q =>
+          discoverSongs(q).then(d => d.results, () => [])));
+        if (!radio || radioGen !== mine) return;
+        for (let i = 0; picked.length < 8 && lists.some(l => l.length > i); i++) {
+          for (const list of lists) {
+            const song = list[i], own = song ? keysOf(song.title) : [];
+            if (!song || !song.id || ids.has(song.id) || !own.length || NOT_MUSIC.test(song.title) ||
+                own.some(key => [...keys].some(k => sameSong(k, key)))) continue;
+            // Jukeboxes and shorts are not songs.
+            if (song.duration && (song.duration < 60 || song.duration > 900)) continue;
+            ids.add(song.id); own.filter(k => k.length > 5).forEach(key => keys.add(key)); picked.push(song);
+            if (picked.length >= 8) break;
+          }
         }
       }
       if (!picked.length) return;
@@ -1081,7 +1107,7 @@
     const song = queue[i];
     mediaId = song.id; resumePosition = null; restoredOnly = false;
     index = i;
-    if (radio && index >= queue.length - 3) extendRadio();
+    if (radio && index >= queue.length - 5) extendRadio();
 
     buzz("light");
     $("mini").hidden = false;
