@@ -417,7 +417,7 @@
 
   $("playFavs").addEventListener("click", () => {
     if (!store.favs.length) return;
-    queue = shuffled(store.favs);
+    queue = shuffled(store.favs); radio = false;
     store.shuffle = true; save(); paintModes();
     playAt(0);
   });
@@ -965,14 +965,80 @@
       if ($('queueSheet').classList.contains('open')) sheet($('queueSheet'),false);
       openNow(); return;
     }
+    // A search is a list of guesses at one song, not a queue: play the
+    // one that was tapped and let similar songs follow it, as radio.
+    if (list === results) { queue = [song]; radio = true; radioGen++; playAt(0); return; }
+    if (list !== queue) radio = false;
     queue = list.slice(); playAt(at);
   }
+
+  /* ---------- radio ------------------------------------------
+     After a song picked from search, the queue fills itself with
+     songs like it, a few at a time, for as long as it keeps
+     playing. The server only knows how to search, so "like it" is
+     a handful of searches built from the title — the film or album
+     after the "|", the channel, "songs like …" — with every other
+     upload of the same song filtered out. */
+  let radio = false, radioGen = 0, radioBusy = null;
+  const NOISE = /\b(official|lyrical|lyrics?|full|audio|video|song|songs|hd|4k|slowed|reverb|lofi|lo-fi|remix|mix|cover|uncut|status|ringtone|version|reprise|unplugged|feat|ft)\b\.?/gi;
+  const songKey = (title) => String(title || '').split('|')[0]
+    .replace(/\(.*?\)|\[.*?\]/g, ' ').replace(NOISE, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLocaleLowerCase();
+  // Two uploads of one song rarely share a title, but one title
+  // nearly always contains the other once the noise is gone.
+  const sameSong = (a, b) => (' ' + a + ' ').includes(' ' + b + ' ') || (' ' + b + ' ').includes(' ' + a + ' ');
+  const keysOf = (title) => {
+    const full = songKey(title);
+    const halves = String(title || '').split('|')[0].split(/\s+-\s+/).map(songKey);
+    const head = full.split(' ').slice(0, 2).join(' ');
+    return [full, ...halves, head.includes(' ') ? head : ''].filter(Boolean);
+  };
+  function radioQueries(song) {
+    const parts = String(song.title || '').split('|').map(p => p.replace(/\(.*?\)|\[.*?\]/g, ' ').trim());
+    const core = songKey(song.title);
+    const album = parts.slice(1).map(songKey).find(p => p && p !== core && p.length > 2);
+    const artist = String(song.artist || '').replace(/\s*-\s*topic$/i, '').trim();
+    return [album && album + ' songs', core && 'songs like ' + core, artist && artist + ' hits']
+      .filter(Boolean);
+  }
+  function extendRadio() {
+    if (!radio) return Promise.resolve();
+    if (radioBusy && radioBusy.gen === radioGen) return radioBusy.done;
+    const seed = queue[index], mine = radioGen;
+    if (!seed) return Promise.resolve();
+    const done = (async () => {
+      const lists = await Promise.all(radioQueries(seed).map(q =>
+        discoverSongs(q).then(d => d.results, () => [])));
+      if (!radio || radioGen !== mine) return;
+      const ids = new Set(queue.map(s => s.id)), keys = new Set(queue.flatMap(s => keysOf(s.title)));
+      const picked = [];
+      for (let i = 0; picked.length < 8 && lists.some(l => l.length > i); i++) {
+        for (const list of lists) {
+          const song = list[i], own = song ? keysOf(song.title) : [];
+          if (!song || !song.id || ids.has(song.id) || !own.length ||
+              own.some(key => [...keys].some(k => sameSong(k, key)))) continue;
+          // Jukeboxes and shorts are not songs.
+          if (song.duration && (song.duration < 60 || song.duration > 900)) continue;
+          ids.add(song.id); own.forEach(key => keys.add(key)); picked.push(song);
+          if (picked.length >= 8) break;
+        }
+      }
+      if (!picked.length) return;
+      queue.push(...picked);
+      const nxt = queue[index + 1];
+      $("upNextLabel").textContent = nxt ? "Up next · " + nxt.title : "Queue";
+      checkpoint();
+    })().finally(() => { if (radioBusy && radioBusy.done === done) radioBusy = null; });
+    radioBusy = { gen: mine, done };
+    return done;
+  }
+
   function checkpoint() {
     if (index < 0 || !queue[index] || queue[index].id !== mediaId) return;
     const position = resumePosition !== null ? resumePosition : audio.currentTime;
     try { localStorage.setItem('aarti.playback.v1', JSON.stringify({
       queue: queue.slice(0, 500), index, position: Number.isFinite(position) ? position : 0,
-      at: Date.now()
+      radio, at: Date.now()
     })); } catch (_) {}
   }
   audio.addEventListener('timeupdate', () => {
@@ -998,7 +1064,7 @@
     const before = token;
     await ready;
     if (token !== before || mediaId) return;
-    queue = restored; index = saved.index; mediaId = queue[index].id;
+    queue = restored; index = saved.index; mediaId = queue[index].id; radio = saved.radio === true;
     resumePosition = saved.position; restoredOnly = true;
     $('mini').hidden = false; document.body.classList.add('with-mini');
     paint(queue[index]); icons(false); waiting(false);
@@ -1015,6 +1081,7 @@
     const song = queue[i];
     mediaId = song.id; resumePosition = null; restoredOnly = false;
     index = i;
+    if (radio && index >= queue.length - 3) extendRadio();
 
     buzz("light");
     $("mini").hidden = false;
@@ -1172,7 +1239,15 @@
     return store.repeat === "all" ? 0 : -1;
   }
 
-  const next = () => { const i = nextIndex(); if (i >= 0) playAt(i); };
+  const next = () => {
+    // Radio never runs out or wraps round: at the end it finds more.
+    if (radio && index >= queue.length - 1 && store.repeat !== "one") {
+      const gen = radioGen;
+      extendRadio().then(() => { if (gen === radioGen && index < queue.length - 1) playAt(index + 1); });
+      return;
+    }
+    const i = nextIndex(); if (i >= 0) playAt(i);
+  };
   $("nNext").addEventListener("click", next);
   $("nPrev").addEventListener("click", () => {
     // Part-way in, "previous" restarts the song — as everywhere else.
@@ -2173,7 +2248,7 @@
   $("plPlay").addEventListener("click", () => {
     if (!plSongs.length) return;
     buzz();
-    queue = plSongs.slice();
+    queue = plSongs.slice(); radio = false;
     playAt(0);
   });
   $("plShuffle").addEventListener("click", () => {
@@ -2184,7 +2259,7 @@
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    queue = shuffled;
+    queue = shuffled; radio = false;
     playAt(0);
   });
 
