@@ -65,6 +65,11 @@ html, body { background:#0A0908; margin:0; }
 
   <section class="block discovery" id="discovery" aria-label="Music discovery"></section>
 
+  <div class="block" id="mixBlock">
+    <div class="block-head"><h2>Made for you today</h2></div>
+    <div class="mix-rail" id="mixRail"></div>
+  </div>
+
   <div class="block" id="recentBlock" hidden>
     <div class="block-head"><h2>Recently played</h2></div>
     <div class="rail" id="recentRail"></div>
@@ -73,7 +78,7 @@ html, body { background:#0A0908; margin:0; }
   <div class="block" id="favBlock" hidden>
     <div class="block-head">
       <h2>Your favourites</h2>
-      <button class="link" id="playFavs">Shuffle</button>
+      <span class="head-acts"><button class="link" id="smartFavs">Smart shuffle</button><button class="link" id="playFavs">Shuffle</button></span>
     </div>
     <div class="rows" id="favRows"></div>
   </div>
@@ -187,6 +192,8 @@ html, body { background:#0A0908; margin:0; }
       <i aria-hidden="true"></i><span>Grove</span>
     </button>
   </div>
+
+  <section class="block stats" id="statsBlock" hidden aria-label="Your listening"></section>
 
   <section class="block" id="ownPlaylists"><div class="block-head"><h2>Your playlists</h2><button class="link" id="createPlaylist">Create</button></div><div class="own-grid" id="ownGrid"></div><p id="ownEmpty" class="personal-status">Make a playlist for your own kind of mood.</p></section>
   <div class="seg">
@@ -495,6 +502,7 @@ html, body { background:#0A0908; margin:0; }
 <script src="queue-motion.js"></script>
 <script src="lyrics.js"></script>
 <script src="row-swipe.js"></script>
+<script src="listening.js"></script>
 <script src="profile.js"></script>
 <script src="backup.js"></script>
 <script src="personal-library.js"></script>
