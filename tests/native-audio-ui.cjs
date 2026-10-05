@@ -42,7 +42,7 @@ let radio=100;const searches=[];
   return route.fulfill({status:404,json:{},headers});
  });
  const fake=()=>{window.__calls=[];window.__fx={preset:'normal',supported:true};window.__listeners={};
-   const plugin={setLike:o=>{__calls.push([o.liked,o.available]);return Promise.resolve();},
+   window.__soundPlaying=[];const plugin={setPlaying:o=>{__soundPlaying.push(o.playing);return Promise.resolve();},setLike:o=>{__calls.push([o.liked,o.available]);return Promise.resolve();},
     fxStatus:()=>Promise.resolve({supported:__fx.supported,preset:__fx.preset,error:__fx.supported?'':'This phone does not allow sound effects for this app.'}),
     fxSet:({preset})=>__fx.supported?(__fx.preset=preset,Promise.resolve({preset})):Promise.reject(new Error('This phone does not allow sound effects for this app.')),
     addListener:(ev,cb)=>{__listeners[ev]=cb;return Promise.resolve({remove(){}});}};
@@ -55,6 +55,8 @@ let radio=100;const searches=[];
   const favIds=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.v1')).favs.map(s=>s.id));
   await page.locator('[data-tab="Search"]').click();await page.locator('#q').fill('alphabet');await page.locator('#searchForm').evaluate(f=>f.requestSubmit());
   await page.locator('#results .row .info').first().click();await page.waitForFunction(()=>document.getElementById('audio').readyState>=3);
+  await page.evaluate(()=>{const a=document.getElementById('audio');a.pause();a.dispatchEvent(new Event('pause'));});
+  assert.equal(await page.evaluate(()=>__soundPlaying.at(-1)),false,'pausing releases sound effects');
   // 1. the lock-screen heart follows the song
   assert.deepEqual(await last(),[false,true]);
   await page.locator('#mFav').click();

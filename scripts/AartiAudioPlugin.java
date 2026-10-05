@@ -28,6 +28,7 @@ public class AartiAudioPlugin extends Plugin {
     private Equalizer eq;
     private BassBoost bass;
     private String preset = "normal";
+    private boolean playing = false;
     private String error = "";
 
     private SharedPreferences prefs() {
@@ -39,7 +40,8 @@ public class AartiAudioPlugin extends Plugin {
         AartiLike.listen(() -> notifyListeners("like", new JSObject()));
         preset = prefs().getString("preset", "normal");
         if (!PRESETS.contains(preset)) preset = "normal";
-        if (!"normal".equals(preset) && !apply(preset)) preset = "normal";
+        // A saved preset is applied only while this app is playing.
+        // Session 0 must never colour another app after we pause.
     }
 
     @Override
@@ -94,9 +96,9 @@ public class AartiAudioPlugin extends Plugin {
             for (short b = 0; b < bands; b++) {
                 int hz = eq.getCenterFreq(b) / 1000;
                 int mb = Math.max(range[0], Math.min(range[1], gainDb(p, hz) * 100));
-                eq.setBandLevel(b, (short) mb);
+                if (eq.setBandLevel(b, (short) mb) != Equalizer.SUCCESS) throw new IllegalStateException("Band rejected");
             }
-            eq.setEnabled(true);
+            if (eq.setEnabled(true) != Equalizer.SUCCESS || !eq.hasControl()) throw new IllegalStateException("Effect unavailable");
             if (bass != null) {
                 int s = bassStrength(p);
                 if (s > 0 && bass.getStrengthSupported()) { bass.setStrength((short) s); bass.setEnabled(true); }
@@ -131,12 +133,24 @@ public class AartiAudioPlugin extends Plugin {
     public void fxSet(PluginCall call) {
         String p = call.getString("preset", "normal");
         if (!PRESETS.contains(p)) { call.reject("Unknown preset"); return; }
-        if (!apply(p)) { call.reject(error.isEmpty() ? "Sound effects are not available on this phone." : error); return; }
+        if (!apply(p)) { preset = "normal"; prefs().edit().putString("preset", preset).apply(); call.reject(error.isEmpty() ? "Sound effects are not available on this phone." : error); return; }
+        if (!playing) release();
         preset = p;
         prefs().edit().putString("preset", p).apply();
         JSObject r = new JSObject();
         r.put("preset", p);
         call.resolve(r);
+    }
+
+    @PluginMethod
+    public void setPlaying(PluginCall call) {
+        playing = Boolean.TRUE.equals(call.getBoolean("playing", false));
+        if (!playing) release();
+        else if (!apply(preset)) {
+            preset = "normal";
+            prefs().edit().putString("preset", preset).apply();
+        }
+        call.resolve();
     }
 
     @PluginMethod

@@ -15,7 +15,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
  const browser=await chromium.launch({headless:true});
  fs.mkdirSync('test-results',{recursive:true});
  const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
- const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('Browser error:',e.stack);});
  let playlistStatus=200, playlistSearches=0;
  await page.route('**/*',async route=>{
   const url=new URL(route.request().url());

@@ -478,7 +478,7 @@
       const own = keysOf(s.title); if (own.some(k => [...keys].some(q => sameSong(q, k)))) continue;
       ids.add(s.id); own.forEach(k => keys.add(k)); extra.push(s); if (extra.length >= 20) break;
     }
-    for (let at = index + 4, n = 0; n < extra.length && at <= queue.length; at += 4, n++) queue.splice(at, 0, extra[n]);
+    for (let at = index + 3, n = 0; n < extra.length && at <= queue.length; at += 4, n++) queue.splice(at, 0, extra[n]);
     queueChanged();
   });
 
@@ -1180,7 +1180,8 @@
         }
       }
       if (!picked.length){radioError=failures?'Could not load songs · Tap to retry':'No new matches yet · Tap to try again';return;}
-      queue.push(...picked);
+      const currentIds = new Set(queue.map(s => s.id));
+      queue.push(...picked.filter(s => !currentIds.has(s.id)));
       if ($("queueSheet").classList.contains("open")) drawQueue(true);
       const nxt = queue[index + 1];
       $("upNextLabel").textContent = nxt ? "Up next · " + nxt.title : "Queue";
@@ -2318,6 +2319,12 @@
       () => paintFx("normal", false, "Sound effects are not available on this phone."));
   }
   $("nowMenu").addEventListener("click", refreshFx);
+  function syncSoundPlayback() {
+    const p = aartiAudio();
+    if (!p || typeof p.setPlaying !== "function") return;
+    try { p.setPlaying({playing: !audio.paused && !audio.ended && !audio.error}).catch(() => {}); } catch (_) {}
+  }
+  ["playing", "pause", "ended", "emptied", "error"].forEach(e => audio.addEventListener(e, syncSoundPlayback));
 
   /* Playback speed. Set as the default rate too, because loading a
      new song puts the rate back to the default. */
