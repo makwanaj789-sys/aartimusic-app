@@ -957,7 +957,7 @@
 
   // Track identity belongs to the loaded media, not a newly selected list.
   let mediaId = null, resumePosition = null, lastCheckpoint = 0, restoredOnly = false;
-  function chooseSong(list, at) {
+  function chooseSong(list, at, fromPlaylist) {
     const song = list[at];
     if (!song) return;
     if (song.id === mediaId && !audio.ended && !audio.error) {
@@ -968,7 +968,9 @@
     // A search is a list of guesses at one song, not a queue: play the
     // one that was tapped and let similar songs follow it, as radio.
     if (list === results) { queue = [song]; radio = true; radioGen++; playAt(0); return; }
-    if (list !== queue) radio = false;
+    // Anything else that is not a playlist keeps going once its own
+    // list runs out; a playlist is a finished thing and stops.
+    if (list !== queue) { radio = !(fromPlaylist || list === plSongs); radioGen++; }
     queue = list.slice(); playAt(at);
   }
 
@@ -1051,6 +1053,7 @@
       }
       if (!picked.length) return;
       queue.push(...picked);
+      if ($("queueSheet").classList.contains("open")) drawQueue(true);
       const nxt = queue[index + 1];
       $("upNextLabel").textContent = nxt ? "Up next · " + nxt.title : "Queue";
       checkpoint();
@@ -1618,7 +1621,8 @@
 
     el.addEventListener("pointerdown", (e) => {
       if (!el.classList.contains("open")) return;
-      if (e.target.closest && e.target.closest(DRAG_SKIP)) return;
+      const list = e.target.closest && e.target.closest(".sheet-scroll");
+      if (list ? list.scrollTop > 0 : (e.target.closest && e.target.closest(DRAG_SKIP))) return;
       id = e.pointerId; y0 = e.clientY; t0 = e.timeStamp; dy = 0; live = false;
     }, { passive: true });
 
@@ -1846,16 +1850,41 @@
   });
 
   // queue
-  $("queueOpen").addEventListener("click", () => {
-    const box = $("queueRows");
+  /* Rows slide in as they scroll into view, and arrive in a short
+     cascade when the sheet opens. Only rows not yet seen animate, so
+     scrolling back up is still. */
+  const queueSeen = "IntersectionObserver" in window && !REDUCED ? new IntersectionObserver((entries) => {
+    entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("seen"); queueSeen.unobserve(en.target); } });
+  }, { root: $("queueRows"), rootMargin: "0px 0px -6% 0px" }) : null;
+  function drawQueue(keepScroll) {
+    const box = $("queueRows"), top = box.scrollTop;
+    if (queueSeen) queueSeen.disconnect();
     box.innerHTML = "";
     queue.forEach((song, i) => {
       const row = rowFor(song, queue, i);
-      if (i < index) row.style.opacity = ".45";
+      row.classList.add("q-row");
+      if (i < index) row.classList.add("played");
+      if (i === index) row.classList.add("q-now");
+      row.style.setProperty("--i", Math.min(Math.max(i - index, 0), 10));
+      if (queueSeen) queueSeen.observe(row); else row.classList.add("seen");
       box.appendChild(row);
     });
+    if (keepScroll) box.scrollTop = top;
+    $("queueCount").textContent = queue.length > index + 1 ? (queue.length - index - 1) + " up next" + (radio ? " · keeps going" : "") : "";
+  }
+  $("queueOpen").addEventListener("click", () => {
+    drawQueue(false);
     sheet($("queueSheet"), true);
+    // Start at the song playing, not at the first one ever queued.
+    const now = $("queueRows").querySelector(".q-row.q-now");
+    const box = $("queueRows");
+    if (now) box.scrollTop += now.getBoundingClientRect().top - box.getBoundingClientRect().top - 8;
+    pullable(box);
   });
+  // At the top of the list a downward swipe closes the sheet; anywhere
+  // else, or upward, it scrolls the list.
+  function pullable(box) { box.style.touchAction = box.scrollTop <= 0 ? "pan-down pinch-zoom" : "pan-y pinch-zoom"; }
+  $("queueRows").addEventListener("scroll", () => pullable($("queueRows")), { passive: true });
   $("queueClose").addEventListener("click", () => sheet($("queueSheet"), false));
   $("queueSheet").addEventListener("click", (e) => {
     if (e.target === $("queueSheet")) sheet($("queueSheet"), false);
@@ -2511,7 +2540,7 @@
   tab("Home");
   AartiProfile.start();
   const personalLibrary=AartiPersonalLibrary({
-    play: (songs,at)=>chooseSong(songs,at),
+    play: (songs,at)=>chooseSong(songs,at,true),
     readStore:()=>store,
     reload:()=>{load();AartiProfile.reload();paintTheme();paintModes();paintFavButtons();drawHome();drawLib();},
     native:()=>nativePlugin('PersonalLibrary'),
