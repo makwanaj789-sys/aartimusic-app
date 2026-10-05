@@ -262,3 +262,15 @@ body.locked .drawer-swipe-edge{pointer-events:none}
 .ly-timing button:active{transform:scale(.96)}
 .ly-follow[hidden]{display:none}
 @media(prefers-reduced-motion:reduce){.ly-line,.lyrics,.lyrics.open{transition:none}.ly-line.on{transform:none}}
+
+/* A direct opacity layer avoids inherited custom-property invalidation of every row. */
+#queueSheet::before{display:none}
+.queue-veil{position:absolute;inset:0;background:#0009;opacity:0;pointer-events:none;will-change:opacity}
+#queueSheet .sheet-in{contain:layout paint;box-shadow:0 -1px 0 rgba(var(--q-glow),.25);backface-visibility:hidden}
+/* Large live blurs rasterized again during the phone's lyric-screen transition. */
+.lyrics{isolation:isolate;contain:layout paint;will-change:transform,opacity;transform:translate3d(0,32px,0);transition:transform .32s cubic-bezier(.2,.8,.2,1),opacity .22s ease,visibility 0s linear .32s}
+.lyrics.open{transform:translate3d(0,0,0);transition:transform .32s cubic-bezier(.2,.8,.2,1),opacity .22s ease,visibility 0s}
+.ly-bg{inset:0;filter:none!important;opacity:.6;background-image:radial-gradient(ellipse at 25% 15%,rgba(var(--lit,var(--glow)),.46),transparent 65%),radial-gradient(ellipse at 90% 80%,rgba(var(--q-glow),.2),transparent 60%)!important}
+.ly-body{mask-image:none;-webkit-mask-image:none}
+#now .now-extra{transition:none;will-change:transform,opacity}
+@media(prefers-reduced-motion:reduce){.lyrics,.lyrics.open{transform:none;transition:none}}

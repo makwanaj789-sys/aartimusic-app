@@ -49,7 +49,12 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.waitForFunction(()=>document.getElementById('audio').readyState>=4);
   await page.evaluate(()=>{const a=document.getElementById('audio');a.pause();a.currentTime=2;});
   await page.locator('#miniOpen').click();await page.waitForFunction(()=>document.getElementById('now').dataset.progress==='1.0000');
-  await page.locator('#queueOpen').click();await page.waitForFunction(()=>document.getElementById('queueSheet').dataset.progress==='1.0000');
+  await page.locator('#queueOpen').click();
+  const compositor=await page.evaluate(()=>{const a=document.querySelector('#queueSheet .sheet-in').getAnimations()[0];
+   return !!a && a.effect.getKeyframes().every(k=>Object.keys(k).every(key=>['offset','computedOffset','easing','composite','transform'].includes(key)));});
+  assert(compositor,'release/tap spring must use a native transform animation');
+  assert.equal(await page.locator('#queueSheet').evaluate(e=>e.style.getPropertyValue('--queue-veil')),'','no inherited per-frame CSS variable');
+  await page.waitForFunction(()=>document.getElementById('queueSheet').dataset.progress==='1.0000');
   await page.waitForFunction(()=>document.querySelectorAll('#queueRows .q-row').length>=21);
   await page.evaluate(()=>window.originalRow=document.querySelector('#queueRows .q-row'));
   let previous=await page.locator('#queueRows .q-row').count();
