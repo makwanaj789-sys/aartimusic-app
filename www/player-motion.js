@@ -6,7 +6,7 @@
     const panel=o.panel, mini=o.mini, art=o.art;
     const title=panel.querySelector('.now-meta'), top=panel.querySelector('.now-top');
     const controls=panel.querySelector('.now-ctrls'), seek=panel.querySelector('.seek');
-    const out=panel.querySelector('.out-row'), queue=panel.querySelector('.queue-open');
+    const out=panel.querySelector('.out-row'), queue=panel.querySelector('.now-extra') || panel.querySelector('.queue-open');
     const surface=panel.querySelector('.now-surface');
     const backdrop=panel.querySelector('.now-bg'), light=panel.querySelector('.now-lit');
     const smallText=mini.querySelector('.meta'), smallButtons=[...mini.querySelectorAll('button')];
