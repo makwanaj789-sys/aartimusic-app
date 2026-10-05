@@ -56,3 +56,69 @@ body.locked .drawer-swipe-edge{pointer-events:none}
 @media(prefers-reduced-motion:reduce){.discovery-chips .chip::before{transition:none}}
 
 .discovery-ambience{mask-image:linear-gradient(transparent,#000 18%);-webkit-mask-image:linear-gradient(transparent,#000 18%)}
+
+/* ============================================================
+   QUEUE SHEET
+   Its own scrolling list, a springier rise, rows that slide in as
+   they scroll into view, and a colour of its own in every theme —
+   a second hue beside the palette's accent, so the queue never
+   reads as the page under it.
+   ============================================================ */
+:root{--q-top:#3a2410;--q-bottom:#140c06;--q-accent:#ffb562;--q-glow:255,181,98}
+:root[data-theme="green"]{--q-top:#0e3a2c;--q-bottom:#06150f;--q-accent:#7dffc0;--q-glow:125,255,192}
+:root[data-theme="teal"]{--q-top:#123a5a;--q-bottom:#061420;--q-accent:#8fd8ff;--q-glow:143,216,255}
+:root[data-theme="violet"]{--q-top:#3d1a52;--q-bottom:#12071c;--q-accent:#ff9ee8;--q-glow:255,158,232}
+:root[data-theme="indigo"]{--q-top:#1d2a66;--q-bottom:#080b22;--q-accent:#7fe3ff;--q-glow:127,227,255}
+:root[data-theme="neon"]{--q-top:#4a0f3e;--q-bottom:#14061a;--q-accent:#c8ff5a;--q-glow:200,255,90}
+:root[data-theme="ruby"]{--q-top:#5a1424;--q-bottom:#1a070c;--q-accent:#ffc27a;--q-glow:255,194,122}
+
+#queueSheet .sheet-in{
+  display:flex;flex-direction:column;height:82%;max-height:82%;overflow:hidden;padding-bottom:0;
+  background:
+    radial-gradient(120% 60% at 50% 0,rgba(var(--q-glow),.22),transparent 70%),
+    linear-gradient(180deg,var(--q-top),var(--q-bottom) 78%);
+  border-top:1px solid rgba(var(--q-glow),.35);
+  box-shadow:0 -18px 50px rgba(0,0,0,.45),0 -1px 0 rgba(var(--q-glow),.25);
+  transition:transform .52s cubic-bezier(.18,1.18,.32,1),border-radius .3s var(--ease);
+}
+#queueSheet:not(.open) .sheet-in{transition:transform .32s cubic-bezier(.5,0,.75,0)}
+#queueSheet.dragging .sheet-in{transition:none;border-radius:26px 26px 0 0}
+#queueSheet .grab{background:rgba(var(--q-glow),.55);width:44px;transition:width .2s var(--ease)}
+#queueSheet.dragging .grab{width:64px}
+#queueSheet .sheet-head{flex:none;padding:0 2px 6px}
+#queueSheet .sheet-head h2{font-size:22px;letter-spacing:.2px}
+#queueSheet .link{color:var(--q-accent)}
+.queue-count{display:block;font-size:11px;color:rgba(var(--q-glow),.85);margin-top:2px;min-height:14px}
+
+#queueRows{
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  padding:2px 0 calc(env(safe-area-inset-bottom,0px) + 28px);
+  /* soft edge where rows scroll under the header */
+  mask-image:linear-gradient(transparent,#000 14px,#000 calc(100% - 26px),transparent);
+  -webkit-mask-image:linear-gradient(transparent,#000 14px,#000 calc(100% - 26px),transparent);
+  scrollbar-width:none;
+}
+#queueRows::-webkit-scrollbar{display:none}
+#queueRows .q-row{border-radius:14px;padding-left:6px;padding-right:2px}
+#queueRows .q-row.played{opacity:.42}
+#queueRows .q-row.q-now{background:rgba(var(--q-glow),.14);box-shadow:inset 3px 0 0 var(--q-accent)}
+#queueRows .q-row.q-now .title{color:var(--q-accent)}
+#queueRows .icon.fav svg{fill:var(--q-accent);stroke:var(--q-accent)}
+
+/* scroll-in: rows wait slightly below and faded until they enter view */
+#queueRows .q-row{opacity:0;transform:translateY(18px) scale(.97);
+  transition:opacity .38s var(--ease),transform .5s cubic-bezier(.2,1.25,.35,1);
+  transition-delay:calc(var(--i,0) * 28ms)}
+#queueRows .q-row.seen{opacity:1;transform:none}
+#queueRows .q-row.played.seen{opacity:.42}
+/* once the sheet is open, rows found by scrolling come in without the opening cascade */
+#queueSheet.open #queueRows .q-row.seen{transition-delay:0s}
+#queueSheet:not(.open) #queueRows .q-row{transition:none}
+
+/* while being pulled down the content eases back a touch */
+#queueSheet.dragging .sheet-head,#queueSheet.dragging #queueRows{transform:scale(.985);transition:transform .2s var(--ease)}
+
+@media(prefers-reduced-motion:reduce){
+  #queueSheet .sheet-in,#queueSheet:not(.open) .sheet-in{transition:transform .2s linear}
+  #queueRows .q-row{opacity:1;transform:none;transition:none}
+}
