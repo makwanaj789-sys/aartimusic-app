@@ -89,7 +89,12 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   async function swipe(x,y,dy){await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});for(let i=1;i<=12;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:y+dy*i/12}]});await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
   await swipe(210,650,-220);await page.waitForFunction(()=>document.getElementById('queueRows').scrollTop>30);
   assert.equal(await page.locator('#queueSheet').getAttribute('data-progress'),'1.0000');
+  // Let the swipe's fling finish first; otherwise it carries on after the
+  // reset below and the next pull lands on a list that is no longer at the top.
+  await page.waitForTimeout(1500);
+  await page.waitForFunction(()=>new Promise(r=>{const b=document.getElementById('queueRows'),t=b.scrollTop;setTimeout(()=>r(b.scrollTop===t),400);}));
   await page.locator('#queueRows').evaluate(b=>{b.scrollTop=0;b.dispatchEvent(new Event('scroll'));});await page.waitForTimeout(200);
+  assert.equal(await page.locator('#queueRows').evaluate(b=>b.scrollTop),0,'list is at the top before the pull');
   await page.evaluate(()=>{window.queueTouch=[];for(const name of ['pointerdown','pointermove','pointerup','pointercancel','lostpointercapture'])document.getElementById('queueSheet').addEventListener(name,e=>window.queueTouch.push({type:name,y:e.clientY,target:e.target.className,scroll:document.getElementById('queueRows').scrollTop,action:document.getElementById('queueRows').style.touchAction,p:document.getElementById('queueSheet').dataset.progress}),true);});
   const list=await page.locator('#queueRows').boundingBox();await swipe(160,list.y+65,300);await page.waitForFunction(()=>!document.getElementById('queueSheet').classList.contains('open'));
   await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#queueOpen').click();assert.equal(await page.locator('#queueSheet').getAttribute('data-progress'),'1.0000');await page.locator('#queueClose').click();assert.equal(await page.locator('#queueSheet').getAttribute('data-progress'),'0.0000');
