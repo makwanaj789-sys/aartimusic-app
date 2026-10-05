@@ -673,10 +673,23 @@
 
   function paintFavButtons(pop) {
     const song = queue[index];
-    if (!song) return;
+    if (!song) { syncLike(); return; }
     const on = isFav(song.id);
     markFav($("mFav"), on, pop);
     markFav($("nFav"), on, pop);
+    syncLike();
+  }
+
+  /* The heart on the lock screen and in the notification, drawn by the
+     native media session. It shows whether the song playing is a
+     favourite, and a tap on it comes back here as a "like" event. Only
+     in the Android app; elsewhere there is no such plugin. */
+  let aartiAudioPlugin;
+  const aartiAudio = () => aartiAudioPlugin === undefined ? (aartiAudioPlugin = nativePlugin("AartiAudio")) : aartiAudioPlugin;
+  function syncLike() {
+    const p = aartiAudio(), song = queue[index];
+    if (!p) return;
+    try { p.setLike({ liked: !!song && isFav(song.id), available: !!song }).catch(() => {}); } catch (_) {}
   }
 
   const tapFav = (e) => {
@@ -2254,6 +2267,29 @@
 
   // sleep timer
   $("nowMenu").addEventListener("click", () => sheet($("sleepSheet"), true));
+  if (aartiAudio()) {
+    try { aartiAudio().addListener("like", () => { if (queue[index]) toggleFav(queue[index]); }); } catch (_) {}
+  }
+
+  /* Sound presets — the phone's equalizer and bass boost, through the
+     native plugin. Shown only in the Android app, and greyed out with
+     the reason when the phone does not allow them. */
+  function paintFx(preset, supported, note) {
+    $("fxHead").hidden = $("fxRow").hidden = false;
+    document.querySelectorAll("[data-fx]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.fx === preset));
+      b.disabled = !supported;
+    });
+    $("fxNote").hidden = !note; $("fxNote").textContent = note || "";
+  }
+  function refreshFx() {
+    const p = aartiAudio();
+    if (!p) return;
+    p.fxStatus().then((s) => paintFx(s.preset, s.supported, s.supported ? "" : (s.error || "Sound effects are not available on this phone.")),
+      () => paintFx("normal", false, "Sound effects are not available on this phone."));
+  }
+  $("nowMenu").addEventListener("click", refreshFx);
+
   /* Playback speed. Set as the default rate too, because loading a
      new song puts the rate back to the default. */
   const SPEEDS = [0.75, 1, 1.25, 1.5];
@@ -2266,6 +2302,16 @@
   applySpeed();
 
   $("sleepSheet").addEventListener("click", (e) => {
+    const fx = e.target.dataset && e.target.dataset.fx;
+    if (fx !== undefined) {
+      const p = aartiAudio(); if (!p) return;
+      buzz();
+      p.fxSet({ preset: fx }).then((r) => {
+        paintFx(r.preset, true, "");
+        toast(r.preset === "normal" ? "Sound: normal" : "Sound: " + e.target.textContent);
+      }, (err) => { paintFx("normal", false, (err && err.message) || "Sound effects are not available on this phone."); });
+      return;
+    }
     const sp = e.target.dataset && e.target.dataset.speed;
     if (sp !== undefined) {
       store.speed = +sp; save(); applySpeed(); buzz();

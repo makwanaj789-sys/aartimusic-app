@@ -64,6 +64,7 @@ jobs:
           node tests/queue-gestures-ui.cjs
           node tests/stats-mixes-ui.cjs
           node tests/speed-ui.cjs
+          node tests/native-audio-ui.cjs
 
       - name: Save UI screenshots
         if: always()
@@ -130,6 +131,11 @@ jobs:
 
       - name: Install native floating capsule
         run: python3 scripts/android-capsule.py
+
+      # Equalizer / bass boost presets and the heart on the lock screen.
+      # After the capsule step: both patch the same media-session service.
+      - name: Install sound presets and lock-screen like
+        run: python3 scripts/android-audio-native.py
 
       # Keep review-build identity stable across future CI runs.
       # The earlier preview key was ephemeral; Next installs alongside it.
