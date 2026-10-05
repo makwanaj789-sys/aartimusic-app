@@ -235,3 +235,9 @@ body.locked .drawer-swipe-edge{pointer-events:none}
 .stats-artists{display:flex;flex-wrap:wrap;gap:8px}
 .stats-artist{display:flex;flex-direction:column;padding:8px 12px;border-radius:12px;background:rgba(var(--q-glow),.12)}
 .stats-artist b{font-size:12.5px}.stats-artist small{font-size:10.5px;color:var(--mist)}
+
+/* ---------- playback speed ---------- */
+.speed-head{margin-top:18px}
+.speed-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:0 0 4px}
+.speed-row button{padding:11px 0;border-radius:12px;font-size:13.5px;font-weight:600;color:var(--mist);background:color-mix(in srgb,var(--ink) 7%,transparent)}
+.speed-row button[aria-pressed="true"]{color:var(--on-accent,#100b17);background:var(--flame)}

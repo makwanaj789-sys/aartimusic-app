@@ -63,6 +63,7 @@ jobs:
           node tests/lyrics-ui.cjs
           node tests/queue-gestures-ui.cjs
           node tests/stats-mixes-ui.cjs
+          node tests/speed-ui.cjs
 
       - name: Save UI screenshots
         if: always()
