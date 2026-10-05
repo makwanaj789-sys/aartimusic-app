@@ -59,6 +59,7 @@ jobs:
         run: |
           node tests/ui-smoke.cjs
           node tests/capsule-ui.cjs
+          node tests/queue-ui.cjs
 
       - name: Save UI screenshots
         if: always()

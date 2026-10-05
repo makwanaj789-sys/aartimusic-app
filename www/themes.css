@@ -122,3 +122,16 @@ body.locked .drawer-swipe-edge{pointer-events:none}
   #queueSheet .sheet-in,#queueSheet:not(.open) .sheet-in{transition:transform .2s linear}
   #queueRows .q-row{opacity:1;transform:none;transition:none}
 }
+
+/* Queue motion owns transform and backdrop opacity; no CSS spring competes. */
+#queueSheet{background:none;opacity:1;transition:none;isolation:isolate}
+#queueSheet::before{content:"";position:absolute;inset:0;background:#0009;opacity:var(--queue-veil,0);pointer-events:none;will-change:opacity}
+#queueSheet .sheet-in,#queueSheet:not(.open) .sheet-in{transition:none;touch-action:auto;border-radius:26px 26px 0 0}
+#queueSheet .sheet-head,#queueSheet .grab{touch-action:none}
+#queueSheet .grab{width:44px;transition:none}
+#queueRows{mask-image:none;-webkit-mask-image:none;touch-action:pan-y pinch-zoom}
+#queueRows .q-row,#queueRows .q-row.seen{transform:none;opacity:1;transition:none;animation:none;content-visibility:auto;contain-intrinsic-size:auto 72px}
+#queueRows .q-row.played{opacity:.42}
+#queueSheet.dragging .sheet-head,#queueSheet.dragging #queueRows{transform:none;transition:none}
+.queue-status{display:block;min-height:56px;width:100%;padding:16px;color:var(--q-accent);font-size:13px}
+.queue-status[hidden]{display:none}
