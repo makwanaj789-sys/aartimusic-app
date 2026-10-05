@@ -65,6 +65,7 @@
   let token = 0;         // guards against two plays racing
   let sleepAt = 0;       // timestamp, or -1 for "end of this track"
   let actionSong = null;
+  let lightGeneration = 0;
 
   const headers = () => {
     const h = {};
@@ -1336,7 +1337,6 @@
     });
   }
 
-  let lightGeneration = 0;
   function relight(song) {
     const generation = ++lightGeneration;
     const lit = $("nowLit");
