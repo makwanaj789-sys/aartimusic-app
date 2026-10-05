@@ -347,6 +347,16 @@
     img.addEventListener("click", play);
     info.addEventListener("click", play);
 
+    // Sideways: right plays it next, left queues it — or, inside the
+    // queue itself, moves it up next or takes it out.
+    if (window.AartiRowSwipe) AartiRowSwipe(row, list === queue ? {
+      right: { label: "Play next", run: () => moveUpNext(i) },
+      left: { label: "Remove", run: () => removeFromQueue(i) },
+    } : {
+      right: { label: "Play next", run: () => playNext(song) },
+      left: { label: "Add to queue", run: () => addToQueue(song) },
+    }, buzz);
+
     return row;
   }
 
@@ -1366,8 +1376,28 @@
 
     if (sleepAt > 0 && Date.now() > sleepAt) {
       audio.pause(); sleepAt = 0; toast("Sleep timer — paused");
+      audio.volume = 1;
     }
+    fadeVolume();
   });
+
+  /* Songs ease in and out instead of starting and stopping with a
+     click, and a sleep timer lowers the music over its last half
+     minute rather than cutting it. Worked out from the song's own
+     position on every timeupdate — that keeps firing with the screen
+     off, where timers are throttled to nothing. Very short clips are
+     left alone. */
+  const FADE_IN = 1.2, FADE_OUT = 4, SLEEP_FADE = 30;
+  function fadeVolume() {
+    const d = audio.duration, t = audio.currentTime;
+    let v = 1;
+    if (d && isFinite(d) && d > 20) v = Math.min(1, t / FADE_IN, (d - t) / FADE_OUT);
+    if (sleepAt > 0) v = Math.min(v, (sleepAt - Date.now()) / 1000 / SLEEP_FADE);
+    if (sleepAt === -1 && d && isFinite(d)) v = Math.min(v, (d - t) / 10);
+    v = Math.max(0, Math.min(1, v));
+    if (Math.abs(audio.volume - v) > 0.004) audio.volume = +v.toFixed(3);
+  }
+  audio.addEventListener("seeked", fadeVolume);
 
   /* ---------- shuffle and repeat ---------------------------- */
 
@@ -1877,12 +1907,52 @@
     queueStatus.textContent=radioLoading?'Finding similar songs…':radioError||'Load more similar songs';
     $("queueCount").textContent=Math.max(0,queue.length-index-1)+' up next'+(radio?' · Auto queue':'');
   }
+  /* Hold the handle and drag a row to a new place. The other rows
+     part to show where it will land; letting go settles it there.
+     Near the top or bottom of the list it scrolls on its own. */
+  function queueHandle(row) {
+    const h = document.createElement("span");
+    h.className = "q-handle"; h.setAttribute("role", "button"); h.setAttribute("aria-label", "Drag to reorder");
+    h.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg>';
+    let d = null;
+    const rows = () => [...$("queueRows").querySelectorAll(".q-row")];
+    h.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const all = rows(), from = all.indexOf(row);
+      d = { id: e.pointerId, y: e.clientY, from, to: from, all, h: row.offsetHeight, top: $("queueRows").scrollTop };
+      try { h.setPointerCapture(e.pointerId); } catch (_) {}
+      row.classList.add("q-lifted"); buzz("light");
+    });
+    h.addEventListener("pointermove", (e) => {
+      if (!d || d.id !== e.pointerId) return;
+      const box = $("queueRows"), r = box.getBoundingClientRect();
+      if (e.clientY < r.top + 48) box.scrollTop -= 8; else if (e.clientY > r.bottom - 48) box.scrollTop += 8;
+      const dy = e.clientY - d.y + (box.scrollTop - d.top);
+      const to = Math.max(0, Math.min(d.all.length - 1, d.from + Math.round(dy / d.h)));
+      row.style.transform = "translateY(" + dy.toFixed(1) + "px)";
+      if (to !== d.to) { d.to = to; buzz("light"); }
+      d.all.forEach((o, n) => {
+        if (o === row) return;
+        const shift = d.from < d.to && n > d.from && n <= d.to ? -d.h : d.from > d.to && n < d.from && n >= d.to ? d.h : 0;
+        o.style.transform = shift ? "translateY(" + shift + "px)" : "";
+      });
+    });
+    const end = (e) => {
+      if (!d || d.id !== e.pointerId) return;
+      const { from, to, all } = d; d = null;
+      all.forEach((o) => { o.style.transform = ""; });
+      row.classList.remove("q-lifted");
+      moveInQueue(from, to);
+    };
+    h.addEventListener("pointerup", end); h.addEventListener("pointercancel", end);
+    return h;
+  }
   function drawQueue(keepScroll){
     const box=$("queueRows"),top=box.scrollTop;
     if(renderedQueue!==queue){box.replaceChildren();renderedQueue=queue;}
     let count=box.querySelectorAll('.q-row').length;
     for(let i=count;i<queue.length;i++){
-      const row=rowFor(queue[i],queue,i);row.classList.add('q-row','seen');box.append(row);
+      const row=rowFor(queue[i],queue,i);row.classList.add('q-row','seen');row.append(queueHandle(row));box.append(row);
     }
     box.querySelectorAll('.q-row').forEach((row,i)=>{row.classList.toggle('played',i<index);row.classList.toggle('q-now',i===index);});
     box.append(queueStatus);queueFeedback();if(keepScroll)box.scrollTop=top;
@@ -1899,6 +1969,45 @@
   },{passive:true});
   $("queueClose").addEventListener('click',()=>sheet($("queueSheet"),false));
   $("queueSheet").addEventListener('click',e=>{if(e.target===$("queueSheet"))sheet(e.target,false);});
+
+  /* ---------- changing the queue ---------------------------- */
+  function upNext() {
+    const nxt = queue[index + 1];
+    $("upNextLabel").textContent = nxt ? "Up next · " + nxt.title : "Queue";
+  }
+  function queueChanged() {
+    upNext(); checkpoint();
+    if ($("queueSheet").classList.contains("open")) { renderedQueue = null; drawQueue(true); }
+  }
+  function playNext(song) {
+    if (index < 0 || !queue[index]) { chooseSong([song], 0); return; }
+    queue.splice(index + 1, 0, song); buzzDone("success"); toast("Playing next"); queueChanged();
+  }
+  function addToQueue(song) {
+    if (index < 0 || !queue[index]) { chooseSong([song], 0); return; }
+    queue.push(song); buzzDone("success"); toast("Added to queue"); queueChanged();
+  }
+  function moveUpNext(i) {
+    if (i === index || i === index + 1 || !queue[i]) return;
+    const [s] = queue.splice(i, 1); if (i < index) index--;
+    queue.splice(index + 1, 0, s); buzzDone("success"); toast("Playing next"); queueChanged();
+  }
+  function removeFromQueue(i) {
+    if (!queue[i]) return;
+    if (i === index) { toast("That one is playing"); return; }
+    queue.splice(i, 1); if (i < index) index--;
+    buzzDone("success"); toast("Removed from queue"); queueChanged();
+  }
+  // Moves a song from one place in the queue to another, keeping the
+  // song that is playing the one that is playing.
+  function moveInQueue(from, to) {
+    if (from === to || !queue[from]) return;
+    const [s] = queue.splice(from, 1); queue.splice(to, 0, s);
+    if (from === index) index = to;
+    else if (from < index && to >= index) index--;
+    else if (from > index && to <= index) index++;
+    buzzDone("success"); queueChanged();
+  }
 
   /* ---------- lyrics ----------------------------------------
      Fetched as soon as a song starts, so the button on the player

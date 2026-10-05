@@ -61,6 +61,7 @@ jobs:
           node tests/capsule-ui.cjs
           node tests/queue-ui.cjs
           node tests/lyrics-ui.cjs
+          node tests/queue-gestures-ui.cjs
 
       - name: Save UI screenshots
         if: always()
