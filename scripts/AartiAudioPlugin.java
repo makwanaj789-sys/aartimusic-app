@@ -96,7 +96,7 @@ public class AartiAudioPlugin extends Plugin {
             for (short b = 0; b < bands; b++) {
                 int hz = eq.getCenterFreq(b) / 1000;
                 int mb = Math.max(range[0], Math.min(range[1], gainDb(p, hz) * 100));
-                if (eq.setBandLevel(b, (short) mb) != Equalizer.SUCCESS) throw new IllegalStateException("Band rejected");
+                eq.setBandLevel(b, (short) mb);
             }
             if (eq.setEnabled(true) != Equalizer.SUCCESS || !eq.hasControl()) throw new IllegalStateException("Effect unavailable");
             if (bass != null) {
