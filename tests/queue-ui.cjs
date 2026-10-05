@@ -80,8 +80,8 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.screenshot({path:'test-results/queue-drag.png'});await page.mouse.up();
   const released=Number(await page.locator('#queueSheet').getAttribute('data-progress'));assert(released<.95,'Release must not reset sheet to open');
   await page.waitForTimeout(40);const rect=await page.locator('#queueSheet .sheet-in').boundingBox();
-  await page.mouse.move(rect.x+70,rect.y+25);await page.mouse.down();const held=await page.locator('#queueSheet').getAttribute('data-progress');await page.waitForTimeout(100);assert.equal(await page.locator('#queueSheet').getAttribute('data-progress'),held);
-  await page.mouse.move(rect.x+70,Math.max(10,rect.y-300),{steps:12});await page.mouse.up();await page.waitForFunction(()=>document.getElementById('queueSheet').dataset.progress==='1.0000');
+  await page.mouse.move(5,790);await page.mouse.down();const held=await page.locator('#queueSheet').getAttribute('data-progress');await page.waitForTimeout(100);assert.equal(await page.locator('#queueSheet').getAttribute('data-progress'),held);
+  await page.mouse.move(5,380,{steps:12});await page.mouse.up();await page.waitForFunction(()=>document.getElementById('queueSheet').dataset.progress==='1.0000');
   assert(Math.abs(await page.locator('#audio').evaluate(a=>a.currentTime)-2)<.2,'Queue gestures must not seek');
   await page.screenshot({path:'test-results/queue-open.png'});
   // Actual touch scrolling works inside the sheet, with pull-down dismissal only at the top.
