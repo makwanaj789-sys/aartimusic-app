@@ -43,6 +43,7 @@
        stored as the absence of an attribute rather than one that
        has to be kept in step with the stylesheet. */
     theme: "amber",
+    speed: 1,            // playback rate; the voice keeps its pitch
   };
 
   function load() {
@@ -2253,7 +2254,24 @@
 
   // sleep timer
   $("nowMenu").addEventListener("click", () => sheet($("sleepSheet"), true));
+  /* Playback speed. Set as the default rate too, because loading a
+     new song puts the rate back to the default. */
+  const SPEEDS = [0.75, 1, 1.25, 1.5];
+  function applySpeed() {
+    const r = SPEEDS.includes(+store.speed) ? +store.speed : 1;
+    audio.defaultPlaybackRate = r; audio.playbackRate = r;
+    if ("preservesPitch" in audio) audio.preservesPitch = true;
+    document.querySelectorAll("[data-speed]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.speed === r)));
+  }
+  applySpeed();
+
   $("sleepSheet").addEventListener("click", (e) => {
+    const sp = e.target.dataset && e.target.dataset.speed;
+    if (sp !== undefined) {
+      store.speed = +sp; save(); applySpeed(); buzz();
+      toast(+sp === 1 ? "Normal speed" : "Speed " + sp + "×");
+      return;
+    }
     const v = e.target.dataset && e.target.dataset.sleep;
     if (v === undefined) { if (e.target === $("sleepSheet")) sheet($("sleepSheet"), false); return; }
 
