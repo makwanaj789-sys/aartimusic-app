@@ -388,7 +388,41 @@
 
   /* ---------- home ------------------------------------------ */
 
+  /* ---------- made for you today ------------------------------
+     Today's Daily Mix comes from what is played most and from the
+     favourites, in an order that holds for the day. Beside it, a mix
+     for the time of day in the listener's own language. Both carry
+     on as radio once their own songs run out. */
+  function drawMixes() {
+    const rail = $("mixRail"); rail.replaceChildren();
+    const profile = AartiProfile.get();
+    const language = (profile && profile.languages && profile.languages[0]) || "Hindi";
+    const daily = AartiListening.dailyMix(store.favs);
+    const m = AartiListening.moment(new Date().getHours(), language);
+    const card = (title, sub, cls, thumbs, go) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "mix-card " + cls;
+      const art = document.createElement("span"); art.className = "mix-art"; art.setAttribute("aria-hidden", "true");
+      // Four covers make a mosaic; with fewer, one cover fills the tile.
+      thumbs = [...new Set(thumbs)]; thumbs.slice(0, thumbs.length >= 4 ? 4 : 1).forEach((t) => { const i = document.createElement("img"); i.alt = ""; i.loading = "lazy"; i.src = t; i.addEventListener("error", () => i.remove()); art.append(i); });
+      const t = document.createElement("b"); t.textContent = title;
+      const s = document.createElement("small"); s.textContent = sub;
+      b.append(art, t, s); b.addEventListener("click", go); rail.append(b);
+    };
+    if (daily.length >= 3) card("Daily Mix", "Your most played + favourites", "mix-daily", daily.map(x => x.thumb).filter(Boolean),
+      () => { buzz(); chooseSong(daily, 0); });
+    card(m.name + " Mix", language + " · for right now", "mix-" + m.name.toLowerCase(), [], async () => {
+      buzz(); toast("Finding your " + m.name.toLowerCase() + " mix…");
+      try {
+        const d = await discoverSongs(m.query);
+        const list = (d.results || []).filter(s => !NOT_MUSIC.test(s.title) && !(s.duration && (s.duration < 60 || s.duration > 900)));
+        if (!list.length) { toast("Nothing found right now"); return; }
+        chooseSong(list, 0);
+      } catch (_) { toast("Couldn't load the mix"); }
+    });
+  }
+
   function drawHome() {
+    drawMixes();
     const hour = new Date().getHours();
     $("pHome").querySelector("h1").textContent =
       (hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening") + (AartiProfile.get() ? ", " + AartiProfile.get().name : "");
@@ -424,6 +458,28 @@
 
     fill($("favRows"), store.favs.slice(0, 6));
   }
+
+  /* Smart shuffle: the favourites, shuffled, with a song like them
+     slipped in after every three — found the same way radio finds
+     them, and never one already in the list. */
+  $("smartFavs").addEventListener("click", async () => {
+    if (!store.favs.length) return;
+    buzz();
+    queue = shuffled(store.favs).slice(0, 60); radio = true; radioGen++;
+    const gen = radioGen; playAt(0); toast("Smart shuffle");
+    const seeds = queue.slice(0, 6);
+    const lists = await Promise.all(seeds.map(s => discoverSongs((radioQueries(s)[0]) || s.title).then(d => d.results || [], () => [])));
+    if (gen !== radioGen) return;
+    const ids = new Set(queue.map(s => s.id)), keys = new Set(queue.flatMap(s => keysOf(s.title)).filter(k => k.length > 5));
+    const extra = [];
+    for (let i = 0; extra.length < 20 && lists.some(l => l.length > i); i++) for (const l of lists) {
+      const s = l[i]; if (!s || !s.id || ids.has(s.id) || NOT_MUSIC.test(s.title) || (s.duration && (s.duration < 60 || s.duration > 900))) continue;
+      const own = keysOf(s.title); if (own.some(k => [...keys].some(q => sameSong(q, k)))) continue;
+      ids.add(s.id); own.forEach(k => keys.add(k)); extra.push(s); if (extra.length >= 20) break;
+    }
+    for (let at = index + 4, n = 0; n < extra.length && at <= queue.length; at += 4, n++) queue.splice(at, 0, extra[n]);
+    queueChanged();
+  });
 
   $("playFavs").addEventListener("click", () => {
     if (!store.favs.length) return;
@@ -520,7 +576,42 @@
      because half of what anyone remembers is who sang it. */
   let libFind = "";
 
+  /* ---------- your listening --------------------------------- */
+  function drawStats() {
+    const box = $("statsBlock"), s = AartiListening.summary();
+    box.hidden = !s.totalMinutes && !s.topSongs.length;
+    if (box.hidden) return;
+    const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+    box.replaceChildren();
+    const head = el("div", "block-head"); head.append(el("h2", "", "Your listening"));
+    const big = el("div", "stats-big");
+    big.append(el("b", "", String(s.weekMinutes)), el("span", "", (s.weekMinutes === 1 ? "minute" : "minutes") + " this week"));
+    const bars = el("div", "stats-bars"); bars.setAttribute("aria-hidden", "true");
+    const most = Math.max(1, ...s.daily.map(d => d.minutes));
+    const names = ["S", "M", "T", "W", "T", "F", "S"];
+    s.daily.forEach((d, i) => {
+      const col = el("div", "stats-bar" + (i === 6 ? " today" : ""));
+      const fill = el("i"); fill.style.setProperty("--h", (d.minutes / most).toFixed(3));
+      col.append(fill, el("span", "", names[new Date(d.day + "T12:00").getDay()]));
+      bars.append(col);
+    });
+    box.append(head, big, bars, el("p", "stats-total", s.totalMinutes + " min listened · " + s.songCount + (s.songCount === 1 ? " song" : " songs")));
+    if (s.topArtists.length) {
+      box.append(el("h3", "stats-h", "Top artists"));
+      const chips = el("div", "stats-artists");
+      s.topArtists.forEach((a, i) => { const c = el("span", "stats-artist"); c.append(el("b", "", (i + 1) + ". " + a.name), el("small", "", a.minutes + " min")); chips.append(c); });
+      box.append(chips);
+    }
+    if (s.topSongs.length) {
+      box.append(el("h3", "stats-h", "Most played"));
+      const rows = el("div", "rows");
+      s.topSongs.forEach((song, i) => { const r = rowFor(song, s.topSongs, i); r.querySelector(".sub").textContent = song.artist + " · " + song.plays + (song.plays === 1 ? " play" : " plays"); rows.append(r); });
+      box.append(rows);
+    }
+  }
+
   function drawLib() {
+    drawStats();
     accState();
     const all = libView === "favs" ? store.favs : store.recents;
     const q = libFind.trim().toLowerCase();
@@ -1141,6 +1232,7 @@
     // the strip as well, now that there is one.
     document.body.classList.add("with-mini");
     waiting(true);
+    listenReset();
     paint(song);
     loadLyrics(song);
     if($("queueSheet").classList.contains("open"))drawQueue(true);
@@ -1321,7 +1413,7 @@
 
   audio.addEventListener("ended", () => {
     if (sleepAt === -1) { sleepAt = 0; toast("Sleep timer — stopping"); return; }
-    if (store.repeat === "one") { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+    if (store.repeat === "one") { listenReset(); audio.currentTime = 0; audio.play().catch(() => {}); return; }
     next();
   });
 
@@ -1379,7 +1471,32 @@
       audio.volume = 1;
     }
     fadeVolume();
+    listened();
   });
+
+  /* What was listened to, for the stats and the mixes. Seconds only
+     count while the song is actually playing forwards — a seek is not
+     listening — and are written in batches of ten. A play counts once,
+     when this play passes thirty seconds. */
+  const ls = { song: null, at: 0, pending: 0, play: 0, counted: false };
+  function listenFlush(newPlay) {
+    if (ls.song && (ls.pending > 0 || newPlay)) AartiListening.add(ls.song, Math.max(ls.pending, 0.001), newPlay);
+    ls.pending = 0;
+  }
+  function listenReset() { listenFlush(false); ls.song = null; }
+  function listened() {
+    const song = queue[index], t = audio.currentTime;
+    if (!song || song.id !== mediaId) return;
+    if (ls.song !== song) { listenFlush(false); Object.assign(ls, { song, at: t, pending: 0, play: 0, counted: false }); return; }
+    const d = t - ls.at; ls.at = t;
+    if (audio.paused || !(d > 0) || d > 2) return;
+    ls.pending += d; ls.play += d;
+    if (!ls.counted && ls.play >= AartiListening.PLAY_AFTER) { ls.counted = true; listenFlush(true); return; }
+    if (ls.pending >= 10) listenFlush(false);
+  }
+  audio.addEventListener("pause", () => listenFlush(false));
+  addEventListener("pagehide", () => listenFlush(false));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) listenFlush(false); });
 
   /* Songs ease in and out instead of starting and stopping with a
      click, and a sleep timer lowers the music over its last half
