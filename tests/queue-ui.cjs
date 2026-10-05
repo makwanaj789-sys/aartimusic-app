@@ -30,7 +30,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   if(url.pathname==='/api/search'){
    if(url.searchParams.get('q')==='seed')return route.fulfill({json:{results:[songs[0]]},headers});
    if(failRadio)return route.fulfill({status:503,json:{error:'offline'},headers});
-   const results=Array.from({length:24},()=>{const n=++serial;return {id:String(n).padStart(11,'0'),title:'Melody '+String(n).padStart(6,'0'),artist:'Radio artist',duration:180,thumb:songs[0].thumb};});
+   const results=Array.from({length:24},()=>{const n=++serial;return {id:String(n).padStart(11,'0'),title:'Melody of '+String(n).padStart(6,'0'),artist:'Radio artist',duration:180,thumb:songs[0].thumb};});
    return route.fulfill({json:{results},headers});
   }
   if(url.pathname.startsWith('/api/stream/')){

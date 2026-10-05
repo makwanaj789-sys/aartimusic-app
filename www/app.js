@@ -993,8 +993,9 @@
   const keysOf = (title) => {
     const full = songKey(title);
     const halves = String(title || '').split('|')[0].split(/\s+-\s+/).map(songKey);
-    const head = full.split(' ').slice(0, 2).join(' ');
-    return [full, ...halves, head.includes(' ') ? head : ''].filter(Boolean);
+    // Two shared opening words (e.g. Gujarati Garba) do not make two songs identical.
+    // Only compare complete normalized titles and the title before an artist suffix.
+    return [...new Set([full,halves[0]])].filter(Boolean);
   };
   function radioQueries(song) {
     const parts = String(song.title || '').split('|').map(p => p.replace(/\(.*?\)|\[.*?\]/g, ' ').trim());
