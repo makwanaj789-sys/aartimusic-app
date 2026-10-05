@@ -62,8 +62,15 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert(previous>=81);assert(await page.evaluate(()=>window.originalRow===document.querySelector('#queueRows .q-row')));
   const titles=await page.locator('#queueRows .q-row .title').allTextContents();assert.equal(new Set(titles).size,titles.length);
   await page.waitForFunction(()=>!document.querySelector('.queue-status').disabled);
-  failRadio=true;await page.locator('#queueRows').evaluate(b=>{b.scrollTop=b.scrollHeight;b.dispatchEvent(new Event('scroll'));});
-  await page.waitForFunction(()=>document.querySelector('.queue-status').textContent.includes('Could not load'));
+  // Cached results may still supply a few valid songs while the server is down.
+  failRadio=true;
+  for(let attempt=0;attempt<6;attempt++){
+   await page.locator('#queueRows').evaluate(b=>{b.scrollTop=b.scrollHeight;b.dispatchEvent(new Event('scroll'));});
+   await page.waitForFunction(()=>!document.querySelector('.queue-status').disabled);
+   if((await page.locator('.queue-status').textContent()).includes('Could not load'))break;
+  }
+  assert.match(await page.locator('.queue-status').textContent(),/Could not load/);
+  previous=await page.locator('#queueRows .q-row').count();
   failRadio=false;await page.locator('.queue-status').click();await page.waitForFunction(n=>document.querySelectorAll('#queueRows .q-row').length>n,previous);
   await page.locator('#queueRows').evaluate(b=>{b.scrollTop=0;b.dispatchEvent(new Event('scroll'));});
   // The sheet stays at its actual dragged position on release and can be grabbed mid-spring.
@@ -86,5 +93,5 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   const list=await page.locator('#queueRows').boundingBox();await swipe(160,list.y+65,300);await page.waitForFunction(()=>!document.getElementById('queueSheet').classList.contains('open'));
   await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#queueOpen').click();assert.equal(await page.locator('#queueSheet').getAttribute('data-progress'),'1.0000');await page.locator('#queueClose').click();assert.equal(await page.locator('#queueSheet').getAttribute('data-progress'),'0.0000');
   assert.deepEqual(errors,[]);console.log('PASS: 80+ continuous recommendations, stable rows, retry, touch scroll, pull-dismiss, interruptible spring, no seek, reduced motion');
- }finally{await browser.close();server.close();}
+ }catch(error){console.error('Queue diagnostics',await page.evaluate(()=>({count:document.querySelectorAll('#queueRows .q-row').length,status:document.querySelector('.queue-status')?.textContent,progress:document.getElementById('queueSheet')?.dataset.progress,scroll:document.getElementById('queueRows')?.scrollTop})));await page.screenshot({path:'test-results/queue-failure.png'});throw error;}finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exit(1)});
