@@ -17,7 +17,7 @@ window.AartiQueueMotion=function({el,rows,onOpen,onClosed}){
   const values=Array.from({length:51},(_,i)=>i===50?target:curve(duration*i/50/1000));
   animation=panel.animate(values.map((value,i)=>({offset:i/50,transform:`translate3d(0,${(1-value)*height}px,0)`})),{duration,easing:'linear',fill:'both'});
   shade=veil.animate(values.map((value,i)=>({offset:i/50,opacity:value})),{duration,easing:'linear',fill:'both'});
-  shade.startTime=animation.startTime;
+  animation.startTime=document.timeline.currentTime;shade.startTime=animation.startTime;
   animation.onfinish=()=>{const a=animation,b=shade;animation=shade=null;settle();a.cancel();b.cancel();};
  }
  function settle(){p=target;v=0;frame=0;paint();if(!p&&visible){visible=false;el.classList.remove('open');el.setAttribute('aria-hidden','true');el.inert=true;onClosed();}}
