@@ -16,7 +16,7 @@
   return {format:'aartimusic-backup',version:1,createdAt:typeof v.createdAt==='string'?v.createdAt:'',library:{
    favs:unique(array(l.favs,5000).map(song)),recents:unique(array(l.recents||[],100).map(song)),history:array(l.history||[],100).map(x=>str(x,300,true)),
    lists:array(l.lists||[],100).map(x=>({id:str(x.id,160,true),title:str(x.title||'Playlist',500),thumb:image(x.thumb),by:str(x.by||'',300)})),
-   theme:themes.includes(l.theme)?l.theme:'amber',shuffle:!!l.shuffle,repeat:['off','one','all'].includes(l.repeat)?l.repeat:'off'
+   speed:[.75,1,1.25,1.5].includes(l.speed)?l.speed:1,theme:themes.includes(l.theme)?l.theme:'amber',shuffle:!!l.shuffle,repeat:['off','one','all'].includes(l.repeat)?l.repeat:'off'
   },profile:p,playlists:array(v.playlists||[],50).map(playlist),icon:icons.includes(v.icon)?v.icon:'classic'};
  }
  function parse(text){if(typeof text!=='string'||text.length>8*1024*1024)throw new Error('Choose an Aarti Music backup under 8 MB.');let v;try{v=JSON.parse(text);}catch(_){fail();}return validate(v);}

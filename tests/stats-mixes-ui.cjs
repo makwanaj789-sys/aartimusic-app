@@ -58,11 +58,12 @@ let radio=100;const searches=[];
   await page.waitForFunction(()=>document.getElementById('audio').readyState>=3);
   await page.evaluate(async()=>{const a=document.getElementById('audio');a.pause();a.currentTime=0;await a.play();a.pause();
     // drive time forward a second at a time, as playback would
-    Object.defineProperty(a,'paused',{configurable:true,get:()=>false});
+    let position=0;Object.defineProperty(a,'currentTime',{configurable:true,get:()=>position,set:v=>position=v});
+    Object.defineProperty(a,'seeking',{configurable:true,get:()=>false});Object.defineProperty(a,'paused',{configurable:true,get:()=>false});
     for(let t=1;t<=40;t++){a.currentTime=t;a.dispatchEvent(new Event('timeupdate'));}
     // a jump is not listening
     a.currentTime=55;a.dispatchEvent(new Event('timeupdate'));
-    delete a.paused;a.dispatchEvent(new Event('pause'));});
+    delete a.currentTime;delete a.seeking;delete a.paused;a.dispatchEvent(new Event('pause'));});
   await page.locator('[data-tab="Lib"]').click();
   await page.waitForFunction(()=>!document.getElementById('statsBlock').hidden);
   const stats=await page.evaluate(()=>({week:document.querySelector('.stats-big b').textContent,

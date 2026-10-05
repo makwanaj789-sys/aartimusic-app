@@ -12,7 +12,7 @@
 (function (root) {
   'use strict';
   const API = 'https://lrclib.net/api';
-  const CACHE = 'aarti.lyrics.v1';
+  const CACHE = 'aarti.lyrics.v2';
   const NOISE = /\b(official|lyrical|lyrics?|full|audio|video|song|hd|4k|8d|slowed|reverb|lofi|lo-fi|remix|mix|cover|uncut|status|ringtone|version|reprise|unplugged|visualiser|visualizer|music|new|latest|hit|hits|bass boosted|jukebox)\b/gi;
 
   const strip = (s) => String(s || '')
@@ -58,14 +58,19 @@
   function pick(results, song) {
     const title = String(song.title || '').split('|')[0];
     let best = null, bestScore = -Infinity;
-    for (const r of results || []) {
+    for (const r of Array.isArray(results) ? results : []) {
       if (!r || r.instrumental || !(r.syncedLyrics || r.plainLyrics)) continue;
-      const words = Math.max(overlap(r.trackName, title), overlap(r.trackName + ' ' + r.artistName, title + ' ' + (song.artist || '')));
-      if (words < 0.5) continue;
+      const titles = [title, ...title.split(/\s+[-–—:]\s+/)];
+      const words = Math.max(...titles.map(t => {
+        const a = norm(t), b = norm(r.trackName);
+        return a === b ? 1 : overlap(a,b) * Math.min(a.split(' ').length,b.split(' ').length) / Math.max(a.split(' ').length,b.split(' ').length);
+      }));
+      // An artist name in common must never identify a different song.
+      if (words < 0.65) continue;
       let score = words * 40 + (r.syncedLyrics ? 15 : 0);
       if (song.duration && r.duration) {
         const off = Math.abs(song.duration - r.duration);
-        if (off > 20) continue;                      // a different recording
+        if (off > 20 && !/slowed|reverb|sped[ -]?up|nightcore/i.test(song.title)) continue;                      // a different recording
         score += Math.max(0, 30 - off * 2);
       }
       if (score > bestScore) { bestScore = score; best = r; }
@@ -79,11 +84,12 @@
      where the song does. */
   function parse(lrc) {
     const lines = [];
+    const offset = Number(/\[offset:([+-]?\d+)\]/i.exec(String(lrc || ''))?.[1] || 0) / 1000;
     String(lrc || '').split(/\r?\n/).forEach((raw) => {
       const stamps = [...raw.matchAll(/\[(\d{1,3}):(\d{1,2}(?:[.:]\d{1,3})?)\]/g)];
       if (!stamps.length) return;
-      const text = raw.replace(/\[[^\]]*\]/g, '').trim();
-      stamps.forEach(m => lines.push({ t: (+m[1]) * 60 + parseFloat(m[2].replace(':', '.')), text }));
+      const text = raw.replace(/\[[^\]]*\]/g, '').replace(/<\d+:\d+(?:\.\d+)?>/g, '').trim();
+      stamps.forEach(m => lines.push({ t: Math.max(0, (+m[1]) * 60 + parseFloat(m[2].replace(':', '.')) - offset), text }));
     });
     lines.sort((a, b) => a.t - b.t);
     // Collapse runs of blanks into one.
@@ -112,30 +118,43 @@
      { none: true }. A "none" is remembered for a day, so a song
      without lyrics is not searched for on every play; a network
      failure is not remembered at all. */
-  function find(song, fetcher) {
+  function find(song, fetcher, options = {}) {
     if (!song || !song.id) return Promise.resolve({ none: true });
     const hit = readCache()[song.id];
-    if (hit && (!hit.none || Date.now() - hit.at < 864e5)) return Promise.resolve(hit);
+    if (hit && Date.now() - hit.at < (hit.none ? 3600e3 : 30 * 864e5)) return Promise.resolve(hit);
     if (inflight.has(song.id)) return inflight.get(song.id);
-    const get = fetcher || ((url) => fetch(url, { headers: { Accept: 'application/json' } }));
+    const get = fetcher || ((url, init) => fetch(url, init));
+    async function request(url) {
+      const controller = new AbortController(); let timer;
+      try {
+        return await Promise.race([(async () => {
+          const r = await get(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+          if (!r.ok) throw new Error('Lyrics HTTP ' + r.status);
+          const data = await r.json();
+          if (!Array.isArray(data)) throw new Error('Invalid lyrics response');
+          return data;
+        })(), new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Lyrics request timed out')); }, options.timeout || 6000); })]);
+      } finally { clearTimeout(timer); }
+    }
     const job = (async () => {
       let failed = 0;
       for (const q of queries(song)) {
         let list;
         try {
-          const r = await get(API + '/search?q=' + encodeURIComponent(q));
-          if (!r.ok) { failed++; continue; }
-          list = await r.json();
+          list = await request(API + '/search?q=' + encodeURIComponent(q));
         } catch (_) { failed++; continue; }
         const best = pick(list, song);
         if (best) {
-          const value = { synced: best.syncedLyrics ? parse(best.syncedLyrics) : [], plain: best.plainLyrics || '',
-                          source: best.trackName + ' · ' + best.artistName };
+          const lines = best.syncedLyrics ? parse(best.syncedLyrics) : [];
+          const mismatch = song.duration && best.duration && Math.abs(song.duration - best.duration) > 20;
+          const value = { synced: mismatch ? [] : lines, plain: best.plainLyrics || lines.map(l => l.text).join('\n'),
+                          timingUnavailable: !!mismatch, source: best.trackName + ' · ' + best.artistName };
+          // A slowed/remixed upload can use the words, but the original timestamps are not trustworthy.
           writeCache(song.id, value);
           return value;
         }
       }
-      if (failed && failed === queries(song).length) throw new Error('Lyrics service unreachable');
+      if (failed) throw new Error('Lyrics service unreachable');
       writeCache(song.id, { none: true });
       return { none: true };
     })().finally(() => inflight.delete(song.id));

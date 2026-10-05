@@ -72,6 +72,11 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert(Math.abs(await page.evaluate(()=>document.getElementById('audio').currentTime)-3.4)<0.6,'tap seeks to the line');
   await page.evaluate(()=>document.getElementById('audio').pause());
 
+  // Timing adjustment persists per track and never starts playback on its own.
+  await page.locator('#lyLater').click();assert.equal(await page.locator('#lyOffset').textContent(),'Timing +0.5s');
+  assert.equal(await page.evaluate(()=>document.getElementById('audio').paused),true);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.lyrics.offsets')).jeena000001),.5);
+  await page.locator('#lyOffset').click();assert.equal(await page.locator('#lyOffset').textContent(),'Timing 0.0s');
   // 3. Back closes the lyrics and leaves the player open.
   await page.goBack();await page.waitForFunction(()=>!document.getElementById('lyrics').classList.contains('open'));
   assert.equal(await page.evaluate(()=>document.getElementById('now').dataset.progress),'1.0000');

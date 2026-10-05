@@ -59,3 +59,21 @@ test('find searches, caches hits, remembers misses, and reports outages', async 
   const later = await L.find({ id: 'down', title: 'Some Song', artist: 'Y' }, async () => ok([{ trackName: 'Some Song', artistName: 'Y', plainLyrics: 'la la' }]));
   assert.equal(later.plain, 'la la');
 });
+
+test('matching does not mistake an artist overlap for the track', () => {
+ assert.equal(L.pick([{trackName:'Another World',artistName:'Arijit Singh',duration:230,plainLyrics:'wrong'}],{title:'Kesariya',artist:'Arijit Singh',duration:230}),null);
+ assert.equal(L.pick({error:'invalid'}, {title:'Kesariya'}),null);
+});
+test('LRC offset and inline timing tags are normalized', () => {
+ assert.deepEqual(L.parse('[offset:500]\n[00:02.00]<00:02.00>Hello <00:02.50>world'),[{t:1.5,text:'Hello world'}]);
+});
+test('slowed upload keeps text but never falsely syncs original timestamps', async () => {
+ const data=await L.find({id:'slow-check',title:'Jeena Jeena Slowed + Reverb',duration:290},async()=>({ok:true,json:async()=>[{trackName:'Jeena Jeena',artistName:'Atif Aslam',duration:230,syncedLyrics:'[00:10]Hello'}]}));
+ assert.deepEqual(data.synced,[]);assert.equal(data.plain,'Hello');assert.equal(data.timingUnavailable,true);
+});
+test('partial outage is retriable and stalled requests time out', async () => {
+ const song={id:'partial-down',title:'Kesariya',artist:'Arijit Singh'};let count=0;
+ await assert.rejects(L.find(song,async()=>{if(++count===1)throw Error('offline');return {ok:true,json:async()=>[]};}));
+ await assert.rejects(L.find({id:'hang',title:'Kesariya'},()=>new Promise(()=>{}),{timeout:15}),/unreachable/);
+ const found=await L.find(song,async()=>({ok:true,json:async()=>[{trackName:'Kesariya',artistName:'Arijit Singh',plainLyrics:'test'}]}));assert.equal(found.plain,'test');
+});

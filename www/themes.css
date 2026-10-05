@@ -248,3 +248,17 @@ body.locked .drawer-swipe-edge{pointer-events:none}
 .fx-row button[aria-pressed="true"]{color:var(--on-accent,#100b17);background:var(--flame)}
 .fx-row button:disabled{opacity:.4}
 .fx-note{margin:8px 2px 0;font-size:12px;color:var(--mist);line-height:1.5}
+
+/* Keep gesture surfaces compositor-driven and preserve readable lyric focus. */
+#queueSheet{user-select:none;-webkit-user-select:none}
+.row.swiping > :not(.swipe-hint){transition:none!important}
+.ly-body{position:relative;touch-action:pan-y;scroll-behavior:auto}
+.ly-line{color:var(--ink);transition:opacity .25s ease,transform .35s cubic-bezier(.2,.8,.2,1)}
+.ly-line.on{color:var(--ink);transform:translate3d(5px,0,0) scale(1.035)}
+.ly-line.past{opacity:.3}
+.ly-timing{display:flex;justify-content:center;gap:8px;padding:8px 16px;flex:none}
+.ly-timing[hidden]{display:none}
+.ly-timing button{min-height:40px;padding:8px 12px;border-radius:18px;background:rgba(var(--q-glow),.13);color:var(--ink);font-size:12px}
+.ly-timing button:active{transform:scale(.96)}
+.ly-follow[hidden]{display:none}
+@media(prefers-reduced-motion:reduce){.ly-line,.lyrics,.lyrics.open{transition:none}.ly-line.on{transform:none}}
