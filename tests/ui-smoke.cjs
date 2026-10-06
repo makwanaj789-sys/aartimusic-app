@@ -16,7 +16,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
  fs.mkdirSync('test-results',{recursive:true});
  const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
  const errors=[];page.on('pageerror',e=>{errors.push(e.message);console.error('Browser error:',e.stack);});
- let playlistStatus=200, playlistSearches=0;
+ let playlistStatus=200, playlistSearches=0; const streamUrls=[];
  await page.route('**/*',async route=>{
   const url=new URL(route.request().url());
   if(url.hostname==='127.0.0.1')return route.continue();
@@ -29,6 +29,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   if(url.pathname==='/api/playlist')return route.fulfill({json:{id:'PL1234567890abcdef',title:'Late night Hindi',results:songs},headers});
   if(url.pathname==='/api/search')return route.fulfill({json:{results:songs},headers});
   if(url.pathname.startsWith('/api/stream/')){
+    streamUrls.push(url);
     const bytes=wav(),range=route.request().headers()['range'];
     const m=range && /^bytes=(\d+)-(\d*)$/.exec(range);
     if(m){const start=Number(m[1]),end=m[2]?Math.min(Number(m[2]),bytes.length-1):bytes.length-1;return route.fulfill({status:206,body:bytes.subarray(start,end+1),contentType:'audio/wav',headers:{...headers,'accept-ranges':'bytes','content-range':`bytes ${start}-${end}/${bytes.length}`}});}
@@ -233,6 +234,14 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.waitForFunction(()=>scrollY>30);
   assert.equal(await page.locator('.settings-drawer').evaluate(d=>d.open),false);
   await touch.detach();
+  // Outside Telegram the stream request says who is listening, so the
+  // bot's storage channel can credit the download.
+  assert(streamUrls.length>0,'A song was streamed');
+  const who=streamUrls[streamUrls.length-1].searchParams;
+  const profileName=await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.profile.v1')).name);
+  assert.equal(who.get('name'),profileName,'The current profile name rides with the stream request');
+  assert.match(who.get('device')||'',/^[0-9a-f]{12}$/,'A per-install id rides with the stream request');
+  assert.equal(who.get('initData'),null);
   assert.deepEqual(errors,[]);
 
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');

@@ -1061,6 +1061,58 @@
 
   /* ---------- playing --------------------------------------- */
 
+  /* ---------- who is listening ------------------------------
+     The bot's storage channel credits every first download with the
+     person who asked for it. Inside Telegram the signed initData says
+     who that is. The APK has no Telegram around it, so it says what it
+     knows instead: the Telegram link token if the phone is connected,
+     the name typed into the profile screen, a random id made once for
+     this install (two people both called Rahul are still two phones),
+     and the phone's own name and model. The server labels the typed
+     name as unverified; only the link token is proof.          */
+
+  const INSTALL_KEY = "aarti.install.v1";
+  function installId() {
+    try {
+      let id = localStorage.getItem(INSTALL_KEY);
+      if (!id) {
+        const raw = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : Math.random().toString(16).slice(2) + Date.now().toString(16);
+        id = raw.replace(/[^a-f0-9]/gi, "").slice(0, 12);
+        localStorage.setItem(INSTALL_KEY, id);
+      }
+      return id;
+    } catch (e) { return ""; }
+  }
+
+  // "Rahul's Galaxy (samsung SM-A515F)": the name set in the phone's
+  // settings when Android shares it, then maker and model. Filled in
+  // once at start-up; a song tapped before then just goes without it.
+  let phoneLabel = "";
+  (async () => {
+    const device = nativePlugin("Device");
+    if (!device) return;
+    try {
+      const i = await device.getInfo();
+      const model = [i.manufacturer, i.model].filter(Boolean).join(" ").trim();
+      const name = (i.name || "").trim();
+      phoneLabel = (name && name.toLowerCase() !== (i.model || "").toLowerCase()
+        ? name + (model ? " (" + model + ")" : "") : model).slice(0, 60);
+    } catch (e) {}
+  })();
+
+  function whoParams() {
+    if (INIT) return [];          // Telegram already signed who this is
+    const out = [];
+    if (store.link && store.link.token) out.push("token=" + encodeURIComponent(store.link.token));
+    const p = window.AartiProfile && window.AartiProfile.get();
+    if (p && p.name) out.push("name=" + encodeURIComponent(p.name.slice(0, 40)));
+    const id = installId();
+    if (id) out.push("device=" + id);
+    if (phoneLabel) out.push("phone=" + encodeURIComponent(phoneLabel));
+    return out;
+  }
+
   function streamUrl(id) {
     let url = SERVER + "/api/stream/" + encodeURIComponent(id);
     const auth = [];
@@ -1068,6 +1120,7 @@
     // request itself — so the proof of identity rides in the address.
     if (INIT) auth.push("initData=" + encodeURIComponent(INIT));
     if (DEV_KEY) auth.push("devKey=" + encodeURIComponent(DEV_KEY));
+    auth.push(...whoParams());
     return auth.length ? url + "?" + auth.join("&") : url;
   }
 
