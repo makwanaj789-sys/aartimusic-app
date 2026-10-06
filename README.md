@@ -38,6 +38,22 @@ The icon and the startup screen are drawn from `assets/` — the
 workflow turns `icon.png`, the adaptive pair and `splash.png` into
 every size Android wants.
 
+## Who is listening
+
+The bot's storage channel credits the first download of every song to
+whoever asked for it. Inside Telegram the signed initData says who that
+is. The APK has no Telegram around it, so each stream request also
+carries what the app knows:
+
+  - `token` — the Telegram link token, if the phone tapped Connect
+    (the only one that proves who it is),
+  - `name` — the name typed into the profile screen (shown as
+    "(app name)": anyone can type anything),
+  - `device` — a random id made once per install, so two people with
+    the same name are still two phones,
+  - `phone` — the phone's name and model from `@capacitor/device`,
+    e.g. "Rahul's Galaxy (samsung SM-A515F)".
+
 ## The bits that are Android's, not the web's
 
 `android/` is generated on each run rather than kept here, so anything
