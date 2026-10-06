@@ -1130,6 +1130,17 @@
     const song = list[at];
     if (!song) return;
     if (song.id === mediaId && !audio.ended && !audio.error) {
+      // Already playing, but picked from a different list (a mix or a
+      // playlist whose first song happens to be on): keep the song
+      // going and make that list what plays next. Without this, tapping
+      // the Daily Mix on a day it starts with the current song left the
+      // old radio queue in place and the mix never played.
+      if (list !== queue && list !== results) {
+        radio = !(fromPlaylist || list === plSongs); radioGen++;
+        queue = list.slice(); index = at;
+        if (radio && index >= queue.length - 10) extendRadio();
+        if ($("queueSheet").classList.contains("open")) drawQueue(true);
+      }
       if (plist.classList.contains('open')) closePl();
       if ($('queueSheet').classList.contains('open')) sheet($('queueSheet'),false);
       openNow(); return;
