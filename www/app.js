@@ -1300,6 +1300,9 @@
     if (i < 0 || i >= queue.length) return;
 
     await ready;
+    // Started offline, or server.json was unreachable then: look again
+    // rather than asking the app's own origin for the song.
+    if (!SERVER) await findServer(true);
     const mine = ++token;                 // anything older is now stale
     const song = queue[i];
     mediaId = song.id; resumePosition = null; restoredOnly = false;
@@ -1500,12 +1503,50 @@
     next();
   });
 
-  audio.addEventListener("error", () => {
+  /* A song that will not load is either the song or the server. Ask
+     the server directly, so the message says which. If the server has
+     only moved — the free tunnel takes a new address every time it
+     restarts — pick up the new address from server.json and try the
+     same song again. A dead server or a refused key stops here instead
+     of skipping through the whole queue one failure at a time. */
+  let failStreak = 0;
+  async function diagnose(id) {
+    if (!SERVER) return "unreachable";
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const r = await fetch(streamUrl(id), { headers: { Range: "bytes=0-1" }, cache: "no-store", signal: ctl.signal });
+      try { if (r.body) r.body.cancel(); } catch (_) {}
+      if (r.ok) return "ok";
+      return r.status === 401 ? "locked" : r.status === 404 ? "missing" : "server";
+    } catch (_) { return "unreachable"; }
+    finally { clearTimeout(timer); }
+  }
+  const WHY = {
+    unreachable: "Can't reach the music server",
+    locked: "The server refused this app (key mismatch)",
+    missing: "This song isn't available",
+    server: "The server couldn't load this song",
+    ok: "Couldn't play that one",
+  };
+  audio.addEventListener("playing", () => { failStreak = 0; });
+  audio.addEventListener("error", async () => {
     waiting(false);
-    toast("Couldn't play that one");
+    const failedToken = token, song = queue[index];
+    if (restoredOnly || !song) { toast(WHY.ok); return; }
+    const why = await diagnose(song.id);
+    if (token !== failedToken) return;
+    if (why === "unreachable") {
+      const before = SERVER;
+      await findServer(true);
+      if (token !== failedToken) return;
+      if (SERVER && SERVER !== before) { toast("Server moved — reconnecting"); playAt(index); return; }
+    }
+    failStreak++;
+    toast(WHY[why]);
+    // The server itself is the problem: skipping would only fail again.
+    if (why === "unreachable" || why === "locked" || failStreak >= 3) return;
     // One dead track shouldn't end the session.
-    const failedToken = token;
-    if (!restoredOnly) setTimeout(() => { if (token === failedToken) next(); }, 800);
+    setTimeout(() => { if (token === failedToken) next(); }, 800);
   });
 
   function setProgress(p) {
