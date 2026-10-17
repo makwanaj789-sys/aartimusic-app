@@ -58,6 +58,7 @@ jobs:
       - name: Player and Home interaction tests
         run: |
           node tests/ui-smoke.cjs
+          node tests/stream-recovery-ui.cjs
           node tests/capsule-ui.cjs
           node tests/queue-ui.cjs
           node tests/lyrics-ui.cjs
