@@ -55,7 +55,7 @@
  }
  async function install(){const drawer=document.querySelector('.settings-drawer');if(!drawer)return;
   const section=el('section','capsule-settings');section.innerHTML='<h3>Glass floating player</h3><p class="pref-copy">Your music, framed in glass. Choose a photo or a silent video.</p><label class="capsule-toggle"><span>Show when minimized</span><input type="checkbox" aria-label="Show floating player when minimized"></label><button type="button">Allow display over other apps</button><p class="pref-copy" role="status" aria-live="polite"></p>';
-  toggle=section.querySelector('input');grant=section.querySelector('button');status=section.querySelector('[role=status]');section.append(btn('Customize glass player',edit));drawer.append(section);
+  toggle=section.querySelector('input');grant=section.querySelector('button');status=section.querySelector('[role=status]');section.append(btn('Customize glass player',edit));if(window.AartiSettings)AartiSettings.addPage('Floating player',[section]);else drawer.append(section);
   toggle.onchange=configure;grant.onclick=()=>requestPermission().catch(report);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)pausePreview();else refresh();});window.addEventListener('focus',refresh);
   new MutationObserver(()=>{if(drawer.open)refresh();}).observe(drawer,{attributes:true,attributeFilter:['open']});

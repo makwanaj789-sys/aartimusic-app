@@ -37,3 +37,8 @@ The workflow reuses the replacement key while its cache exists. GitHub caches ar
 Playlist panels now slide vertically instead of scaling the whole screen into the Explore button. Profile uploads retain their aspect ratio and fit inside the badge; previously cropped stored photos need to be selected again. Settings contains a separate Choose theme screen, including a persistent White palette. JSON export/import controls were removed at the owner's request; existing local playlists and saved data remain intact. The supplied anime clip is bundled as the new default floating media, with a reduced-motion poster and an Aarti anime preset for existing installations. Existing custom floating media choices are preserved.
 
 Validation: 23 contract tests; UI smoke coverage for White persistence, full-width photo uploads, absent JSON controls, non-scaling playlist transitions; capsule editor coverage for the bundled anime preset. Physical-device rendering still needs a Realme check.
+
+
+## Button-origin transition and settings categories
+Playlist opening now reveals a full-size panel through an animated rounded clip starting at the actual tapped button. Closing reverses the clip to the same button. Text fades at full size rather than being scaled into a black rectangle. Offscreen/missing origins and reduced motion retain a simple fallback. The white playlist surface now stays light.
+Settings now offers spaced full-width entries for profile, themes, app icon and (on Android) floating player. Each category opens its own page with Back; contact links remain on the main settings page.

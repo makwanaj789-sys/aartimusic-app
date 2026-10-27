@@ -143,3 +143,19 @@ button { touch-action:manipulation; }
 :root[data-theme="white"] .discovery-chips .chip.active::before { background:var(--flame); }
 :root[data-theme="white"] .discovery-ambience { opacity:.14 !important; }
 :root[data-theme="white"] .mini * { text-shadow:none; }
+
+/* Separate settings pages with a stable, spaced category menu. */
+.settings-menu { display:grid; gap:12px; margin:26px 0 30px; }
+.settings-entry { display:flex; align-items:center; justify-content:space-between; gap:16px; width:100%; min-height:60px; padding:18px; border:1px solid var(--line); border-radius:17px; background:var(--bg-2); color:var(--ink); font:inherit; font-size:14px; text-align:left; }
+.settings-entry::after { content:'›'; font-size:24px; line-height:1; color:var(--flame); }
+.settings-entry:active { background:var(--bg-3); }
+.settings-page { padding-top:16px; }
+.settings-page > h2 { font-size:27px; margin:20px 0 24px; }
+.settings-page .icon-choices { margin-top:14px; }
+.settings-page .capsule-settings { border:0; margin:0; padding:0; }
+.settings-page .capsule-settings > h3 { display:none; }
+.settings-page .pref-button { width:100%; margin-top:14px; }
+#plist.button-morph { transform:none; transition:none; will-change:clip-path; }
+#plist.button-morph #plBg { visibility:hidden; }
+#plist #plBg { background-image:none !important; filter:none; background:var(--bg); }
+#plist #plBg::after { background:transparent; }

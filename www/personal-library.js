@@ -45,8 +45,7 @@
   }
   $('createPlaylist').onclick=()=>create();
   const settings=document.querySelector('.settings-drawer');
-  settings.append(el('h3','','App icon'));
-  const icons=el('div','icon-choices');settings.append(icons);
+  const icons=el('div','icon-choices');
   let iconBusy=false;
   function paintIcon(key){const src=key==='classic'?'brand-icon.png':'icons/'+key+'.svg';document.querySelectorAll('.brand-icon').forEach(img=>img.src=src);icons.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.icon===key)));}
   for(const [key,name] of [['classic','Classic'],['teal','Midnight'],['violet','Orbit'],['indigo','Waves'],['neon','Pulse'],['ruby','Note']]){
@@ -54,7 +53,7 @@
   }
   paintIcon(B.icons.includes(localStorage.getItem(ICON))?localStorage.getItem(ICON):'classic');
   const plugin=o.native();if(plugin)plugin.getIcon().then(r=>{if(B.icons.includes(r.icon)){localStorage.setItem(ICON,r.icon);paintIcon(r.icon);}}).catch(()=>{});
-  settings.append(el('p','personal-status','Launcher icons may take a moment to refresh. Your theme and icon can be chosen independently.'));
+  AartiSettings.addPage('App icon',[icons,el('p','personal-status','Launcher icons may take a moment to refresh. Your theme and icon can be chosen independently.')]);
   render();return {addSong};
  };
 })(window);

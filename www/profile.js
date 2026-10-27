@@ -55,7 +55,7 @@
  function drawerTo(p){
   if(drawerAnimation&&settings.open){const matrix=new DOMMatrixReadOnly(getComputedStyle(settings).transform);drawerProgress=Math.max(0,Math.min(1,1+matrix.m41/settings.offsetWidth));}
   drawerAnimation?.cancel();drawerAnimation=null;
-  if(p&&!settings.open){previousFocus=document.activeElement;settings.showModal();drawerFrame(0);}
+  if(p&&!settings.open){previousFocus=document.activeElement;settingsBack();settings.showModal();drawerFrame(0);}
   if(!settings.open)return;
   const start=drawerProgress;drawerFrame(p);
   const finish=()=>{if(!p){settings.close();previousFocus?.focus();}};
@@ -86,29 +86,41 @@
   document.addEventListener('pointermove',e=>move(e.clientX,e.clientY,e.timeStamp,e),true);
   document.addEventListener('pointerup',()=>end(),true);document.addEventListener('pointercancel',()=>end(true),true);
   document.addEventListener('click',e=>{if(suppressClick&&e.detail){suppressClick=false;e.preventDefault();e.stopImmediatePropagation();}},true);
-  settings.addEventListener('cancel',e=>{e.preventDefault();drawerTo(0);});
+  settings.addEventListener('cancel',e=>{e.preventDefault();if(activePage)settingsBack();else drawerTo(0);});
  }
 
  function updateBadge(){avatar(badge,profile);const name=document.getElementById('settingsName');if(name)name.textContent=profile?.name||'Your profile';}
+ let settingsHome,settingsMenu,activePage=null;
+ function settingsBack(){
+  for(const page of settings.querySelectorAll('.settings-page'))page.hidden=true;
+  settingsHome.hidden=false;activePage=null;settings.scrollTop=0;
+ }
+ function addSettingsPage(label,nodes){
+  const page=el('section','settings-page');page.hidden=true;
+  const back=button('Back to settings',()=>{settingsBack();entry.focus();},'pref-secondary');
+  page.append(back,el('h2','',label),...nodes);settings.append(page);
+  const entry=button(label,()=>{settingsBack();settingsHome.hidden=true;page.hidden=false;activePage=page;settings.scrollTop=0;back.focus();},'settings-entry');
+  settingsMenu.append(entry);return page;
+ }
  function start(){
   dialog=el('dialog','profile-dialog');dialog.setAttribute('aria-label','Music profile setup');dialog.addEventListener('cancel',e=>{if(!profile)e.preventDefault();});document.body.append(dialog);
   badge=button('',()=>{updateBadge();showModal(settings);},'profile-badge');badge.id='profileMenu';badge.setAttribute('aria-label','Open settings');document.body.append(badge);
-  settings=el('dialog','settings-drawer');settings.setAttribute('aria-label','Settings');settings.innerHTML='<div class="settings-heading"><h2>Settings</h2></div><p id="settingsName"></p><p class="pref-copy">Make Aarti Music feel like you.</p>';
+  settings=el('dialog','settings-drawer');settings.setAttribute('aria-label','Settings');settings.innerHTML='<div class="settings-heading"><h2>Settings</h2></div>';
+  settingsHome=el('div','settings-home');settingsHome.innerHTML='<p id="settingsName"></p><p class="pref-copy">Make Aarti Music feel like you.</p>';settings.append(settingsHome);
+  settingsMenu=el('div','settings-menu');settingsHome.append(settingsMenu);root.AartiSettings={addPage:addSettingsPage,back:settingsBack};
   settings.querySelector('.settings-heading').append(button('Close',()=>closeModal(settings),'pref-secondary'));
-  settings.append(button('Edit profile & music preferences',()=>{closeModal(settings);edit();}));
+  settingsMenu.append(button('Edit profile & music preferences',()=>{closeModal(settings);edit();},'settings-entry'));
   const theme=document.querySelector('.themes');if(theme){
    for(const [id,name,color] of [["teal","Midnight","#77ccdb"],["violet","Violet","#d1a0ff"],["indigo","Indigo","#a6a2ff"],["neon","Neon","#ff70c6"],["ruby","Ruby","#ff9aaa"]]){if(theme.querySelector('[data-theme="'+id+'"]'))continue;const b=el('button','th');b.type='button';b.dataset.theme=id;b.setAttribute('aria-pressed',String(document.documentElement.dataset.theme===id));b.style.setProperty('--swatch',color);b.append(el('i'),el('span','',name));theme.append(b);}
    const white=button('White',()=>{},'th');white.dataset.theme='white';white.style.setProperty('--swatch','#f7f8fc');theme.append(white);
-   const themePage=el('section','theme-page');themePage.hidden=true;
-   themePage.append(button('Back to settings',()=>{themePage.hidden=true;for(const n of settings.children)if(n!==themePage)n.hidden=false;},'pref-secondary'),el('h2','','Choose theme'),theme);
-   settings.append(button('Choose theme',()=>{for(const n of settings.children)n.hidden=true;themePage.hidden=false;settings.scrollTop=0;},'pref-button'),themePage);
+   addSettingsPage('Choose theme',[theme]);
   }
-  settings.append(el('h3','','Contact us'));
+  settingsHome.append(el('h3','','Contact us'));
   for(const [text,url,mark] of [
    ['@h81t6','https://instagram.com/h81t6','<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle class="dot" cx="17.5" cy="6.5" r="1"/>'],
    ['@umclon','https://t.me/umclon','<path class="solid" d="M3 11l17-7-3 16-6-5-3 3 1-5 8-6-10 5z"/>']
-  ]){const a=el('a','settings-contact');a.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+mark+'</svg>';a.append(el('span','',text));a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.setAttribute('aria-label',(text==='@h81t6'?'Instagram ':'Telegram ')+text);settings.append(a);}
-  settings.append(el('p','pref-copy','Your photo and preferences stay on this device.'));document.body.append(settings);updateBadge();
+  ]){const a=el('a','settings-contact');a.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true">'+mark+'</svg>';a.append(el('span','',text));a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.setAttribute('aria-label',(text==='@h81t6'?'Instagram ':'Telegram ')+text);settingsHome.append(a);}
+  settingsHome.append(el('p','pref-copy','Your photo and preferences stay on this device.'));document.body.append(settings);updateBadge();
   settings.addEventListener('click',e=>{if(e.target===settings){const b=settings.getBoundingClientRect();if(e.clientX>b.right)closeModal(settings);}});
   drawerGestures();
   if(!profile)edit();

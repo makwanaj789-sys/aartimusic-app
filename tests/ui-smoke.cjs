@@ -194,8 +194,11 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
    await page.locator('#profileMenu').click();
   }
   assert.equal(await page.locator('.settings-contact svg').count(),2);
+  assert(await page.locator('.icon-choices').isHidden());
+  await page.getByRole('button',{name:'App icon',exact:true}).click();
   await page.getByRole('button',{name:'Pulse icon',exact:true}).click();
   assert.equal(await page.evaluate(()=>localStorage.getItem('aarti.icon.v1')),'neon');
+  await page.getByRole('button',{name:'Back to settings',exact:true}).click();
   await page.locator('.settings-drawer').getByRole('button',{name:'Close',exact:true}).click();
   await page.locator('[data-tab="Lib"]').click();
   await page.locator('#createPlaylist').click();
@@ -283,10 +286,46 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert.equal(await page.locator('html').getAttribute('data-theme'),'white');
   await page.screenshot({path:'test-results/white-theme.png'});
   await page.locator('[data-tab="Home"]').click();
-  await page.locator('.studio-play').first().click();
-  assert.equal(await page.locator('#plist').evaluate(e=>e.classList.contains('growing')),false);
-  await page.locator('#plClose').click();
-  assert.equal(await page.locator('#plist').evaluate(e=>e.classList.contains('growing')),false);
+  await page.locator('.studio-play').first().waitFor();
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  // Freeze native animations to inspect both endpoints and the in-between frame.
+  const opening=await page.evaluate(()=>{
+    const button=document.querySelector('.studio-play');button.scrollIntoView({block:'center'});
+    const rect=button.getBoundingClientRect();button.click();
+    const panel=document.querySelector('#plist');
+    const animation=panel.getAnimations().find(a=>a.effect.target===panel&&a.effect.getKeyframes()[0].clipPath);
+    if(!animation)return null;
+    animation.pause();animation.currentTime=0;
+    window.testPlaylistAnimation=animation;
+    return {frames:animation.effect.getKeyframes(),rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},width:innerWidth,height:innerHeight};
+  });
+  assert(opening,'Button-origin morph exists');
+  const inset=opening.frames[0].clipPath.match(/[\d.]+/g).map(Number);
+  assert(Math.abs(inset[0]-opening.rect.y)<1);
+  assert(Math.abs(inset[3]-opening.rect.x)<1);
+  assert(Math.abs(opening.width-inset[1]-inset[3]-opening.rect.width)<1);
+  assert(Math.abs(opening.height-inset[0]-inset[2]-opening.rect.height)<1);
+  await page.evaluate(()=>{testPlaylistAnimation.currentTime=220;});
+  await page.screenshot({path:'test-results/playlist-morph-opening.png'});
+  await page.evaluate(()=>testPlaylistAnimation.finish());
+  await page.waitForFunction(()=>!document.querySelector('#plist').classList.contains('button-morph'));
+  const closing=await page.evaluate(()=>{
+    document.getElementById('plClose').click();
+    const panel=document.querySelector('#plist');
+    const animation=panel.getAnimations().find(a=>a.effect.target===panel&&a.effect.getKeyframes()[0].clipPath);
+    animation.pause();animation.currentTime=190;window.testPlaylistAnimation=animation;
+    return animation.effect.getKeyframes();
+  });
+  assert.equal(closing[closing.length-1].clipPath,opening.frames[0].clipPath,'Close returns exactly to the source button');
+  await page.screenshot({path:'test-results/playlist-morph-closing.png'});
+  await page.evaluate(()=>testPlaylistAnimation.finish());
+  await page.waitForFunction(()=>!document.querySelector('#plist').classList.contains('open'));
+  await page.locator('#profileMenu').click();
+  const entries=await page.locator('.settings-entry').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {top:r.top,bottom:r.bottom};}));
+  for(let i=1;i<entries.length;i++)assert(entries[i].top-entries[i-1].bottom>=10,'Settings entries have a clear gap');
+  assert(await page.getByRole('link',{name:'Instagram @h81t6'}).isVisible());
+  assert(await page.locator('.icon-choices').isHidden());
+  await page.screenshot({path:'test-results/settings-categories.png'});
   assert.deepEqual(errors,[]);
 
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');

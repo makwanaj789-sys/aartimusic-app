@@ -2772,26 +2772,60 @@
     drawHome();
   }
 
+  let playlistOrigin=null,playlistMotion=null,playlistContentMotion=null,playlistClosing=false;
+  function originClip(){
+    const r=onScreen(playlistOrigin);
+    if(!r)return null;
+    const top=Math.max(0,r.top),left=Math.max(0,r.left),right=Math.max(0,innerWidth-r.right),bottom=Math.max(0,innerHeight-r.bottom);
+    return 'inset('+top+'px '+right+'px '+bottom+'px '+left+'px round '+Math.min(r.height/2,28)+'px)';
+  }
+  function animatePlaylist(open,done){
+    const interrupted=!!playlistMotion;
+    const current=interrupted?getComputedStyle(plist).clipPath:null;
+    const opacity=getComputedStyle(plist.querySelector('.now-in')).opacity;
+    playlistMotion?.cancel();playlistContentMotion?.cancel();playlistMotion=null;
+    const clip=originClip(),full='inset(0px 0px 0px 0px round 0px)';
+    if(matchMedia('(prefers-reduced-motion: reduce)').matches||!clip){plist.classList.remove('button-morph');done();return;}
+    plist.classList.add('button-morph');
+    const style=getComputedStyle(document.documentElement),bg=style.getPropertyValue('--bg').trim(),accent=style.getPropertyValue('--flame').trim();
+    const duration=open?440:380;
+    const animation=plist.animate([
+      {clipPath:current&&current!=='none'?current:open?clip:full,backgroundColor:open?accent:bg},
+      {clipPath:open?full:clip,backgroundColor:open?bg:accent}
+    ],{duration,easing:'cubic-bezier(.22,.8,.24,1)',fill:'both'});
+    playlistMotion=animation;
+    playlistContentMotion=plist.querySelector('.now-in').animate(open?[
+      {opacity:interrupted?opacity:0,transform:'translateY(18px)',offset:0},
+      {opacity:0,transform:'translateY(18px)',offset:.2},
+      {opacity:1,transform:'translateY(0)',offset:1}
+    ]:[{opacity,transform:'translateY(0)'},{opacity:0,transform:'translateY(12px)',offset:.5},{opacity:0,transform:'translateY(12px)'}],{duration,easing:'ease',fill:'both'});
+    animation.finished.then(()=>{
+      if(playlistMotion!==animation)return;
+      done();animation.cancel();playlistContentMotion?.cancel();playlistMotion=null;
+      plist.classList.remove('button-morph');
+    }).catch(()=>{});
+  }
   function openPl(from) {
-    if (plist.classList.contains("open")) return;
-    plist.classList.remove("growing");
-    cameFrom.delete(plist);
-    plist.classList.add("open");
-    plist.setAttribute("aria-hidden", "false");
-    document.body.classList.add("locked");
-    opened(plist, closePl);
+    if(plist.classList.contains('open')&&!playlistClosing)return;
+    const reversing=playlistClosing;playlistClosing=false;
+    if(from)playlistOrigin=from;
+    if(!reversing)playlistOrigin=from||null;
+    plist.classList.remove('growing');
+    plist.classList.add('open');plist.inert=false;
+    plist.setAttribute('aria-hidden','false');document.body.classList.add('locked');
+    if(!reversing)opened(plist,closePl);
+    animatePlaylist(true,()=>{});
   }
   function closePl(how) {
-    if (!plist.classList.contains("open")) return;
-    ++playlistRequest;
-    // Back into the card it came out of — unless that card has been
-    // scrolled away or the playlist was opened from a pasted link,
-    // in which case there is nothing to go back into and it slides.
-    plist.classList.remove("growing");
-    plist.classList.remove("open");
-    plist.setAttribute("aria-hidden", "true");
-    if (!now.classList.contains("open")) document.body.classList.remove("locked");
-    closed(plist);
+    if(!plist.classList.contains('open')||playlistClosing)return;
+    ++playlistRequest;playlistClosing=true;plist.inert=true;
+    const finish=()=>{
+      playlistClosing=false;plist.classList.remove('open');plist.setAttribute('aria-hidden','true');
+      if(!now.classList.contains('open'))document.body.classList.remove('locked');
+      closed(plist);
+      if(playlistOrigin?.isConnected)playlistOrigin.focus({preventScroll:true});
+    };
+    animatePlaylist(false,finish);
   }
   $("plClose").addEventListener("click", () => closePl());
   draggable(plist, () => closePl("drag"), { threshold: 120 });
