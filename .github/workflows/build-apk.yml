@@ -22,6 +22,11 @@ on:
       - "tests/**"
       - ".github/workflows/build-apk.yml"
 
+# Only the latest commit on a branch needs an APK.
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -51,6 +56,7 @@ jobs:
         run: node --test tests/playlists.test.cjs tests/backup.test.cjs tests/lyrics.test.cjs tests/listening.test.cjs
 
       - name: Install browser test tools
+        timeout-minutes: 5
         run: |
           npm install --no-save playwright@1.62.1
           npx playwright install --with-deps chromium
