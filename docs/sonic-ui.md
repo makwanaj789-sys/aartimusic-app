@@ -23,3 +23,10 @@ Fixes: the circular now-playing overlay is aligned exactly with its artwork; the
 The original 17 October build saved the matching private keystore only in the Actions cache `aartimusic-review-signing-v3`. The 27 October build reports that cache missing. No keystore is present in repository history or the original build artifacts. APK certificates do not contain the private key.
 
 A compatible update therefore requires a backup of that original keystore. Store its base64 encoding in the repository Actions secret `AARTI_SIGNING_KEY_BASE64`; do not commit the keystore. The build imports it only if needed and validates the pinned public certificate. Both main and working-branch builds now retain the installed package and explicit signing configuration. Without the original key, an in-place Android update cannot be produced; migration to a new signing identity would require backup/restore and explicit user agreement.
+
+
+## Fresh installation after PR #27
+
+The original 1.2 signing key is unavailable. The owner accepted exporting a backup, uninstalling the old app, and installing the new APK. Review builds now generate a replacement key when neither the new v4 cache nor `AARTI_SIGNING_KEY_BASE64` is available; they no longer require the original certificate. The package ID and all restored features stay unchanged.
+
+The workflow reuses the replacement key while its cache exists. GitHub caches are temporary: permanent update compatibility requires a privately retained keystore supplied as the repository secret `AARTI_SIGNING_KEY_BASE64` (alias `androiddebugkey`, passwords `android`). Never commit or upload the private keystore to public artifacts. A warning is emitted whenever a new key is generated. Export app data before uninstalling; Android removes local app data on uninstall.

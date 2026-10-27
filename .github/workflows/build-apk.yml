@@ -136,15 +136,15 @@ jobs:
       - name: Install sound presets and lock-screen like
         run: python3 scripts/android-audio-native.py
 
-      # Keep review-build identity stable across future CI runs.
-      # The earlier preview key was ephemeral; Next installs alongside it.
+      # Fresh install approved: use a new cache separate from the lost original key.
+      # A repository secret can supply a durable key instead of cache-only signing.
       - name: Reuse the review signing key
         uses: actions/cache@v4
         with:
           path: .ci-signing/review.keystore
-          key: aartimusic-review-signing-v3
+          key: aartimusic-review-signing-fresh-v4
 
-      - name: Prepare original app signing
+      - name: Prepare fresh-install signing
         env:
           AARTI_SIGNING_KEY_BASE64: ${{ secrets.AARTI_SIGNING_KEY_BASE64 }}
         run: python3 scripts/review-signing.py
