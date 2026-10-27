@@ -41,7 +41,38 @@
     const songsHead = el('h2', 'discovery-songs-title', 'Discover songs');
     const songsStatus = el('p', 'discovery-status'); songsStatus.setAttribute('role', 'status');
     const songs = el('div', 'discovery-songs');
-    host.append(chips, head, sub, status, rail, songsHead, songsStatus, songs);
+    // The featured edit uses live playlist data and the existing playlist route.
+    const hero = el('section', 'studio-hero');
+    hero.hidden = true;
+    const collage = el('div', 'studio-collage'); collage.setAttribute('aria-hidden', 'true');
+    const heroCopy = el('div', 'studio-hero-copy');
+    const heroLabel = el('p', 'studio-eyebrow', 'THE DAILY SELECTION');
+    const heroTitle = el('h2', '', 'Still vibes. Real moments.');
+    const heroSub = el('p', 'studio-hero-sub');
+    const heroOpen = el('button', 'studio-play', 'Explore mix ↗'); heroOpen.type = 'button';
+    let featured = null;
+    heroOpen.addEventListener('click', () => { if(featured) options.openPlaylist(featured.id, featured, heroOpen); });
+    heroCopy.append(heroLabel, heroTitle, heroSub, heroOpen); hero.append(collage, heroCopy);
+    host.append(chips);
+    if(!options.mode) host.append(hero);
+    host.append(head, sub, status, rail, songsHead, songsStatus, songs);
+    function renderHero(list) {
+      if(options.mode) return;
+      featured = list[0] || null; hero.hidden = !featured;
+      if(!featured) return;
+      heroSub.textContent = featured.title || 'Your next favourite is waiting.';
+      heroOpen.setAttribute('aria-label', 'Explore mix: ' + heroSub.textContent);
+      collage.replaceChildren();
+      // With one result, two differently cropped prints form the same collage.
+      const covers = list.slice(0, 3);
+      if(covers.length === 1) covers.push(covers[0]);
+      covers.forEach((p, i) => {
+        const frame = el('div', 'studio-print print-' + i);
+        const img = el('img'); img.alt = ''; if(p.thumb) img.src = p.thumb;
+        img.addEventListener('error', () => { img.hidden = true; });
+        frame.append(img); collage.append(frame);
+      });
+    }
     let prefKey = '';
     function drawChips(){ chips.replaceChildren(); categories.forEach(([name], i) => {
       const b = el('button', 'chip', name); b.type = 'button';
@@ -58,8 +89,9 @@
     }
     function renderCards(list) {
       rail.replaceChildren();
-      list.slice(0, 10).forEach(p => {
-        const card = el('button', 'discovery-card'); card.type = 'button';
+      renderHero(list);
+      list.slice(0, 10).forEach((p, i) => {
+        const card = el('button', 'discovery-card'); card.type = 'button'; card.style.setProperty('--entry', Math.min(i, 5));
         const cover = el('span', 'discovery-cover');
         const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
         if (p.thumb) img.src = p.thumb;
@@ -72,11 +104,11 @@
     function renderSongs(list) {
       songs.replaceChildren();
       list.slice(0, 6).forEach((song, i) => {
-        const row = el('button', 'discovery-song'); row.type = 'button';
+        const row = el('button', 'discovery-song'); row.type = 'button'; row.style.setProperty('--entry', i);
         const img = el('img'); img.alt = ''; img.loading = 'lazy'; img.decoding = 'async'; if (song.thumb) img.src = song.thumb;
         const meta = el('span', 'discovery-song-meta');
         meta.append(el('span', 'discovery-title', song.title), el('span', 'discovery-by', song.artist || 'Music for you'));
-        row.append(img, meta, el('span', 'discovery-song-play', '▶'));
+        row.append(el('span', 'studio-track-number', String(i+1).padStart(2,'0')), img, meta, el('span', 'discovery-song-play', '▶'));
         row.addEventListener('click', () => options.playSongs(list, i)); songs.append(row);
       });
     }
@@ -107,7 +139,7 @@
         songsStatus.textContent = saved.data.songs.length ? '' : 'No songs found for this mood.';
         busy = false; return;
       }
-      rail.replaceChildren(); songs.replaceChildren();
+      rail.replaceChildren(); songs.replaceChildren(); renderHero([]);
       status.textContent = 'Finding your mixes…'; songsStatus.textContent = 'Finding songs…';
       let lists = [], tracks = [], failed = false;
       try {

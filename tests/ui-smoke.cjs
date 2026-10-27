@@ -66,6 +66,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert(playlistSearches>0,'Home automatically requests playlists');
   await page.waitForFunction(()=>document.getElementById('boot').hidden);
   assert.equal(await page.locator('#boot').evaluate(e=>getComputedStyle(e).pointerEvents),'none');
+  await page.waitForTimeout(800);
   await page.screenshot({path:'test-results/home.png',fullPage:true});
   await page.locator('#discovery').getByRole('button',{name:'Trending',exact:true}).click();
   await page.waitForFunction(()=>document.getElementById('discovery').dataset.mood==='Trending');
@@ -76,6 +77,20 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert.notEqual(trendingColor,garbaColor,'Categories need distinct backgrounds');
   await page.waitForTimeout(300);await page.screenshot({path:'test-results/garba.png'});
   await page.locator('#discovery').getByRole('button',{name:'For you',exact:true}).click();
+  assert(await page.locator('#discovery .studio-hero').isVisible(), 'Featured edit uses discovered playlists');
+  await page.locator('#discovery .studio-play').click();
+  await page.locator('#plRows .row').first().waitFor();
+  assert.equal(await page.locator('#plTitle').textContent(),'Late night Hindi');
+  await page.waitForTimeout(650);
+  await page.screenshot({path:'test-results/collection.png'});
+  await page.locator('#plClose').click();
+  await page.waitForFunction(()=>!document.getElementById('plist').classList.contains('open'));
+  for(const width of [320,390,768]) {
+    await page.setViewportSize({width,height:844});
+    await page.waitForTimeout(650);
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth), 'No horizontal page overflow at '+width);
+  }
+  await page.setViewportSize({width:390,height:844});
   await page.locator('.discovery-song').first().click();
   await page.waitForFunction(()=>!document.getElementById('mini').hidden);
   await page.evaluate(()=>{document.getElementById('audio').pause();window.originalArtwork=document.getElementById('nArt');});
@@ -152,7 +167,10 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert(await page.locator('#audio').evaluate(a=>a.paused),'Restored audio must wait for Play');
   assert.equal(await page.locator('.profile-dialog[open]').count(),0,'Onboarding must only run once');
   await page.locator('#profileMenu').click();await page.locator('.settings-drawer[open]').waitFor();
-  await page.getByRole('button',{name:'Grove',exact:true}).click();
+  for(const [label,theme] of [['Coral','coral'],['Ocean','blue'],['Violet','violet'],['Amber',null],['Grove','green']]) {
+    await page.getByRole('button',{name:label,exact:true}).click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
+  }
   assert.equal(await page.locator('html').getAttribute('data-theme'),'green');
   await page.screenshot({path:'test-results/settings.png'});
   await page.getByRole('button',{name:'Edit profile & music preferences',exact:true}).click();
@@ -242,6 +260,19 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert.equal(who.get('name'),profileName,'The current profile name rides with the stream request');
   assert.match(who.get('device')||'',/^[0-9a-f]{12}$/,'A per-install id rides with the stream request');
   assert.equal(who.get('initData'),null);
+  // A scrolling library must not leave the profile floating over song rows.
+  await page.locator('[data-tab="Lib"]').click();
+  await page.locator('#libRows .row').first().waitFor();
+  await page.evaluate(()=>scrollTo(0,200));
+  assert((await page.locator('#profileMenu').boundingBox()).y < 0, 'Profile scrolls with the header');
+  const live=page.locator('#libRows .row').first();
+  await live.evaluate(e=>e.classList.add('on'));
+  {
+    const cover=await live.locator('img').boundingBox(), eq=await live.locator('.eq').boundingBox();
+    assert(Math.abs(cover.x-eq.x)<1 && Math.abs(cover.y-eq.y)<1, 'Playing overlay aligns with cover');
+    assert.equal(await live.locator('.eq').evaluate(e=>getComputedStyle(e).borderRadius),'50%');
+  }
+  assert.equal(await page.locator('.themes [data-theme="violet"]').count(),1, 'No duplicate theme controls');
   assert.deepEqual(errors,[]);
 
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');

@@ -39,11 +39,9 @@
        screen fills itself with what is actually listened to rather
        than staying empty until someone edits config.js. */
     lists: [],
-    /* Which palette. "amber" is what :root already is, so it is
-       stored as the absence of an attribute rather than one that
-       has to be kept in step with the stylesheet. */
-    theme: "amber",
-    speed: 1,            // playback rate; the voice keeps its pitch
+    /* Coral is the new-install palette; saved theme choices are preserved. */
+    theme: "coral",
+    speed: 1,
   };
 
   function load() {
@@ -207,7 +205,7 @@
     window.scrollTo(0, 0);
     if (changed && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       pages[name].getAnimations().forEach(a=>a.cancel());
-      pages[name].animate([{opacity:.35,transform:`translate3d(${direction*20}px,12px,0) scale(.985)`},{opacity:1,transform:'none'}],{duration:260,easing:'cubic-bezier(.2,.8,.2,1)'});
+      pages[name].animate([{opacity:.35,transform:`translate3d(${direction*20}px,12px,0) scale(.985)`},{opacity:1,transform:'none'}],{duration:360,easing:'cubic-bezier(.2,.8,.2,1)'});
     }
     if(name==='Search') { $('searchEmpty').hidden=true; searchDiscovery.refresh(); }
     if(name==='Lists') listDiscovery.refresh();
@@ -216,18 +214,12 @@
     b.addEventListener("click", () => { buzzPick(); tab(b.dataset.tab); })
   );
 
-  /* ---------- the palette -----------------------------------
-     Amber and Grove. A theme is eight custom properties on :root,
-     so switching one is one attribute and a repaint — there is no
-     second stylesheet to load and nothing to keep in step.
-
-     Amber is what :root is without the attribute, which is what
-     makes it the one that cannot be got wrong.                */
+  /* ---------- palette: persisted choices shared by every screen ---------- */
 
   const THEMES = AartiBackup.themes;
 
   function paintTheme() {
-    const t = THEMES.indexOf(store.theme) >= 0 ? store.theme : "amber";
+    const t = THEMES.indexOf(store.theme) >= 0 ? store.theme : "coral";
     const root = document.documentElement;
     if (t === "amber") root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", t);

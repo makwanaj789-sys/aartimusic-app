@@ -96,7 +96,7 @@
   settings.querySelector('.settings-heading').append(button('Close',()=>closeModal(settings),'pref-secondary'));
   settings.append(button('Edit profile & music preferences',()=>{closeModal(settings);edit();}));
   const theme=document.querySelector('.themes');if(theme){
-   for(const [id,name,color] of [["teal","Midnight","#77ccdb"],["violet","Violet","#d1a0ff"],["indigo","Indigo","#a6a2ff"],["neon","Neon","#ff70c6"],["ruby","Ruby","#ff9aaa"]]){const b=el('button','th');b.type='button';b.dataset.theme=id;b.setAttribute('aria-pressed',String(document.documentElement.dataset.theme===id));b.style.setProperty('--swatch',color);b.append(el('i'),el('span','',name));theme.append(b);}
+   for(const [id,name,color] of [["teal","Midnight","#77ccdb"],["violet","Violet","#d1a0ff"],["indigo","Indigo","#a6a2ff"],["neon","Neon","#ff70c6"],["ruby","Ruby","#ff9aaa"]]){if(theme.querySelector('[data-theme="'+id+'"]'))continue;const b=el('button','th');b.type='button';b.dataset.theme=id;b.setAttribute('aria-pressed',String(document.documentElement.dataset.theme===id));b.style.setProperty('--swatch',color);b.append(el('i'),el('span','',name));theme.append(b);}
    settings.append(theme);
   }
   settings.append(el('h3','','Contact us'));

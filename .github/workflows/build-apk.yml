@@ -12,7 +12,7 @@ name: Build APK
 on:
   workflow_dispatch:          # the "Run workflow" button
   push:
-    branches: [main, fix/working-apk-playlists]
+    branches: [main, fix/working-apk-playlists, feat/sonic-ui-redesign]
     paths:
       - "www/**"
       - "assets/**"
@@ -99,6 +99,9 @@ jobs:
       # 13 hides every notification until the second is granted, and a
       # player that never says it is a player is easy for a phone's own
       # music UI to leave out. Re-running changes nothing.
+      - name: Match Android system bars to the app
+        run: python3 scripts/android-system-bars.py
+
       - name: Manifest bits the notification needs
         run: python3 scripts/android-manifest.py android/app/src/main/AndroidManifest.xml
 
@@ -151,9 +154,7 @@ jobs:
         if: github.ref != 'refs/heads/main'
         run: |
           mkdir -p .ci-signing
-          if [ ! -s .ci-signing/review.keystore ]; then
-            keytool -genkeypair -keystore .ci-signing/review.keystore -storepass android -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          test -s .ci-signing/review.keystore || { echo "Original signing key missing; update build stopped"; exit 1; }
           python3 scripts/review-signing.py
 
       - name: Build the APK

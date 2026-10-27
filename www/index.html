@@ -9,10 +9,11 @@
      puts it on the element early enough that the splash and the
      first screen are never briefly the other palette. -->
 <script>try{var t=JSON.parse(localStorage.getItem('aarti.v1')||'{}').theme;
-if(t&&t!=='amber')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
+document.documentElement.setAttribute('data-theme',t||'coral');}catch(e){}</script>
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="personal.css">
 <link rel="stylesheet" href="themes.css">
+<link rel="stylesheet" href="studio.css">
 <!-- The two weights on screen before anything is scrolled. The rest
      are declared in app.css and fetched when something needs them. -->
 <link rel="preload" href="fonts/sora-400-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -58,7 +59,7 @@ html, body { background:#0A0908; margin:0; }
 <!-- ============ HOME ============ -->
 <section class="page" id="pHome">
   <header class="head">
-    <div class="brand-kicker"><img class="brand-icon" src="brand-icon.png" alt="">AARTI MUSIC <span>YOUR DAILY SOUND</span></div>
+    <div class="brand-kicker"><img class="brand-icon" src="brand-icon.png" alt="">AARTI MUSIC <span>THE DAILY EDIT</span></div>
     <h1>Good evening</h1>
     <p id="greetSub">Pick up where you left off</p>
   </header>
@@ -101,8 +102,9 @@ html, body { background:#0A0908; margin:0; }
 <!-- ============ SEARCH ============ -->
 <section class="page" id="pSearch" hidden>
   <header class="head">
+    <p class="page-eyebrow">FIND YOUR FREQUENCY</p><h1>Discover.</h1>
     <form class="searchbar" id="searchForm" autocomplete="off">
-      <input id="q" type="search" placeholder="Songs, artists…" enterkeyhint="search">
+      <input id="q" aria-label="Search songs and artists" type="search" placeholder="Songs, artists…" enterkeyhint="search">
       <button type="submit" aria-label="Search">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
       </button>
@@ -132,8 +134,9 @@ html, body { background:#0A0908; margin:0; }
 <!-- ============ PLAYLISTS ============ -->
 <section class="page" id="pLists" hidden>
   <header class="head">
+    <p class="page-eyebrow">A MIX FOR EVERY MOMENT</p><h1>Collections.</h1>
     <form class="searchbar" id="listForm" autocomplete="off">
-      <input id="lq" type="search" placeholder="Playlists on YouTube…" enterkeyhint="search">
+      <input id="lq" aria-label="Search playlists" type="search" placeholder="Playlists on YouTube…" enterkeyhint="search">
       <button type="submit" aria-label="Search playlists">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
       </button>
@@ -168,7 +171,7 @@ html, body { background:#0A0908; margin:0; }
 
 <!-- ============ LIBRARY ============ -->
 <section class="page" id="pLib" hidden>
-  <header class="head"><h1>Your library</h1></header>
+  <header class="head"><p class="page-eyebrow">COLLECT THE GOOD STUFF</p><h1>Your library.</h1><p>Your favourites. Always within reach.</p></header>
 
   <div class="account" id="account">
     <span class="acc-dot" id="accDot" aria-hidden="true"></span>
@@ -184,7 +187,10 @@ html, body { background:#0A0908; margin:0; }
        either theme — a chooser that changes colour with the choice
        tells you nothing about what you are choosing. -->
   <div class="themes" role="group" aria-label="Theme">
-    <span class="th-label">Theme</span>
+    <span class="th-label">Appearance</span>
+    <button class="th th-coral" data-theme="coral" aria-pressed="false"><i aria-hidden="true"></i><span>Coral</span></button>
+    <button class="th th-blue" data-theme="blue" aria-pressed="false"><i aria-hidden="true"></i><span>Ocean</span></button>
+    <button class="th th-violet" data-theme="violet" aria-pressed="false"><i aria-hidden="true"></i><span>Violet</span></button>
     <button class="th th-amber" data-theme="amber" aria-pressed="true">
       <i aria-hidden="true"></i><span>Amber</span>
     </button>
