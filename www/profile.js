@@ -6,7 +6,7 @@
  let profile=null;
  try { const p=JSON.parse(localStorage.getItem(KEY));if(p&&typeof p.name==='string'&&p.name.trim()&&Array.isArray(p.languages)&&p.languages.length&&Array.isArray(p.artists)&&p.artists.length)profile=p; }catch(_){}
  const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
- const button=(text,fn,cls='pref-button')=>{const b=el('button',cls,text);b.type='button';b.onclick=fn;return b;};
+ const button=(text,fn,cls='pref-button')=>{const b=el('button',cls,text);b.type='button';if(cls==='settings-entry')b.setAttribute('aria-label',text);b.onclick=fn;return b;};
  const reduced=()=>matchMedia('(prefers-reduced-motion: reduce)').matches;
  let dialog,previousFocus,draft,step=0,editing=false,photoBusy=false;
  function initials(name){return name.trim().split(/\s+/).slice(0,2).map(x=>Array.from(x)[0]).join('').toUpperCase();}
