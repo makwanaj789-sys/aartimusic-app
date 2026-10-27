@@ -107,3 +107,14 @@ button { touch-action:manipulation; }
 /* Preserve the semantic hidden state against component display declarations. */
 [hidden] { display:none !important; }
 @media(max-width:350px) { .rail { margin-inline:-16px; padding-inline:16px; }.discovery-chips { margin-right:-16px; padding-right:16px; } }
+/* Keep fixed controls opaque, and clear the old floating-nav geometry. */
+.nav { left:0; right:0; bottom:0; width:auto; height:auto; border-radius:0; padding:0 max(8px,calc((100vw - 850px)/2)) env(safe-area-inset-bottom,0px); background:var(--bg); box-shadow:none; }
+.nav button.on { background:none; }.nav button.on::after { display:block; }
+.nav::before { display:block; }
+.profile-badge { position:absolute; }
+.row .eq { left:0; border-radius:50%; }
+.row img { display:block; }
+:root[data-theme="coral"] { --q-top:#44201f; --q-bottom:#130d0e; --q-accent:#ffb0a1; --q-glow:255,114,94; }
+:root[data-theme="blue"] { --q-top:#172e49; --q-bottom:#090f1b; --q-accent:#9dceff; --q-glow:119,181,255; }
+/* The native player keeps its low-cost colour backdrop from themes.css. */
+#now .now-bg { filter:none; }

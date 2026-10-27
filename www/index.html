@@ -12,6 +12,7 @@
 document.documentElement.setAttribute('data-theme',t||'coral');}catch(e){}</script>
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="personal.css">
+<link rel="stylesheet" href="themes.css">
 <link rel="stylesheet" href="studio.css">
 <!-- The two weights on screen before anything is scrolled. The rest
      are declared in app.css and fetched when something needs them. -->
@@ -30,6 +31,7 @@ html, body { background:#0A0908; margin:0; }
         gap:26px; background:#0A0908; pointer-events:none; }
 #boot .boot-mark { display:block; width:min(40vw, 168px); height:auto; }
 </style>
+<link rel="stylesheet" href="capsule.css">
 </head>
 <body>
 
@@ -64,6 +66,11 @@ html, body { background:#0A0908; margin:0; }
 
   <section class="block discovery" id="discovery" aria-label="Music discovery"></section>
 
+  <div class="block" id="mixBlock">
+    <div class="block-head"><h2>Made for you today</h2></div>
+    <div class="mix-rail" id="mixRail"></div>
+  </div>
+
   <div class="block" id="recentBlock" hidden>
     <div class="block-head"><h2>Recently played</h2></div>
     <div class="rail" id="recentRail"></div>
@@ -72,7 +79,7 @@ html, body { background:#0A0908; margin:0; }
   <div class="block" id="favBlock" hidden>
     <div class="block-head">
       <h2>Your favourites</h2>
-      <button class="link" id="playFavs">Shuffle</button>
+      <span class="head-acts"><button class="link" id="smartFavs">Smart shuffle</button><button class="link" id="playFavs">Shuffle</button></span>
     </div>
     <div class="rows" id="favRows"></div>
   </div>
@@ -183,7 +190,7 @@ html, body { background:#0A0908; margin:0; }
     <span class="th-label">Appearance</span>
     <button class="th th-coral" data-theme="coral" aria-pressed="false"><i aria-hidden="true"></i><span>Coral</span></button>
     <button class="th th-blue" data-theme="blue" aria-pressed="false"><i aria-hidden="true"></i><span>Ocean</span></button>
-    <button class="th th-violet" data-theme="violet" aria-pressed="false"><i aria-hidden="true"></i><span>Iris</span></button>
+    <button class="th th-violet" data-theme="violet" aria-pressed="false"><i aria-hidden="true"></i><span>Violet</span></button>
     <button class="th th-amber" data-theme="amber" aria-pressed="true">
       <i aria-hidden="true"></i><span>Amber</span>
     </button>
@@ -192,6 +199,9 @@ html, body { background:#0A0908; margin:0; }
     </button>
   </div>
 
+  <section class="block stats" id="statsBlock" hidden aria-label="Your listening"></section>
+
+  <section class="block" id="ownPlaylists"><div class="block-head"><h2>Your playlists</h2><button class="link" id="createPlaylist">Create</button></div><div class="own-grid" id="ownGrid"></div><p id="ownEmpty" class="personal-status">Make a playlist for your own kind of mood.</p></section>
   <div class="seg">
     <button class="on" data-lib="favs">Favourites</button>
     <button data-lib="recents">History</button>
@@ -349,11 +359,35 @@ html, body { background:#0A0908; margin:0; }
       </button>
     </div>
 
+    <div class="now-extra">
+    <button class="lyrics-open" id="lyricsOpen" aria-label="Lyrics">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h11M4 10h11M4 14h7"/><circle cx="17.5" cy="16.5" r="2.5"/><path d="M20 16.5V7l-2 1"/></svg>
+      <span id="lyricsPeek">Lyrics</span>
+    </button>
+
     <button class="queue-open" id="queueOpen">
       <svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h10M4 17h7"/><path d="M17 8l3 4-3 4"/></svg>
       <span id="upNextLabel">Queue</span>
     </button>
+    </div>
   </div>
+</section>
+
+<!-- ============ LYRICS ============ -->
+<section class="lyrics" id="lyrics" aria-hidden="true" role="dialog" aria-label="Lyrics">
+  <div class="ly-bg" id="lyBg" aria-hidden="true"></div>
+  <header class="ly-head">
+    <button id="lyClose" aria-label="Close lyrics"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="ly-meta"><b id="lyTitle"></b><span id="lyArtist"></span></div>
+    <button id="lyFollow" class="ly-follow" hidden>Follow</button>
+  </header>
+  <div class="ly-body" id="lyBody"></div>
+  <div class="ly-timing" id="lyTiming" hidden aria-label="Lyrics timing">
+    <button id="lyEarlier" aria-label="Show lyrics half a second earlier">−0.5s</button>
+    <button id="lyOffset" aria-label="Reset lyrics timing">Timing 0.0s</button>
+    <button id="lyLater" aria-label="Show lyrics half a second later">+0.5s</button>
+  </div>
+  <p class="ly-source" id="lySource"></p>
 </section>
 
 <!-- ============ QUEUE ============ -->
@@ -361,10 +395,10 @@ html, body { background:#0A0908; margin:0; }
   <div class="sheet-in">
     <div class="grab"></div>
     <div class="sheet-head">
-      <h2>Queue</h2>
+      <div><h2>Queue</h2><small class="queue-count" id="queueCount"></small></div>
       <button class="link" id="queueClose">Done</button>
     </div>
-    <div class="rows" id="queueRows"></div>
+    <div class="rows sheet-scroll" id="queueRows"></div>
   </div>
 </section>
 
@@ -373,6 +407,7 @@ html, body { background:#0A0908; margin:0; }
   <div class="sheet-in">
     <div class="grab"></div>
     <div class="sheet-song" id="actSong"></div>
+    <button class="act" data-act="playlist">Add to your playlist</button>
     <button class="act" data-act="next">Play next</button>
     <button class="act" data-act="queue">Add to queue</button>
     <button class="act" data-act="fav" id="actFav">Add to favourites</button>
@@ -390,6 +425,15 @@ html, body { background:#0A0908; margin:0; }
     <button class="act" data-sleep="60">1 hour</button>
     <button class="act" data-sleep="track">End of this track</button>
     <button class="act ghost" data-sleep="0">Turn off</button>
+    <div class="sheet-head speed-head"><h2>Playback speed</h2></div>
+    <div class="speed-row" role="group" aria-label="Playback speed">
+      <button data-speed="0.75">0.75×</button><button data-speed="1">1×</button><button data-speed="1.25">1.25×</button><button data-speed="1.5">1.5×</button>
+    </div>
+    <div class="sheet-head speed-head" id="fxHead" hidden><h2>Sound</h2></div>
+    <div class="fx-row" id="fxRow" role="group" aria-label="Sound" hidden>
+      <button data-fx="normal">Normal</button><button data-fx="bass">Bass boost</button><button data-fx="vocal">Vocal</button><button data-fx="treble">Treble</button><button data-fx="party">Party</button>
+    </div>
+    <p class="fx-note" id="fxNote" hidden></p>
   </div>
 </section>
 
@@ -475,7 +519,14 @@ html, body { background:#0A0908; margin:0; }
 <script src="playlists.js"></script>
 <script src="discovery.js"></script>
 <script src="player-motion.js"></script>
+<script src="queue-motion.js"></script>
+<script src="lyrics.js"></script>
+<script src="row-swipe.js"></script>
+<script src="listening.js"></script>
 <script src="profile.js"></script>
+<script src="backup.js"></script>
+<script src="personal-library.js"></script>
 <script src="app.js"></script>
+<script src="capsule.js"></script>
 </body>
 </html>

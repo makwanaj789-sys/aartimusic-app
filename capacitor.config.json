@@ -1,6 +1,6 @@
 {
-  "appId": "com.aartimusic.player",
-  "appName": "Aarti Music",
+  "appId": "com.aartimusic.player.preview.v3",
+  "appName": "AartiMusic",
   "webDir": "www",
   "android": {
     "allowMixedContent": false,

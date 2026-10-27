@@ -48,7 +48,7 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Playlist contract tests
-        run: node --test tests/playlists.test.cjs
+        run: node --test tests/playlists.test.cjs tests/backup.test.cjs tests/lyrics.test.cjs tests/listening.test.cjs
 
       - name: Install browser test tools
         run: |
@@ -56,7 +56,16 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Player and Home interaction tests
-        run: node tests/ui-smoke.cjs
+        run: |
+          node tests/ui-smoke.cjs
+          node tests/stream-recovery-ui.cjs
+          node tests/capsule-ui.cjs
+          node tests/queue-ui.cjs
+          node tests/lyrics-ui.cjs
+          node tests/queue-gestures-ui.cjs
+          node tests/stats-mixes-ui.cjs
+          node tests/speed-ui.cjs
+          node tests/native-audio-ui.cjs
 
       - name: Save UI screenshots
         if: always()
@@ -66,10 +75,7 @@ jobs:
           path: test-results/
           if-no-files-found: ignore
 
-      # Two lines the media session plugin leaves out, which are what a
-      # phone's own music capsule looks for. Gradle builds the plugin
-      # straight out of node_modules, so this has to land before it.
-      # The script refuses loudly if the plugin has moved on.
+      # Standard media-session launch intent and ongoing notification.
       - name: Two lines the media notification is missing
         run: python3 scripts/media-session-patch.py
 
@@ -77,11 +83,6 @@ jobs:
       # repo stays small and there is no build output to keep in sync.
       # --yes stops npx pausing to ask whether it may fetch the CLI,
       # which a machine with nobody watching can never answer.
-      - name: Use a separate package for the review APK
-        if: github.ref != 'refs/heads/main'
-        run: |
-          node -e 'const fs=require("fs"); const file="capacitor.config.json"; const c=JSON.parse(fs.readFileSync(file)); c.appId="com.aartimusic.player.preview.v2"; c.appName="Aarti Music Next"; fs.writeFileSync(file,JSON.stringify(c,null,2));'
-
       - name: Create the Android project
         run: |
           npx --yes cap add android || true
@@ -93,14 +94,13 @@ jobs:
       # 13 hides every notification until the second is granted, and a
       # player that never says it is a player is easy for a phone's own
       # music UI to leave out. Re-running changes nothing.
+      - name: Match Android system bars to the app
+        run: python3 scripts/android-system-bars.py
+
       - name: Manifest bits the notification needs
         run: python3 scripts/android-manifest.py android/app/src/main/AndroidManifest.xml
 
-      # The one way the whole of Android agrees an app is a music
-      # player: a browser service in the manifest. Phones that draw
-      # their own music capsule ask the same question, and the three
-      # other signals were not enough on a Realme. The service itself
-      # does nothing — it exists to be found.
+      # Publish the existing token to standard Android media-browser clients.
       - name: Say this is a music player
         run: python3 scripts/android-media-app.py
 
@@ -125,14 +125,29 @@ jobs:
             echo "no assets/icon.png — keeping the default icon"
           fi
 
+      - name: Install backup picker and launcher icon choices
+        run: python3 scripts/android-personal-library.py
+
+      - name: Install native floating capsule
+        run: python3 scripts/android-capsule.py
+
+      # Equalizer / bass boost presets and the heart on the lock screen.
+      # After the capsule step: both patch the same media-session service.
+      - name: Install sound presets and lock-screen like
+        run: python3 scripts/android-audio-native.py
+
       # Keep review-build identity stable across future CI runs.
       # The earlier preview key was ephemeral; Next installs alongside it.
       - name: Reuse the review signing key
-        if: github.ref != 'refs/heads/main'
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: aartimusic-preview-v2-debug-keystore
+          path: .ci-signing/review.keystore
+          key: aartimusic-review-signing-v3
+
+      - name: Prepare original app signing
+        env:
+          AARTI_SIGNING_KEY_BASE64: ${{ secrets.AARTI_SIGNING_KEY_BASE64 }}
+        run: python3 scripts/review-signing.py
 
       - name: Build the APK
         working-directory: android
@@ -140,6 +155,12 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Verify review signing cache input
+        run: |
+          test -s .ci-signing/review.keystore
+          keytool -printcert -jarfile android/app/build/outputs/apk/debug/app-debug.apk
+          python3 scripts/review-signing.py --verify
 
       - name: Hand back the APK
         uses: actions/upload-artifact@v4

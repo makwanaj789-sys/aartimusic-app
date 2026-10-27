@@ -41,6 +41,7 @@
     lists: [],
     /* Coral is the new-install palette; saved theme choices are preserved. */
     theme: "coral",
+    speed: 1,
   };
 
   function load() {
@@ -62,6 +63,7 @@
   let token = 0;         // guards against two plays racing
   let sleepAt = 0;       // timestamp, or -1 for "end of this track"
   let actionSong = null;
+  let lightGeneration = 0;
 
   const headers = () => {
     const h = {};
@@ -214,7 +216,7 @@
 
   /* ---------- palette: persisted choices shared by every screen ---------- */
 
-  const THEMES = ["coral", "green", "blue", "violet", "amber"];
+  const THEMES = AartiBackup.themes;
 
   function paintTheme() {
     const t = THEMES.indexOf(store.theme) >= 0 ? store.theme : "coral";
@@ -238,12 +240,10 @@
     relight(queue[index]);
   }
 
-  document.querySelectorAll(".th").forEach((b) =>
-    b.addEventListener("click", () => {
-      if (store.theme === b.dataset.theme) return;
-      store.theme = b.dataset.theme;
-      save(); buzzPick(); paintTheme();
-    }));
+  document.addEventListener("click", e => {
+    const b=e.target.closest('.th[data-theme]');if(!b||!THEMES.includes(b.dataset.theme))return;
+    store.theme=b.dataset.theme;save();buzzPick();paintTheme();
+  });
 
   paintTheme();
 
@@ -306,7 +306,7 @@
 
   function rowFor(song, list, i) {
     const row = document.createElement("div");
-    row.className = "row";
+    row.className = "row"; row.dataset.songId = song.id;
     if (queue[index] && queue[index].id === song.id) row.classList.add("on");
 
     const img = document.createElement("img");
@@ -341,6 +341,16 @@
     img.addEventListener("click", play);
     info.addEventListener("click", play);
 
+    // Sideways: right plays it next, left queues it — or, inside the
+    // queue itself, moves it up next or takes it out.
+    if (window.AartiRowSwipe) AartiRowSwipe(row, list === queue ? {
+      right: { label: "Play next", run: () => moveUpNext(i) },
+      left: { label: "Remove", run: () => removeFromQueue(i) },
+    } : {
+      right: { label: "Play next", run: () => playNext(song) },
+      left: { label: "Add to queue", run: () => addToQueue(song) },
+    }, buzz);
+
     return row;
   }
 
@@ -372,7 +382,41 @@
 
   /* ---------- home ------------------------------------------ */
 
+  /* ---------- made for you today ------------------------------
+     Today's Daily Mix comes from what is played most and from the
+     favourites, in an order that holds for the day. Beside it, a mix
+     for the time of day in the listener's own language. Both carry
+     on as radio once their own songs run out. */
+  function drawMixes() {
+    const rail = $("mixRail"); rail.replaceChildren();
+    const profile = AartiProfile.get();
+    const language = (profile && profile.languages && profile.languages[0]) || "Hindi";
+    const daily = AartiListening.dailyMix(store.favs);
+    const m = AartiListening.moment(new Date().getHours(), language);
+    const card = (title, sub, cls, thumbs, go) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "mix-card " + cls;
+      const art = document.createElement("span"); art.className = "mix-art"; art.setAttribute("aria-hidden", "true");
+      // Four covers make a mosaic; with fewer, one cover fills the tile.
+      thumbs = [...new Set(thumbs)]; thumbs.slice(0, thumbs.length >= 4 ? 4 : 1).forEach((t) => { const i = document.createElement("img"); i.alt = ""; i.loading = "lazy"; i.src = t; i.addEventListener("error", () => i.remove()); art.append(i); });
+      const t = document.createElement("b"); t.textContent = title;
+      const s = document.createElement("small"); s.textContent = sub;
+      b.append(art, t, s); b.addEventListener("click", go); rail.append(b);
+    };
+    if (daily.length >= 3) card("Daily Mix", "Your most played + favourites", "mix-daily", daily.map(x => x.thumb).filter(Boolean),
+      () => { buzz(); chooseSong(daily, 0); });
+    card(m.name + " Mix", language + " · for right now", "mix-" + m.name.toLowerCase(), [], async () => {
+      buzz(); toast("Finding your " + m.name.toLowerCase() + " mix…");
+      try {
+        const d = await discoverSongs(m.query);
+        const list = (d.results || []).filter(s => !NOT_MUSIC.test(s.title) && !(s.duration && (s.duration < 60 || s.duration > 900)));
+        if (!list.length) { toast("Nothing found right now"); return; }
+        chooseSong(list, 0);
+      } catch (_) { toast("Couldn't load the mix"); }
+    });
+  }
+
   function drawHome() {
+    drawMixes();
     const hour = new Date().getHours();
     $("pHome").querySelector("h1").textContent =
       (hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening") + (AartiProfile.get() ? ", " + AartiProfile.get().name : "");
@@ -409,9 +453,31 @@
     fill($("favRows"), store.favs.slice(0, 6));
   }
 
+  /* Smart shuffle: the favourites, shuffled, with a song like them
+     slipped in after every three — found the same way radio finds
+     them, and never one already in the list. */
+  $("smartFavs").addEventListener("click", async () => {
+    if (!store.favs.length) return;
+    buzz();
+    queue = shuffled(store.favs).slice(0, 60); radio = true; radioGen++;
+    const gen = radioGen; playAt(0); toast("Smart shuffle");
+    const seeds = queue.slice(0, 6);
+    const lists = await Promise.all(seeds.map(s => discoverSongs((radioQueries(s)[0]) || s.title).then(d => d.results || [], () => [])));
+    if (gen !== radioGen) return;
+    const ids = new Set(queue.map(s => s.id)), keys = new Set(queue.flatMap(s => keysOf(s.title)).filter(k => k.length > 5));
+    const extra = [];
+    for (let i = 0; extra.length < 20 && lists.some(l => l.length > i); i++) for (const l of lists) {
+      const s = l[i]; if (!s || !s.id || ids.has(s.id) || NOT_MUSIC.test(s.title) || (s.duration && (s.duration < 60 || s.duration > 900))) continue;
+      const own = keysOf(s.title); if (own.some(k => [...keys].some(q => sameSong(q, k)))) continue;
+      ids.add(s.id); own.forEach(k => keys.add(k)); extra.push(s); if (extra.length >= 20) break;
+    }
+    for (let at = index + 3, n = 0; n < extra.length && at <= queue.length; at += 4, n++) queue.splice(at, 0, extra[n]);
+    queueChanged();
+  });
+
   $("playFavs").addEventListener("click", () => {
     if (!store.favs.length) return;
-    queue = shuffled(store.favs);
+    queue = shuffled(store.favs); radio = false;
     store.shuffle = true; save(); paintModes();
     playAt(0);
   });
@@ -504,7 +570,42 @@
      because half of what anyone remembers is who sang it. */
   let libFind = "";
 
+  /* ---------- your listening --------------------------------- */
+  function drawStats() {
+    const box = $("statsBlock"), s = AartiListening.summary();
+    box.hidden = !s.totalMinutes && !s.topSongs.length;
+    if (box.hidden) return;
+    const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+    box.replaceChildren();
+    const head = el("div", "block-head"); head.append(el("h2", "", "Your listening"));
+    const big = el("div", "stats-big");
+    big.append(el("b", "", String(s.weekMinutes)), el("span", "", (s.weekMinutes === 1 ? "minute" : "minutes") + " this week"));
+    const bars = el("div", "stats-bars"); bars.setAttribute("aria-hidden", "true");
+    const most = Math.max(1, ...s.daily.map(d => d.minutes));
+    const names = ["S", "M", "T", "W", "T", "F", "S"];
+    s.daily.forEach((d, i) => {
+      const col = el("div", "stats-bar" + (i === 6 ? " today" : ""));
+      const fill = el("i"); fill.style.setProperty("--h", (d.minutes / most).toFixed(3));
+      col.append(fill, el("span", "", names[new Date(d.day + "T12:00").getDay()]));
+      bars.append(col);
+    });
+    box.append(head, big, bars, el("p", "stats-total", s.totalMinutes + " min listened · " + s.songCount + (s.songCount === 1 ? " song" : " songs")));
+    if (s.topArtists.length) {
+      box.append(el("h3", "stats-h", "Top artists"));
+      const chips = el("div", "stats-artists");
+      s.topArtists.forEach((a, i) => { const c = el("span", "stats-artist"); c.append(el("b", "", (i + 1) + ". " + a.name), el("small", "", a.minutes + " min")); chips.append(c); });
+      box.append(chips);
+    }
+    if (s.topSongs.length) {
+      box.append(el("h3", "stats-h", "Most played"));
+      const rows = el("div", "rows");
+      s.topSongs.forEach((song, i) => { const r = rowFor(song, s.topSongs, i); r.querySelector(".sub").textContent = song.artist + " · " + song.plays + (song.plays === 1 ? " play" : " plays"); rows.append(r); });
+      box.append(rows);
+    }
+  }
+
   function drawLib() {
+    drawStats();
     accState();
     const all = libView === "favs" ? store.favs : store.recents;
     const q = libFind.trim().toLowerCase();
@@ -565,10 +666,23 @@
 
   function paintFavButtons(pop) {
     const song = queue[index];
-    if (!song) return;
+    if (!song) { syncLike(); return; }
     const on = isFav(song.id);
     markFav($("mFav"), on, pop);
     markFav($("nFav"), on, pop);
+    syncLike();
+  }
+
+  /* The heart on the lock screen and in the notification, drawn by the
+     native media session. It shows whether the song playing is a
+     favourite, and a tap on it comes back here as a "like" event. Only
+     in the Android app; elsewhere there is no such plugin. */
+  let aartiAudioPlugin;
+  const aartiAudio = () => aartiAudioPlugin === undefined ? (aartiAudioPlugin = nativePlugin("AartiAudio")) : aartiAudioPlugin;
+  function syncLike() {
+    const p = aartiAudio(), song = queue[index];
+    if (!p) return;
+    try { p.setLike({ liked: !!song && isFav(song.id), available: !!song }).catch(() => {}); } catch (_) {}
   }
 
   const tapFav = (e) => {
@@ -939,6 +1053,58 @@
 
   /* ---------- playing --------------------------------------- */
 
+  /* ---------- who is listening ------------------------------
+     The bot's storage channel credits every first download with the
+     person who asked for it. Inside Telegram the signed initData says
+     who that is. The APK has no Telegram around it, so it says what it
+     knows instead: the Telegram link token if the phone is connected,
+     the name typed into the profile screen, a random id made once for
+     this install (two people both called Rahul are still two phones),
+     and the phone's own name and model. The server labels the typed
+     name as unverified; only the link token is proof.          */
+
+  const INSTALL_KEY = "aarti.install.v1";
+  function installId() {
+    try {
+      let id = localStorage.getItem(INSTALL_KEY);
+      if (!id) {
+        const raw = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+          : Math.random().toString(16).slice(2) + Date.now().toString(16);
+        id = raw.replace(/[^a-f0-9]/gi, "").slice(0, 12);
+        localStorage.setItem(INSTALL_KEY, id);
+      }
+      return id;
+    } catch (e) { return ""; }
+  }
+
+  // "Rahul's Galaxy (samsung SM-A515F)": the name set in the phone's
+  // settings when Android shares it, then maker and model. Filled in
+  // once at start-up; a song tapped before then just goes without it.
+  let phoneLabel = "";
+  (async () => {
+    const device = nativePlugin("Device");
+    if (!device) return;
+    try {
+      const i = await device.getInfo();
+      const model = [i.manufacturer, i.model].filter(Boolean).join(" ").trim();
+      const name = (i.name || "").trim();
+      phoneLabel = (name && name.toLowerCase() !== (i.model || "").toLowerCase()
+        ? name + (model ? " (" + model + ")" : "") : model).slice(0, 60);
+    } catch (e) {}
+  })();
+
+  function whoParams() {
+    if (INIT) return [];          // Telegram already signed who this is
+    const out = [];
+    if (store.link && store.link.token) out.push("token=" + encodeURIComponent(store.link.token));
+    const p = window.AartiProfile && window.AartiProfile.get();
+    if (p && p.name) out.push("name=" + encodeURIComponent(p.name.slice(0, 40)));
+    const id = installId();
+    if (id) out.push("device=" + id);
+    if (phoneLabel) out.push("phone=" + encodeURIComponent(phoneLabel));
+    return out;
+  }
+
   function streamUrl(id) {
     let url = SERVER + "/api/stream/" + encodeURIComponent(id);
     const auth = [];
@@ -946,27 +1112,148 @@
     // request itself — so the proof of identity rides in the address.
     if (INIT) auth.push("initData=" + encodeURIComponent(INIT));
     if (DEV_KEY) auth.push("devKey=" + encodeURIComponent(DEV_KEY));
+    auth.push(...whoParams());
     return auth.length ? url + "?" + auth.join("&") : url;
   }
 
   // Track identity belongs to the loaded media, not a newly selected list.
   let mediaId = null, resumePosition = null, lastCheckpoint = 0, restoredOnly = false;
-  function chooseSong(list, at) {
+  function chooseSong(list, at, fromPlaylist) {
     const song = list[at];
     if (!song) return;
     if (song.id === mediaId && !audio.ended && !audio.error) {
+      // Already playing, but picked from a different list (a mix or a
+      // playlist whose first song happens to be on): keep the song
+      // going and make that list what plays next. Without this, tapping
+      // the Daily Mix on a day it starts with the current song left the
+      // old radio queue in place and the mix never played.
+      if (list !== queue && list !== results) {
+        radio = !(fromPlaylist || list === plSongs); radioGen++;
+        queue = list.slice(); index = at;
+        if (radio && index >= queue.length - 10) extendRadio();
+        if ($("queueSheet").classList.contains("open")) drawQueue(true);
+      }
       if (plist.classList.contains('open')) closePl();
       if ($('queueSheet').classList.contains('open')) sheet($('queueSheet'),false);
       openNow(); return;
     }
-    queue = list.slice(); playAt(at);
+    // A search is a list of guesses at one song, not a queue: play the
+    // one that was tapped and let similar songs follow it, as radio.
+    if (list === results) { queue = [song]; radio = true; radioGen++; playAt(0); return; }
+    // Anything else that is not a playlist keeps going once its own
+    // list runs out; a playlist is a finished thing and stops.
+    if (list !== queue) { radio = !(fromPlaylist || list === plSongs); radioGen++; }
+    if(list!==queue)queue = list.slice(); playAt(at);
   }
+
+  /* ---------- radio ------------------------------------------
+     After a song picked from search, the queue fills itself with
+     songs like it, a few at a time, for as long as it keeps
+     playing. The server only knows how to search, so "like it" is
+     a handful of searches built from the title — the film or album
+     after the "|", the channel, "songs like …" — with every other
+     upload of the same song filtered out. */
+  let radio = false, radioGen = 0, radioBusy = null;
+  let radioLoading=false,radioError="",radioQueryGen=-1;const radioQueriesUsed=new Set();
+  const NOISE = /\b(official|lyrical|lyrics?|full|audio|video|song|songs|hd|4k|slowed|reverb|lofi|lo-fi|remix|mix|cover|uncut|status|ringtone|version|reprise|unplugged|feat|ft)\b\.?/gi;
+  const songKey = (title) => String(title || '').split('|')[0]
+    .replace(/\(.*?\)|\[.*?\]/g, ' ').replace(NOISE, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').trim().toLocaleLowerCase();
+  // Two uploads of one song rarely share a title, but one title
+  // nearly always contains the other once the noise is gone.
+  const sameSong = (a, b) => (' ' + a + ' ').includes(' ' + b + ' ') || (' ' + b + ' ').includes(' ' + a + ' ');
+  const keysOf = (title) => {
+    const full = songKey(title);
+    const halves = String(title || '').split('|')[0].split(/\s+-\s+/).map(songKey);
+    // Two shared opening words (e.g. Gujarati Garba) do not make two songs identical.
+    // Only compare complete normalized titles and the title before an artist suffix.
+    return [...new Set([full,halves[0]])].filter(Boolean);
+  };
+  function radioQueries(song) {
+    const parts = String(song.title || '').split('|').map(p => p.replace(/\(.*?\)|\[.*?\]/g, ' ').trim());
+    const core = songKey(song.title);
+    const album = parts.slice(1).map(songKey).find(p => p && p !== core && p.length > 2);
+    const artist = String(song.artist || '').replace(/\s*-\s*topic$/i, '').trim();
+    return [album && album + ' songs', core && 'songs like ' + core, artist && artist + ' hits']
+      .filter(Boolean);
+  }
+  // Searches return gameplay, trailers and talk as readily as songs.
+  const NOT_MUSIC = /\b(gameplay|trailer|teaser|wwe|2k\d\d|episode|interview|podcast|reaction|tutorial|news|full movie|scene|vlog|unboxing)\b/i;
+  const MOODS = ['hit songs', 'new songs', 'romantic songs', 'party songs', 'sad songs', 'top songs', 'best songs', 'love songs'];
+  let moodTurn = 0;
+  // Where the next batch can come from, best first: the song playing,
+  // the songs radio already chose (newest first), then the listener's
+  // own artists and languages, and finally plain hits so it never
+  // runs dry.
+  function radioSeeds() {
+    const seeds = [];
+    for (let i = index; i >= 0 && seeds.length < 4; i--) if (queue[i]) seeds.push(radioQueries(queue[i]));
+    for(let i=queue.length-1;i>index&&seeds.length<8;i--)seeds.push(radioQueries(queue[i]));
+    const profile = AartiProfile.get();
+    const artists = (profile && profile.artists) || [];
+    const languages = (profile && profile.languages && profile.languages.length) ? profile.languages : ['Hindi'];
+    const mood = () => MOODS[moodTurn++ % MOODS.length];
+    const artist = artists.length ? artists[Math.floor(Math.random() * artists.length)] : '';
+    seeds.push([artist && artist + ' songs', languages[0] + ' ' + mood()].filter(Boolean));
+    seeds.push(languages.map(l => l + ' ' + mood()));
+    return seeds;
+  }
+  function radioSearch(query){
+    let timer;
+    return Promise.race([discoverSongs(query),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Recommendation timed out')),12000);})]).finally(()=>clearTimeout(timer));
+  }
+  function extendRadio(retry=false) {
+    if (!radio) return Promise.resolve();
+    if (radioBusy && radioBusy.gen === radioGen) return radioBusy.done;
+    const mine = radioGen;
+    if(radioQueryGen!==mine){radioQueryGen=mine;radioQueriesUsed.clear();radioError="";}
+    if(retry){radioQueriesUsed.clear();radioError="";}
+    if (!queue[index]) return Promise.resolve();
+    radioLoading=true;radioError="";queueFeedback();
+    const done = (async () => {
+      let failures=0,requests=0;
+      const ids = new Set(queue.map(s => s.id));
+      // Only recent songs count as repeats, so a long session does not
+      // slowly rule out every title there is.
+      const keys = new Set(queue.slice(-25).flatMap(s => keysOf(s.title)).filter(k => k.length > 5));
+      const picked = [];
+      for (const queries of radioSeeds()) {
+        if (picked.length >= 20 || requests>=9) break;
+        const fresh=queries.filter(q=>!radioQueriesUsed.has(q.toLocaleLowerCase()));
+        if(!fresh.length)continue;
+        fresh.forEach(q=>radioQueriesUsed.add(q.toLocaleLowerCase()));requests+=fresh.length;
+        const lists=await Promise.all(fresh.map(q=>radioSearch(q).then(d=>d.results,error=>{failures++;console.warn("Queue recommendation failed",error);radioQueriesUsed.delete(q.toLocaleLowerCase());return [];})));
+        if (!radio || radioGen !== mine) return;
+        for (let i = 0; picked.length < 20 && lists.some(l => l.length > i); i++) {
+          for (const list of lists) {
+            const song = list[i], own = song ? keysOf(song.title) : [];
+            if (!song || !song.id || ids.has(song.id) || !own.length || NOT_MUSIC.test(song.title) ||
+                own.some(key => [...keys].some(k => sameSong(k, key)))) continue;
+            // Jukeboxes and shorts are not songs.
+            if (song.duration && (song.duration < 60 || song.duration > 900)) continue;
+            ids.add(song.id); own.filter(k => k.length > 5).forEach(key => keys.add(key)); picked.push(song);
+            if (picked.length >= 20) break;
+          }
+        }
+      }
+      if (!picked.length){radioError=failures?'Could not load songs · Tap to retry':'No new matches yet · Tap to try again';return;}
+      const currentIds = new Set(queue.map(s => s.id));
+      queue.push(...picked.filter(s => !currentIds.has(s.id)));
+      if ($("queueSheet").classList.contains("open")) drawQueue(true);
+      const nxt = queue[index + 1];
+      $("upNextLabel").textContent = nxt ? "Up next · " + nxt.title : "Queue";
+      checkpoint();
+    })().finally(() => { if (radioBusy && radioBusy.done === done){radioBusy=null;radioLoading=false;queueFeedback();} });
+    radioBusy = { gen: mine, done };
+    return done;
+  }
+
   function checkpoint() {
     if (index < 0 || !queue[index] || queue[index].id !== mediaId) return;
     const position = resumePosition !== null ? resumePosition : audio.currentTime;
     try { localStorage.setItem('aarti.playback.v1', JSON.stringify({
-      queue: queue.slice(0, 500), index, position: Number.isFinite(position) ? position : 0,
-      at: Date.now()
+      queue: queue.slice(Math.max(0,index-50), Math.max(0,index-50)+500), index:index-Math.max(0,index-50), position: Number.isFinite(position) ? position : 0,
+      radio, at: Date.now()
     })); } catch (_) {}
   }
   audio.addEventListener('timeupdate', () => {
@@ -992,10 +1279,10 @@
     const before = token;
     await ready;
     if (token !== before || mediaId) return;
-    queue = restored; index = saved.index; mediaId = queue[index].id;
+    queue = restored; index = saved.index; mediaId = queue[index].id; radio = saved.radio === true;
     resumePosition = saved.position; restoredOnly = true;
     $('mini').hidden = false; document.body.classList.add('with-mini');
-    paint(queue[index]); icons(false); waiting(false);
+    paint(queue[index]); icons(false); waiting(false); loadLyrics(queue[index]);
     $('nCur').textContent = time(resumePosition);
     audio.preload = 'metadata'; audio.src = streamUrl(mediaId); audio.load();
     markRows(); playerMotion.refresh();
@@ -1005,10 +1292,14 @@
     if (i < 0 || i >= queue.length) return;
 
     await ready;
+    // Started offline, or server.json was unreachable then: look again
+    // rather than asking the app's own origin for the song.
+    if (!SERVER) await findServer(true);
     const mine = ++token;                 // anything older is now stale
     const song = queue[i];
     mediaId = song.id; resumePosition = null; restoredOnly = false;
     index = i;
+    if (radio && index >= queue.length - 10) extendRadio();
 
     buzz("light");
     $("mini").hidden = false;
@@ -1016,7 +1307,11 @@
     // the strip as well, now that there is one.
     document.body.classList.add("with-mini");
     waiting(true);
+    audio.volume = 1;
+    listenReset();
     paint(song);
+    loadLyrics(song);
+    if($("queueSheet").classList.contains("open"))drawQueue(true);
     addRecent(song);
 
     setProgress(0);
@@ -1102,9 +1397,11 @@
   }
 
   function relight(song) {
+    const generation = ++lightGeneration;
     const lit = $("nowLit");
     if (lit) lit.classList.add("dimming");
     lightFrom(song && song.thumb).then((rgb) => {
+      if (generation !== lightGeneration) return;
       document.documentElement.style.setProperty("--lit", rgb || themeGlow());
       if (lit) requestAnimationFrame(() => lit.classList.remove("dimming"));
     });
@@ -1143,7 +1440,7 @@
     const id = queue[index] && queue[index].id;
     document.querySelectorAll(".row").forEach((row) => {
       const t = row.querySelector(".title");
-      row.classList.toggle("on", !!id && t && t.textContent === (queue[index] || {}).title);
+      row.classList.toggle("on", !!id && row.dataset.songId === id);
     });
   }
 
@@ -1166,7 +1463,15 @@
     return store.repeat === "all" ? 0 : -1;
   }
 
-  const next = () => { const i = nextIndex(); if (i >= 0) playAt(i); };
+  const next = () => {
+    // Radio never runs out or wraps round: at the end it finds more.
+    if (radio && index >= queue.length - 1 && store.repeat !== "one") {
+      const gen = radioGen,at=index;
+      extendRadio().then(() => { if (gen === radioGen && index===at && index < queue.length - 1) playAt(index + 1); });
+      return;
+    }
+    const i = nextIndex(); if (i >= 0) playAt(i);
+  };
   $("nNext").addEventListener("click", next);
   $("nPrev").addEventListener("click", () => {
     // Part-way in, "previous" restarts the song — as everywhere else.
@@ -1186,16 +1491,54 @@
 
   audio.addEventListener("ended", () => {
     if (sleepAt === -1) { sleepAt = 0; toast("Sleep timer — stopping"); return; }
-    if (store.repeat === "one") { audio.currentTime = 0; audio.play().catch(() => {}); return; }
+    if (store.repeat === "one") { listenReset(); audio.currentTime = 0; audio.play().catch(() => {}); return; }
     next();
   });
 
-  audio.addEventListener("error", () => {
+  /* A song that will not load is either the song or the server. Ask
+     the server directly, so the message says which. If the server has
+     only moved — the free tunnel takes a new address every time it
+     restarts — pick up the new address from server.json and try the
+     same song again. A dead server or a refused key stops here instead
+     of skipping through the whole queue one failure at a time. */
+  let failStreak = 0;
+  async function diagnose(id) {
+    if (!SERVER) return "unreachable";
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const r = await fetch(streamUrl(id), { headers: { Range: "bytes=0-1" }, cache: "no-store", signal: ctl.signal });
+      try { if (r.body) r.body.cancel(); } catch (_) {}
+      if (r.ok) return "ok";
+      return r.status === 401 ? "locked" : r.status === 404 ? "missing" : "server";
+    } catch (_) { return "unreachable"; }
+    finally { clearTimeout(timer); }
+  }
+  const WHY = {
+    unreachable: "Can't reach the music server",
+    locked: "The server refused this app (key mismatch)",
+    missing: "This song isn't available",
+    server: "The server couldn't load this song",
+    ok: "Couldn't play that one",
+  };
+  audio.addEventListener("playing", () => { failStreak = 0; });
+  audio.addEventListener("error", async () => {
     waiting(false);
-    toast("Couldn't play that one");
+    const failedToken = token, song = queue[index];
+    if (restoredOnly || !song) { toast(WHY.ok); return; }
+    const why = await diagnose(song.id);
+    if (token !== failedToken) return;
+    if (why === "unreachable") {
+      const before = SERVER;
+      await findServer(true);
+      if (token !== failedToken) return;
+      if (SERVER && SERVER !== before) { toast("Server moved — reconnecting"); playAt(index); return; }
+    }
+    failStreak++;
+    toast(WHY[why]);
+    // The server itself is the problem: skipping would only fail again.
+    if (why === "unreachable" || why === "locked" || failStreak >= 3) return;
     // One dead track shouldn't end the session.
-    const failedToken = token;
-    if (!restoredOnly) setTimeout(() => { if (token === failedToken) next(); }, 800);
+    setTimeout(() => { if (token === failedToken) next(); }, 800);
   });
 
   function setProgress(p) {
@@ -1241,8 +1584,56 @@
 
     if (sleepAt > 0 && Date.now() > sleepAt) {
       audio.pause(); sleepAt = 0; toast("Sleep timer — paused");
+      audio.volume = 1;
     }
+    fadeVolume();
+    listened();
   });
+
+  /* What was listened to, for the stats and the mixes. Seconds only
+     count while the song is actually playing forwards — a seek is not
+     listening — and are written in batches of ten. A play counts once,
+     when this play passes thirty seconds. */
+  const ls = { song: null, at: 0, pending: 0, play: 0, counted: false };
+  function listenFlush(newPlay) {
+    if (ls.song && (ls.pending > 0 || newPlay)) AartiListening.add(ls.song, Math.max(ls.pending, 0.001), newPlay);
+    ls.pending = 0;
+  }
+  function listenReset() { listenFlush(false); ls.song = null; }
+  function listened() {
+    const song = queue[index], t = audio.currentTime;
+    if (!song || song.id !== mediaId) return;
+    if (ls.song !== song) { listenFlush(false); Object.assign(ls, { song, at: t, pending: 0, play: 0, counted: false }); return; }
+    const d = t - ls.at; ls.at = t;
+    if (audio.paused || audio.seeking || !(d > 0) || d > 2) return;
+    const seconds = d / (audio.playbackRate || 1);
+    ls.pending += seconds; ls.play += seconds;
+    if (!ls.counted && ls.play >= AartiListening.PLAY_AFTER) { ls.counted = true; listenFlush(true); return; }
+    if (ls.pending >= 10) listenFlush(false);
+  }
+  audio.addEventListener("seeking", () => { ls.at = audio.currentTime; });
+  audio.addEventListener("seeked", () => { ls.at = audio.currentTime; });
+  audio.addEventListener("pause", () => listenFlush(false));
+  addEventListener("pagehide", () => listenFlush(false));
+  document.addEventListener("visibilitychange", () => { if (document.hidden) listenFlush(false); });
+
+  /* Songs ease in and out instead of starting and stopping with a
+     click, and a sleep timer lowers the music over its last half
+     minute rather than cutting it. Worked out from the song's own
+     position on every timeupdate — that keeps firing with the screen
+     off, where timers are throttled to nothing. Very short clips are
+     left alone. */
+  const FADE_IN = 1.2, FADE_OUT = 4, SLEEP_FADE = 30;
+  function fadeVolume() {
+    const d = audio.duration, t = audio.currentTime;
+    let v = 1;
+    if (d && isFinite(d) && d > 20) v = Math.min(1, t / FADE_IN, (d - t) / FADE_OUT);
+    if (sleepAt > 0) v = Math.min(v, (sleepAt - Date.now()) / 1000 / SLEEP_FADE);
+    if (sleepAt === -1 && d && isFinite(d)) v = Math.min(v, (d - t) / 10);
+    v = Math.max(0, Math.min(1, v));
+    if (Math.abs(audio.volume - v) > 0.004) audio.volume = +v.toFixed(3);
+  }
+  audio.addEventListener("seeked", fadeVolume);
 
   /* ---------- shuffle and repeat ---------------------------- */
 
@@ -1366,7 +1757,9 @@
 
   /* ---------- sheets ---------------------------------------- */
 
+  let queueMotion;
   const sheet = (el, on) => {
+    if(el.id === "queueSheet" && queueMotion){queueMotion[on?"open":"close"]();return;}
     // Opening what is open, or closing what is shut, would push or
     // spend a history entry for nothing.
     if (!!on === el.classList.contains("open")) return;
@@ -1511,7 +1904,8 @@
 
     el.addEventListener("pointerdown", (e) => {
       if (!el.classList.contains("open")) return;
-      if (e.target.closest && e.target.closest(DRAG_SKIP)) return;
+      const list = e.target.closest && e.target.closest(".sheet-scroll");
+      if (list ? list.scrollTop > 0 : (e.target.closest && e.target.closest(DRAG_SKIP))) return;
       id = e.pointerId; y0 = e.clientY; t0 = e.timeStamp; dy = 0; live = false;
     }, { passive: true });
 
@@ -1725,7 +2119,7 @@
      screen behind it coming back is what tells you the gesture is
      working before you have committed to it. A shorter threshold
      than the full screen, because a sheet is shorter. */
-  [["queueSheet", 90], ["actionSheet", 80], ["sleepSheet", 80]].forEach(([id, threshold]) => {
+  [["actionSheet", 80], ["sleepSheet", 80]].forEach(([id, threshold]) => {
     const el = $(id);
     const panel = el.querySelector(".sheet-in");
     draggable(el, () => sheet(el, false), {
@@ -1738,21 +2132,239 @@
     });
   });
 
-  // queue
-  $("queueOpen").addEventListener("click", () => {
-    const box = $("queueRows");
-    box.innerHTML = "";
-    queue.forEach((song, i) => {
-      const row = rowFor(song, queue, i);
-      if (i < index) row.style.opacity = ".45";
-      box.appendChild(row);
+  // Queue updates append rows without restarting animations or replacing touched DOM.
+  queueMotion=AartiQueueMotion({el:$("queueSheet"),rows:$("queueRows"),
+    onOpen:()=>opened($("queueSheet"),()=>queueMotion.close()),onClosed:()=>closed($("queueSheet"))});
+  let renderedQueue=null;
+  const queueStatus=document.createElement('button');queueStatus.type='button';queueStatus.className='queue-status';queueStatus.setAttribute('aria-live','polite');
+  function queueFeedback(){
+    queueStatus.hidden=!radio;
+    queueStatus.disabled=radioLoading;
+    queueStatus.textContent=radioLoading?'Finding similar songs…':radioError||'Load more similar songs';
+    $("queueCount").textContent=Math.max(0,queue.length-index-1)+' up next'+(radio?' · Auto queue':'');
+  }
+  /* Hold the handle and drag a row to a new place. The other rows
+     part to show where it will land; letting go settles it there.
+     Near the top or bottom of the list it scrolls on its own. */
+  function queueHandle(row) {
+    const h = document.createElement("span");
+    h.className = "q-handle"; h.setAttribute("role", "button"); h.setAttribute("aria-label", "Drag to reorder");
+    h.innerHTML = '<svg viewBox="0 0 24 24"><path d="M5 9h14M5 15h14"/></svg>';
+    let d = null;
+    const rows = () => [...$("queueRows").querySelectorAll(".q-row")];
+    h.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const all = rows(), from = all.indexOf(row);
+      d = { id: e.pointerId, y: e.clientY, from, to: from, all, h: row.offsetHeight, top: $("queueRows").scrollTop };
+      try { h.setPointerCapture(e.pointerId); } catch (_) {}
+      row.classList.add("q-lifted"); buzz("light");
     });
-    sheet($("queueSheet"), true);
+    h.addEventListener("pointermove", (e) => {
+      if (!d || d.id !== e.pointerId) return;
+      const box = $("queueRows"), r = box.getBoundingClientRect();
+      if (e.clientY < r.top + 48) box.scrollTop -= 8; else if (e.clientY > r.bottom - 48) box.scrollTop += 8;
+      const dy = e.clientY - d.y + (box.scrollTop - d.top);
+      const to = Math.max(0, Math.min(d.all.length - 1, d.from + Math.round(dy / d.h)));
+      row.style.transform = "translateY(" + dy.toFixed(1) + "px)";
+      if (to !== d.to) { d.to = to; buzz("light"); }
+      d.all.forEach((o, n) => {
+        if (o === row) return;
+        const shift = d.from < d.to && n > d.from && n <= d.to ? -d.h : d.from > d.to && n < d.from && n >= d.to ? d.h : 0;
+        o.style.transform = shift ? "translateY(" + shift + "px)" : "";
+      });
+    });
+    const end = (e) => {
+      if (!d || d.id !== e.pointerId) return;
+      const { from, to, all } = d; d = null;
+      all.forEach((o) => { o.style.transform = ""; });
+      row.classList.remove("q-lifted");
+      if (e.type !== "pointercancel" && e.type !== "lostpointercapture") moveInQueue(from, to);
+    };
+    h.addEventListener("pointerup", end); h.addEventListener("pointercancel", end); h.addEventListener("lostpointercapture", end);
+    return h;
+  }
+  function drawQueue(keepScroll){
+    const box=$("queueRows"),top=box.scrollTop;
+    if(renderedQueue!==queue){box.replaceChildren();renderedQueue=queue;}
+    let count=box.querySelectorAll('.q-row').length;
+    for(let i=count;i<queue.length;i++){
+      const row=rowFor(queue[i],queue,i);row.classList.add('q-row','seen');row.append(queueHandle(row));box.append(row);
+    }
+    box.querySelectorAll('.q-row').forEach((row,i)=>{row.classList.toggle('played',i<index);row.classList.toggle('q-now',i===index);});
+    box.append(queueStatus);queueFeedback();if(keepScroll)box.scrollTop=top;
+  }
+  queueStatus.addEventListener('click',()=>extendRadio(true));
+  $("queueOpen").addEventListener("click",()=>{
+    drawQueue(false);sheet($("queueSheet"),true);
+    const row=$("queueRows").querySelector('.q-now'),box=$("queueRows");
+    if(row)box.scrollTop+=row.getBoundingClientRect().top-box.getBoundingClientRect().top-8;
+    queueMotion.scrollMode();if(radio&&queue.length-index-1<20)extendRadio();
   });
-  $("queueClose").addEventListener("click", () => sheet($("queueSheet"), false));
-  $("queueSheet").addEventListener("click", (e) => {
-    if (e.target === $("queueSheet")) sheet($("queueSheet"), false);
-  });
+  $("queueRows").addEventListener('scroll',()=>{
+    const b=$("queueRows");if(radio&&!radioError&&b.scrollHeight-b.scrollTop-b.clientHeight<360)extendRadio();
+  },{passive:true});
+  $("queueClose").addEventListener('click',()=>sheet($("queueSheet"),false));
+  $("queueSheet").addEventListener('click',e=>{if(e.target===$("queueSheet"))sheet(e.target,false);});
+
+  /* ---------- changing the queue ---------------------------- */
+  function upNext() {
+    const nxt = queue[index + 1];
+    $("upNextLabel").textContent = nxt ? "Up next · " + nxt.title : "Queue";
+  }
+  function queueChanged() {
+    upNext(); checkpoint();
+    if ($("queueSheet").classList.contains("open")) { renderedQueue = null; drawQueue(true); }
+  }
+  function playNext(song) {
+    if (index < 0 || !queue[index]) { chooseSong([song], 0); return; }
+    queue.splice(index + 1, 0, song); buzzDone("success"); toast("Playing next"); queueChanged();
+  }
+  function addToQueue(song) {
+    if (index < 0 || !queue[index]) { chooseSong([song], 0); return; }
+    queue.push(song); buzzDone("success"); toast("Added to queue"); queueChanged();
+  }
+  function moveUpNext(i) {
+    if (i === index || i === index + 1 || !queue[i]) return;
+    const [s] = queue.splice(i, 1); if (i < index) index--;
+    queue.splice(index + 1, 0, s); buzzDone("success"); toast("Playing next"); queueChanged();
+  }
+  function removeFromQueue(i) {
+    if (!queue[i]) return;
+    if (i === index) { toast("That one is playing"); return; }
+    queue.splice(i, 1); if (i < index) index--;
+    buzzDone("success"); toast("Removed from queue"); queueChanged();
+  }
+  // Moves a song from one place in the queue to another, keeping the
+  // song that is playing the one that is playing.
+  function moveInQueue(from, to) {
+    if (from === to || !queue[from]) return;
+    const [s] = queue.splice(from, 1); queue.splice(to, 0, s);
+    if (from === index) index = to;
+    else if (from < index && to >= index) index--;
+    else if (from > index && to <= index) index++;
+    buzzDone("success"); queueChanged();
+  }
+
+  /* ---------- lyrics ----------------------------------------
+     Fetched as soon as a song starts, so the button on the player
+     can already show the line being sung. The full screen follows
+     the song line by line until a finger scrolls it; then it waits
+     a few seconds, offers Follow, and picks the song back up. */
+  const ly = { song: null, data: null, lines: [], at: -1, holdUntil: 0, failed: false, offset: 0, followTimer: 0 };
+  const lyBody = $("lyBody"), lyPeek = $("lyricsPeek");
+  function lyStatus(text, retry) {
+    lyBody.replaceChildren();
+    const p = document.createElement("div"); p.className = "ly-status"; p.setAttribute("role", "status"); p.textContent = text;
+    if (retry) { const b = document.createElement("button"); b.type = "button"; b.textContent = "Try again";
+      b.addEventListener("click", () => { ly.song = null; loadLyrics(queue[index]); }); p.append(document.createElement("br"), b); }
+    lyBody.append(p);
+  }
+  function drawLyrics() {
+    const d = ly.data; ly.lines = []; ly.at = -1;
+    $("lySource").textContent = ""; $("lyTiming").hidden = !(d && d.synced && d.synced.length);
+    if (!d) { lyStatus(ly.failed ? "Couldn't reach the lyrics service." : "Finding lyrics…", ly.failed); return; }
+    if (d.none) { lyStatus("No lyrics found for this song yet."); return; }
+    lyBody.replaceChildren();
+    if (d.synced && d.synced.length) {
+      d.synced.forEach((l) => {
+        const b = document.createElement("button"); b.type = "button";
+        b.className = "ly-line" + (l.text ? "" : " gap"); b.textContent = l.text;
+        // A tap on a line jumps the song there.
+        if (l.text) b.addEventListener("click", () => {
+          if (!audio.src) return;
+          audio.currentTime = Math.max(0, Math.min(audio.duration || Infinity, l.t + ly.offset)); if (audio.paused) audio.play().catch(() => {});
+          ly.holdUntil = 0; buzz("light"); syncLyrics(true);
+        });
+        lyBody.append(b); ly.lines.push(b);
+      });
+    } else {
+      const p = document.createElement("div"); p.className = "ly-plain"; p.textContent = d.plain; lyBody.append(p);
+    }
+    $("lySource").textContent = (d.synced && d.synced.length ? "Synced lyrics" : "Lyrics") + " · LRCLIB" + (d.source ? " · " + d.source : "");
+    if (d.timingUnavailable) $("lySource").textContent += " · Different edit: timing unavailable";
+    syncLyrics(true);
+  }
+  function syncLyrics(jump) {
+    const d = ly.data, timed = d && d.synced && d.synced.length;
+    if (!timed) return;
+    const i = AartiLyrics.lineAt(d.synced, (audio.currentTime || 0) - ly.offset);
+    if (i === ly.at && !jump) return;
+    const previous = ly.at; ly.at = i;
+    // The button on the player shows the line, so lyrics are one glance away.
+    let k = i; while (k > 0 && !d.synced[k].text) k--;
+    const line = k >= 0 && d.synced[k].text;
+    lyPeek.textContent = line || "Lyrics";
+    $("lyricsOpen").classList.toggle("live", !!line);
+    if (!$("lyrics").classList.contains("open")) return;
+    const first = jump || previous < 0 ? 0 : Math.max(0, Math.min(previous, i));
+    const last = jump || previous < 0 ? ly.lines.length - 1 : Math.max(previous, i);
+    for (let n = first; n <= last; n++) { const el = ly.lines[n]; if (!el) continue;
+      el.classList.toggle("on", n === i); el.classList.toggle("past", n < i);
+      if (n === i) el.setAttribute("aria-current", "true"); else el.removeAttribute("aria-current");
+    }
+    if (i >= 0 && Date.now() > ly.holdUntil) {
+      const el = ly.lines[i], box = lyBody;
+      const to = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight * 0.38;
+      box.scrollTo({ top: Math.max(0, to), behavior: jump || REDUCED ? "auto" : "smooth" });
+      $("lyFollow").hidden = true;
+    }
+  }
+  function loadLyrics(song) {
+    if (!song || (ly.song && ly.song.id === song.id)) return;
+    clearTimeout(ly.followTimer); ly.holdUntil = 0;
+    ly.song = song; ly.data = null; ly.failed = false;
+    try { const offsets = JSON.parse(localStorage.getItem('aarti.lyrics.offsets') || '{}'); ly.offset = Math.max(-30, Math.min(30, Number(offsets[song.id]) || 0)); } catch (_) { ly.offset = 0; }
+    paintLyOffset();
+    lyPeek.textContent = "Lyrics"; $("lyricsOpen").classList.remove("live");
+    $("lyTitle").textContent = AartiLyrics.strip(String(song.title || "").split("|")[0]) || song.title; $("lyArtist").textContent = song.artist || "";
+    $("lyBg").style.backgroundImage = song.thumb ? 'url("' + song.thumb + '")' : "";
+    drawLyrics();
+    AartiLyrics.find(song).then((d) => {
+      if (ly.song !== song) return;
+      ly.data = d; drawLyrics();
+    }, () => {
+      if (ly.song !== song) return;
+      ly.failed = true; drawLyrics();
+    });
+  }
+  audio.addEventListener("timeupdate", () => syncLyrics(false));
+  audio.addEventListener("seeked", () => syncLyrics(true));
+  // A finger on the lyrics means reading ahead or back: stop following for a moment.
+  ["touchstart", "wheel"].forEach((ev) => lyBody.addEventListener(ev, () => {
+    ly.holdUntil = Date.now() + 5000; if (ly.lines.length) $("lyFollow").hidden = false;
+    clearTimeout(ly.followTimer); ly.followTimer = setTimeout(() => { ly.holdUntil = 0; if ($("lyrics").classList.contains("open")) syncLyrics(true); }, 5100);
+  }, { passive: true }));
+  function paintLyOffset() { $("lyOffset").textContent = 'Timing ' + (ly.offset > 0 ? '+' : '') + ly.offset.toFixed(1) + 's'; }
+  function changeLyOffset(delta) {
+    ly.offset = delta === null ? 0 : Math.max(-30, Math.min(30, ly.offset + delta));
+    if (ly.song) try { const offsets = JSON.parse(localStorage.getItem('aarti.lyrics.offsets') || '{}');
+      delete offsets[ly.song.id]; offsets[ly.song.id] = ly.offset;
+      localStorage.setItem('aarti.lyrics.offsets', JSON.stringify(Object.fromEntries(Object.entries(offsets).slice(-150))));
+    } catch (_) {}
+    paintLyOffset(); ly.holdUntil = 0; syncLyrics(true);
+  }
+  $("lyEarlier").addEventListener("click", () => changeLyOffset(-.5));
+  $("lyLater").addEventListener("click", () => changeLyOffset(.5));
+  $("lyOffset").addEventListener("click", () => changeLyOffset(null));
+  $("lyFollow").addEventListener("click", () => { ly.holdUntil = 0; syncLyrics(true); });
+  function openLyrics() {
+    const lyr = $("lyrics");
+    if (lyr.classList.contains("open")) return;
+    if (queue[index]) loadLyrics(queue[index]);
+    lyr.inert = false; lyr.classList.add("open"); lyr.setAttribute("aria-hidden", "false");
+    ly.holdUntil = 0; $("lyFollow").hidden = true;
+    opened(lyr, closeLyrics);
+    requestAnimationFrame(() => syncLyrics(true));
+  }
+  function closeLyrics() {
+    const lyr = $("lyrics");
+    if (!lyr.classList.contains("open")) return;
+    clearTimeout(ly.followTimer); lyr.inert = true; lyr.classList.remove("open"); lyr.setAttribute("aria-hidden", "true");
+    closed(lyr);
+  }
+  $("lyrics").inert = true;
+  $("lyricsOpen").addEventListener("click", openLyrics);
+  $("lyClose").addEventListener("click", closeLyrics);
 
   // per-song actions
   function openActions(song) {
@@ -1765,12 +2377,12 @@
     const act = e.target.dataset && e.target.dataset.act;
     if (!act) { if (e.target === $("actionSheet")) sheet($("actionSheet"), false); return; }
 
+    if (act === "playlist" && actionSong) { personalLibrary.addSong(actionSong); }
     if (act === "next" && actionSong) {
-      queue.splice(index + 1, 0, actionSong);
-      paint(queue[index]); buzzDone("success"); toast("Playing next");
+      playNext(actionSong);
     }
     if (act === "queue" && actionSong) {
-      queue.push(actionSong); buzzDone("success"); toast("Added to queue");
+      addToQueue(actionSong);
     }
     if (act === "fav" && actionSong) {
       toggleFav(actionSong);
@@ -1782,7 +2394,63 @@
 
   // sleep timer
   $("nowMenu").addEventListener("click", () => sheet($("sleepSheet"), true));
+  if (aartiAudio()) {
+    try { aartiAudio().addListener("like", () => { if (queue[index]) toggleFav(queue[index]); }); } catch (_) {}
+  }
+
+  /* Sound presets — the phone's equalizer and bass boost, through the
+     native plugin. Shown only in the Android app, and greyed out with
+     the reason when the phone does not allow them. */
+  function paintFx(preset, supported, note) {
+    $("fxHead").hidden = $("fxRow").hidden = false;
+    document.querySelectorAll("[data-fx]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.fx === preset));
+      b.disabled = !supported;
+    });
+    $("fxNote").hidden = !note; $("fxNote").textContent = note || "";
+  }
+  function refreshFx() {
+    const p = aartiAudio();
+    if (!p) return;
+    p.fxStatus().then((s) => paintFx(s.preset, s.supported, s.supported ? "" : (s.error || "Sound effects are not available on this phone.")),
+      () => paintFx("normal", false, "Sound effects are not available on this phone."));
+  }
+  $("nowMenu").addEventListener("click", refreshFx);
+  function syncSoundPlayback() {
+    const p = aartiAudio();
+    if (!p || typeof p.setPlaying !== "function") return;
+    try { p.setPlaying({playing: !audio.paused && !audio.ended && !audio.error}).catch(() => {}); } catch (_) {}
+  }
+  ["playing", "pause", "ended", "emptied", "error"].forEach(e => audio.addEventListener(e, syncSoundPlayback));
+
+  /* Playback speed. Set as the default rate too, because loading a
+     new song puts the rate back to the default. */
+  const SPEEDS = [0.75, 1, 1.25, 1.5];
+  function applySpeed() {
+    const r = SPEEDS.includes(+store.speed) ? +store.speed : 1;
+    audio.defaultPlaybackRate = r; audio.playbackRate = r;
+    if ("preservesPitch" in audio) audio.preservesPitch = true;
+    document.querySelectorAll("[data-speed]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.speed === r)));
+  }
+  applySpeed();
+
   $("sleepSheet").addEventListener("click", (e) => {
+    const fx = e.target.dataset && e.target.dataset.fx;
+    if (fx !== undefined) {
+      const p = aartiAudio(); if (!p) return;
+      buzz();
+      p.fxSet({ preset: fx }).then((r) => {
+        paintFx(r.preset, true, "");
+        toast(r.preset === "normal" ? "Sound: normal" : "Sound: " + e.target.textContent);
+      }, (err) => { paintFx("normal", false, (err && err.message) || "Sound effects are not available on this phone."); });
+      return;
+    }
+    const sp = e.target.dataset && e.target.dataset.speed;
+    if (sp !== undefined) {
+      store.speed = +sp; save(); applySpeed(); buzz();
+      toast(+sp === 1 ? "Normal speed" : "Speed " + sp + "×");
+      return;
+    }
     const v = e.target.dataset && e.target.dataset.sleep;
     if (v === undefined) { if (e.target === $("sleepSheet")) sheet($("sleepSheet"), false); return; }
 
@@ -1790,6 +2458,7 @@
     else if (v === "0") { sleepAt = 0; toast("Sleep timer off"); }
     else { sleepAt = Date.now() + parseInt(v, 10) * 60000; toast(`Sleeping in ${v} minutes`); }
 
+    fadeVolume();
     sheet($("sleepSheet"), false);
   });
 
@@ -2166,7 +2835,7 @@
   $("plPlay").addEventListener("click", () => {
     if (!plSongs.length) return;
     buzz();
-    queue = plSongs.slice();
+    queue = plSongs.slice(); radio = false;
     playAt(0);
   });
   $("plShuffle").addEventListener("click", () => {
@@ -2177,7 +2846,7 @@
       const j = Math.floor(Math.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
     }
-    queue = shuffled;
+    queue = shuffled; radio = false;
     playAt(0);
   });
 
@@ -2402,6 +3071,13 @@
   });
   tab("Home");
   AartiProfile.start();
+  const personalLibrary=AartiPersonalLibrary({
+    play: (songs,at)=>chooseSong(songs,at,true),
+    readStore:()=>store,
+    reload:()=>{load();AartiProfile.reload();paintTheme();paintModes();applySpeed();paintFavButtons();drawHome();drawLib();},
+    native:()=>nativePlugin('PersonalLibrary'),
+    toast
+  });
   restorePlayback();
 
   // Opening visual has its own short timer in HTML and never gates startup.
