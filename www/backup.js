@@ -1,7 +1,7 @@
 /* Strict, portable backup schema. Credentials and server settings are never copied. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.AartiBackup=api;})(typeof window==='undefined'?globalThis:window,function(){
  'use strict';
- const themes=['coral','blue','amber','green','teal','violet','indigo','neon','ruby'],icons=['classic','teal','violet','indigo','neon','ruby'];
+ const themes=['white','coral','blue','amber','green','teal','violet','indigo','neon','ruby'],icons=['classic','teal','violet','indigo','neon','ruby'];
  function fail(){throw new Error('This is not a supported Aarti Music backup.');}
  function str(v,max,required){if(typeof v!=='string'||v.length>max||(required&&!v.trim()))fail();return v;}
  function array(v,max){if(!Array.isArray(v)||v.length>max)fail();return v;}

@@ -30,3 +30,10 @@ A compatible update therefore requires a backup of that original keystore. Store
 The original 1.2 signing key is unavailable. The owner accepted exporting a backup, uninstalling the old app, and installing the new APK. Review builds now generate a replacement key when neither the new v4 cache nor `AARTI_SIGNING_KEY_BASE64` is available; they no longer require the original certificate. The package ID and all restored features stay unchanged.
 
 The workflow reuses the replacement key while its cache exists. GitHub caches are temporary: permanent update compatibility requires a privately retained keystore supplied as the repository secret `AARTI_SIGNING_KEY_BASE64` (alias `androiddebugkey`, passwords `android`). Never commit or upload the private keystore to public artifacts. A warning is emitted whenever a new key is generated. Export app data before uninstalling; Android removes local app data on uninstall.
+
+
+## Playback UI follow-up
+
+Playlist panels now slide vertically instead of scaling the whole screen into the Explore button. Profile uploads retain their aspect ratio and fit inside the badge; previously cropped stored photos need to be selected again. Settings contains a separate Choose theme screen, including a persistent White palette. JSON export/import controls were removed at the owner's request; existing local playlists and saved data remain intact. The supplied anime clip is bundled as the new default floating media, with a reduced-motion poster and an Aarti anime preset for existing installations. Existing custom floating media choices are preserved.
+
+Validation: 23 contract tests; UI smoke coverage for White persistence, full-width photo uploads, absent JSON controls, non-scaling playlist transitions; capsule editor coverage for the bundled anime preset. Physical-device rendering still needs a Realme check.

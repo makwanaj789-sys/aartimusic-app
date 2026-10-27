@@ -31,6 +31,12 @@ const server=http.createServer((req,res)=>{let file=path.join(root,new URL(req.u
   fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/glass-editor.png'});await page.getByRole('button',{name:'Save glass player'}).click();assert.equal(await page.evaluate(()=>saved.media),'custom');
   await page.evaluate(()=>{window.failConfigure=true;});await checkbox.click();await page.locator('.capsule-settings [role=status]').filter({hasText:'Could not save floating preference'}).waitFor();assert(await checkbox.isChecked());
   await page.evaluate(()=>{testState.permitted=false;dispatchEvent(new Event('focus'));});await page.waitForFunction(()=>document.querySelector('.capsule-toggle input').disabled);
+  await page.evaluate(()=>{failConfigure=false;});
+  await page.getByRole('button',{name:'Customize glass player'}).click();
+  await page.getByRole('button',{name:'Aarti anime',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('.glass-media video')?.videoWidth===640);
+  await page.getByRole('button',{name:'Save glass player'}).click();
+  assert.equal(await page.evaluate(()=>saved.media),'aarti');
   assert.deepEqual(errors,[]);
   // Fresh installation: Skip also advances without opening Android settings.
   await page.evaluate(()=>{localStorage.removeItem('aarti.capsule.intro.v2');document.body.innerHTML='<dialog class="settings-drawer" open></dialog>';failConfigure=false;});await page.addScriptTag({path:path.resolve('www/capsule.js')});await page.getByRole('button',{name:'Not now · continue without floating'}).click();assert.equal(await page.locator('.capsule-intro').count(),0);

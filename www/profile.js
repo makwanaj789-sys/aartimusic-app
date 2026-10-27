@@ -35,7 +35,7 @@
    file.onchange=async()=>{const f=file.files[0];if(!f)return;if(f.size>15*1024*1024){err.textContent='Choose an image under 15 MB.';return;}
     photoBusy=true;pick.disabled=true;err.textContent='Preparing photo…';
     const url=URL.createObjectURL(f);
-    try{const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');c.width=c.height=256;const side=Math.min(img.width,img.height);c.getContext('2d').drawImage(img,(img.width-side)/2,(img.height-side)/2,side,side,0,0,256,256);draft.photo=c.toDataURL('image/jpeg',.82);avatar(face,draft);err.textContent='';}catch(_){err.textContent='That image could not be opened. Try another.';}finally{URL.revokeObjectURL(url);photoBusy=false;pick.disabled=false;}
+    try{const img=new Image();img.src=url;await img.decode();const c=document.createElement('canvas');const scale=Math.min(1,512/Math.max(img.width,img.height));c.width=Math.max(1,Math.round(img.width*scale));c.height=Math.max(1,Math.round(img.height*scale));c.getContext('2d').drawImage(img,0,0,c.width,c.height);draft.photo=c.toDataURL('image/jpeg',.82);avatar(face,draft);err.textContent='';}catch(_){err.textContent='That image could not be opened. Try another.';}finally{URL.revokeObjectURL(url);photoBusy=false;pick.disabled=false;}
    };
    wrap.append(pick,file,button('Remove photo',()=>{draft.photo='';avatar(face,draft);},'pref-secondary'));
   }else if(step===1){
@@ -53,6 +53,7 @@
  let badge,settings,drawerProgress=0,drawerAnimation;
  function drawerFrame(p){drawerProgress=Math.max(0,Math.min(1,p));settings.style.transform=`translate3d(${(drawerProgress-1)*100}%,0,0)`;}
  function drawerTo(p){
+  if(drawerAnimation&&settings.open){const matrix=new DOMMatrixReadOnly(getComputedStyle(settings).transform);drawerProgress=Math.max(0,Math.min(1,1+matrix.m41/settings.offsetWidth));}
   drawerAnimation?.cancel();drawerAnimation=null;
   if(p&&!settings.open){previousFocus=document.activeElement;settings.showModal();drawerFrame(0);}
   if(!settings.open)return;
@@ -97,7 +98,10 @@
   settings.append(button('Edit profile & music preferences',()=>{closeModal(settings);edit();}));
   const theme=document.querySelector('.themes');if(theme){
    for(const [id,name,color] of [["teal","Midnight","#77ccdb"],["violet","Violet","#d1a0ff"],["indigo","Indigo","#a6a2ff"],["neon","Neon","#ff70c6"],["ruby","Ruby","#ff9aaa"]]){if(theme.querySelector('[data-theme="'+id+'"]'))continue;const b=el('button','th');b.type='button';b.dataset.theme=id;b.setAttribute('aria-pressed',String(document.documentElement.dataset.theme===id));b.style.setProperty('--swatch',color);b.append(el('i'),el('span','',name));theme.append(b);}
-   settings.append(theme);
+   const white=button('White',()=>{},'th');white.dataset.theme='white';white.style.setProperty('--swatch','#f7f8fc');theme.append(white);
+   const themePage=el('section','theme-page');themePage.hidden=true;
+   themePage.append(button('Back to settings',()=>{themePage.hidden=true;for(const n of settings.children)if(n!==themePage)n.hidden=false;},'pref-secondary'),el('h2','','Choose theme'),theme);
+   settings.append(button('Choose theme',()=>{for(const n of settings.children)n.hidden=true;themePage.hidden=false;settings.scrollTop=0;},'pref-button'),themePage);
   }
   settings.append(el('h3','','Contact us'));
   for(const [text,url,mark] of [

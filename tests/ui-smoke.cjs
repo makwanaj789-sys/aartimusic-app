@@ -167,11 +167,13 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   assert(await page.locator('#audio').evaluate(a=>a.paused),'Restored audio must wait for Play');
   assert.equal(await page.locator('.profile-dialog[open]').count(),0,'Onboarding must only run once');
   await page.locator('#profileMenu').click();await page.locator('.settings-drawer[open]').waitFor();
-  for(const [label,theme] of [['Coral','coral'],['Ocean','blue'],['Violet','violet'],['Amber',null],['Grove','green']]) {
+  await page.getByRole('button',{name:'Choose theme',exact:true}).click();
+  for(const [label,theme] of [['White','white'],['Coral','coral'],['Ocean','blue'],['Violet','violet'],['Amber',null],['Grove','green']]) {
     await page.getByRole('button',{name:label,exact:true}).click();
     assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
   }
   assert.equal(await page.locator('html').getAttribute('data-theme'),'green');
+  await page.getByRole('button',{name:'Back to settings',exact:true}).click();
   await page.screenshot({path:'test-results/settings.png'});
   await page.getByRole('button',{name:'Edit profile & music preferences',exact:true}).click();
   await page.locator('#profileName').fill('Ajay Music');
@@ -183,8 +185,10 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   // Seven palettes preserve playback and offer a translucent floating nav.
   await page.locator('#profileMenu').click();
   for(const [name,key]of [['Midnight','teal'],['Violet','violet'],['Indigo','indigo'],['Neon','neon'],['Ruby','ruby']]){
+   await page.getByRole('button',{name:'Choose theme',exact:true}).click();
    await page.locator('.themes').getByRole('button',{name,exact:true}).click();
    assert.equal(await page.locator('html').getAttribute('data-theme'),key);
+   await page.getByRole('button',{name:'Back to settings',exact:true}).click();
    await page.locator('.settings-drawer').getByRole('button',{name:'Close',exact:true}).click();
    await page.screenshot({path:'test-results/theme-'+key+'.png'});
    await page.locator('#profileMenu').click();
@@ -208,19 +212,7 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.locator('.personal-dialog').getByRole('button',{name:'Done',exact:true}).click();
   await page.screenshot({path:'test-results/personal-playlists.png'});
   await page.locator('#profileMenu').click();
-  const downloadPromise=page.waitForEvent('download');
-  await page.getByRole('button',{name:'Save backup',exact:true}).click();
-  const download=await downloadPromise;const downloaded=await download.path();
-  const backup=JSON.parse(fs.readFileSync(downloaded,'utf8'));
-  assert.equal(backup.format,'aartimusic-backup');assert.equal(backup.playlists[0].songs.length,1);
-  assert.equal(backup.library.theme,'ruby');assert(!JSON.stringify(backup).includes('devKey'));assert(!('link' in backup.library));
-  // A merge must preserve current favourites and avoid duplicate playlists.
-  const fileInput=page.locator('.settings-drawer input[type=file]');
-  await fileInput.setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
-  await page.locator('.personal-dialog').getByRole('button',{name:'Merge backup',exact:true}).click();
-  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.playlists.v1')).length),1);
-  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.playlists.v1'))[0].songs.length),1);
-  assert.equal(await page.locator('#audio').evaluate(a=>a.paused),true);
+  assert.equal(await page.getByRole('button',{name:/^(Save backup|Restore backup)$/}).count(),0);
   await page.locator('.settings-drawer').getByRole('button',{name:'Close',exact:true}).click();
   await page.reload();await page.locator('#profileMenu').waitFor();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'ruby');
@@ -273,6 +265,28 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
     assert.equal(await live.locator('.eq').evaluate(e=>getComputedStyle(e).borderRadius),'50%');
   }
   assert.equal(await page.locator('.themes [data-theme="violet"]').count(),1, 'No duplicate theme controls');
+  await page.evaluate(()=>scrollTo(0,0));
+  await page.locator('#profileMenu').click();
+  await page.getByRole('button',{name:'Choose theme',exact:true}).click();
+  await page.getByRole('button',{name:'White',exact:true}).click();
+  await page.getByRole('button',{name:'Back to settings',exact:true}).click();
+  await page.getByRole('button',{name:'Edit profile & music preferences',exact:true}).click();
+  await page.locator('#profilePhoto').setInputFiles({name:'wide.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect width="400" height="200" fill="blue"/><rect width="30" height="200" fill="red"/></svg>')});
+  await page.waitForFunction(()=>document.querySelector('.profile-photo img')?.naturalWidth===400);
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'Let’s listen',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('#profileMenu img')?.naturalWidth===400);
+  assert.equal(await page.locator('#profileMenu img').evaluate(i=>i.naturalWidth/i.naturalHeight),2);
+  assert.equal(await page.locator('#profileMenu img').evaluate(i=>getComputedStyle(i).objectFit),'contain');
+  await page.reload();await page.locator('#profileMenu').waitFor();
+  assert.equal(await page.locator('html').getAttribute('data-theme'),'white');
+  await page.screenshot({path:'test-results/white-theme.png'});
+  await page.locator('[data-tab="Home"]').click();
+  await page.locator('.studio-play').first().click();
+  assert.equal(await page.locator('#plist').evaluate(e=>e.classList.contains('growing')),false);
+  await page.locator('#plClose').click();
+  assert.equal(await page.locator('#plist').evaluate(e=>e.classList.contains('growing')),false);
   assert.deepEqual(errors,[]);
 
   console.log('PASS: automatic discovery, same-artwork tap/drag/reduced-motion, favourites, shuffle/repeat, queue, explicit errors');

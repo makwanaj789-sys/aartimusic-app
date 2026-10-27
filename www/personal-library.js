@@ -5,7 +5,7 @@
   let lists=[];try{lists=JSON.parse(localStorage.getItem(KEY)||'[]').map(B.playlist);}catch(_){}
   const $=id=>document.getElementById(id),el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text)n.textContent=text;return n;};
   const btn=(text,fn,cls='')=>{const b=el('button',cls,text);b.type='button';b.onclick=fn;return b;};
-  const dialog=el('dialog','personal-dialog');dialog.setAttribute('aria-label','Your playlists and backup');document.body.append(dialog);
+  const dialog=el('dialog','personal-dialog');dialog.setAttribute('aria-label','Your playlists');document.body.append(dialog);
   let previousFocus;
   function open(){if(!dialog.open){previousFocus=document.activeElement;dialog.showModal();}}
   function close(){dialog.close();previousFocus?.focus();}
@@ -55,37 +55,6 @@
   paintIcon(B.icons.includes(localStorage.getItem(ICON))?localStorage.getItem(ICON):'classic');
   const plugin=o.native();if(plugin)plugin.getIcon().then(r=>{if(B.icons.includes(r.icon)){localStorage.setItem(ICON,r.icon);paintIcon(r.icon);}}).catch(()=>{});
   settings.append(el('p','personal-status','Launcher icons may take a moment to refresh. Your theme and icon can be chosen independently.'));
-  settings.append(el('h3','','Backup & restore'));
-  const controls=el('div','backup-controls');settings.append(controls);
-  const file=el('input');file.type='file';file.accept='.json,application/json';file.hidden=true;settings.append(file);
-  function exportText(){const value=B.create(o.readStore(),AartiProfile.get(),lists,localStorage.getItem(ICON));const text=JSON.stringify(value,null,2);if(new Blob([text]).size>8*1024*1024)throw new Error('Backup is too large. Remove some custom cover photos and try again.');return text;}
-  controls.append(btn('Save backup',async()=>{try{const text=exportText(),name='AartiMusic-backup-'+new Date().toISOString().slice(0,10)+'.json',p=o.native();if(p){const r=await p.exportBackup({data:text,name});if(!r?.cancelled)o.toast('Backup saved');}else{const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));const a=el('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);}}catch(e){o.toast(e.message||'Backup could not be saved.');}},'library-action'));
-  controls.append(btn('Restore backup',async()=>{try{const p=o.native();if(p){const r=await p.importBackup();if(!r.cancelled)preview(r.data);}else file.click();}catch(e){o.toast(e.message||'Backup could not be opened.');}},'library-action'));
-  file.onchange=async()=>{const f=file.files[0];file.value='';if(!f)return;try{if(f.size>8*1024*1024)throw new Error('Choose a backup under 8 MB.');preview(await f.text());}catch(e){o.toast(e.message);}};
-  function preview(text){
-   const data=B.parse(text);frame('Restore your music');
-   status(data.library.favs.length+' favourites · '+data.playlists.length+' playlists');
-   status('Songs will be merged with your saved library. Existing playlists and favourites will not be deleted. Audio files and login credentials are not part of a backup.');
-   const label=el('label','backup-options'),check=el('input');check.type='checkbox';check.checked=true;label.append(check,document.createTextNode('Also restore the name, photo, music preferences, theme and icon.'));dialog.append(label);
-   const actions=el('div','personal-actions');actions.append(btn('Merge backup',async()=>{
-    try{
-     const current=o.readStore(),merged=B.mergePlaylists(lists,data.playlists),fresh=JSON.parse(JSON.stringify(current));
-     const ids=new Set(fresh.favs.map(x=>x.id));for(const song of data.library.favs){if(!ids.has(song.id)){fresh.favs.push({...song,at:Date.now()});ids.add(song.id);}delete fresh.gone[song.id];}
-     fresh.recents=[...new Map([...fresh.recents,...data.library.recents].map(x=>[x.id,x])).values()].slice(0,30);
-     fresh.history=[...new Set([...fresh.history,...data.library.history])].slice(0,30);
-     fresh.lists=[...new Map([...fresh.lists,...data.library.lists].map(x=>[x.id,x])).values()].slice(0,100);
-     if(check.checked){fresh.theme=data.library.theme;fresh.shuffle=data.library.shuffle;fresh.repeat=data.library.repeat;}
-     const changes=[['aarti.v1',JSON.stringify(fresh)],[KEY,JSON.stringify(merged)]];
-     if(check.checked&&data.profile)changes.push(['aarti.profile.v1',JSON.stringify(data.profile)]);
-     const previous=changes.map(([key])=>[key,localStorage.getItem(key)]);
-     try{for(const [key,value]of changes)localStorage.setItem(key,value);}catch(error){for(const [key,value]of previous){if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value);}throw error;}
-     lists=merged;render();o.reload();close();
-     if(check.checked){try{const native=o.native();if(native)await native.setIcon({icon:data.icon});localStorage.setItem(ICON,data.icon);paintIcon(data.icon);}catch(_){o.toast('Library restored. Choose the app icon again in Settings.');return;}}
-     o.toast('Backup restored.');
-    }catch(e){status(e.message||'Restore failed. Your saved library was kept.',true);}
-   },'primary'),btn('Cancel',close));dialog.append(actions);
-  }
-  settings.append(el('p','personal-status','Save the JSON file somewhere safe. Backups contain your profile and library, not downloaded music or sign-in tokens.'));
   render();return {addSong};
  };
 })(window);

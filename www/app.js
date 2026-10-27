@@ -2774,8 +2774,8 @@
 
   function openPl(from) {
     if (plist.classList.contains("open")) return;
-    if (growFrom(plist, from)) { cameFrom.set(plist, from); settle(plist); }
-    else cameFrom.delete(plist);
+    plist.classList.remove("growing");
+    cameFrom.delete(plist);
     plist.classList.add("open");
     plist.setAttribute("aria-hidden", "false");
     document.body.classList.add("locked");
@@ -2787,8 +2787,7 @@
     // Back into the card it came out of — unless that card has been
     // scrolled away or the playlist was opened from a pasted link,
     // in which case there is nothing to go back into and it slides.
-    if (how === "drag") plist.classList.remove("growing");
-    else growFrom(plist, cameFrom.get(plist));
+    plist.classList.remove("growing");
     plist.classList.remove("open");
     plist.setAttribute("aria-hidden", "true");
     if (!now.classList.contains("open")) document.body.classList.remove("locked");

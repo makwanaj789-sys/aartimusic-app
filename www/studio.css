@@ -118,3 +118,28 @@ button { touch-action:manipulation; }
 :root[data-theme="blue"] { --q-top:#172e49; --q-bottom:#090f1b; --q-accent:#9dceff; --q-glow:119,181,255; }
 /* The native player keeps its low-cost colour backdrop from themes.css. */
 #now .now-bg { filter:none; }
+
+/* Keep the full photo visible; reset the browser button's default inset. */
+.profile-badge { padding:0; display:grid; place-items:center; border-radius:12px; }
+.profile-badge img,.profile-photo img { display:block; width:100%; height:100%; object-fit:contain; }
+.profile-photo { border-radius:18px; }
+.theme-page { padding-top:16px; }
+.theme-page h2 { margin-top:20px; }
+#plist { background:var(--bg); transform:translate3d(0,100%,0); transition:transform .34s cubic-bezier(.2,.8,.2,1),visibility .34s; }
+#plist.open { transform:translate3d(0,0,0); }
+#plist.dragging { transition:none; }
+:root[data-theme="white"] { color-scheme:light; --bg:#f7f8fc; --bg-2:#fff; --bg-3:#e9edf5; --line:#d4dae5; --ink:#172033; --text:#172033; --mist:#58657b; --flame:#245edb; --ember:#1949ad; --hot:#153d91; --glow:36,94,219; --on-accent:#fff; --q-top:#edf2fc; --q-bottom:#f7f8fc; --q-accent:#245edb; --q-glow:36,94,219; }
+:root[data-theme="white"] .studio-hero { background:linear-gradient(145deg,#e4eaf6,#fff); }
+:root[data-theme="white"] .mini-in { background:#fffffff5; color:var(--ink); }
+:root[data-theme="white"] .now,:root[data-theme="white"] .lyrics { color:var(--ink); }
+:root[data-theme="white"] .settings-drawer,:root[data-theme="white"] .profile-dialog { color:var(--ink); }
+@media(prefers-reduced-motion:reduce) { #plist { transition:none; } }
+:root[data-theme="white"] .studio-hero-copy { background:linear-gradient(0deg,#fff,transparent 90%); }
+:root[data-theme="white"] .studio-hero-sub { color:var(--mist); }
+:root[data-theme="white"] #now .now-bg::after { background:linear-gradient(180deg,#f7f8fcc9,#f7f8fc); }
+:root[data-theme="white"] .row,:root[data-theme="white"] .discovery-song { border-color:var(--line); }
+:root[data-theme="white"] .pref-field input,:root[data-theme="white"] .artist-add input,:root[data-theme="white"] .language-choice,:root[data-theme="white"] .artist-choice { border-color:var(--line); background:var(--bg-2); }
+:root[data-theme="white"] .discovery-chips .chip.active { background:var(--flame); color:#fff; border-color:var(--flame); }
+:root[data-theme="white"] .discovery-chips .chip.active::before { background:var(--flame); }
+:root[data-theme="white"] .discovery-ambience { opacity:.14 !important; }
+:root[data-theme="white"] .mini * { text-shadow:none; }
