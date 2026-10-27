@@ -1,10 +1,16 @@
 """Pin review builds to the explicit, cached keystore and verify its certificate."""
 from pathlib import Path
-import subprocess,sys,hashlib
+import subprocess,sys,hashlib,os,base64
 key=Path('.ci-signing/review.keystore')
 # Public certificate fingerprint of the user's installed AartiMusic 1.2 APK.
 INSTALLED_SHA256='E9E8D11AAEB7C9A7D5A9FC9C676A44B88B801F322EAA3B57A279ACFF346F327F'
-if not key.is_file():raise SystemExit('Original signing key missing; refusing to create an incompatible update')
+if not key.is_file() and os.environ.get('AARTI_SIGNING_KEY_BASE64'):
+ key.parent.mkdir(parents=True,exist_ok=True)
+ try: data=base64.b64decode(os.environ['AARTI_SIGNING_KEY_BASE64'],validate=True)
+ except ValueError: raise SystemExit('Signing key secret must be valid base64')
+ fd=os.open(key,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+ with os.fdopen(fd,'wb') as f:f.write(data)
+if not key.is_file():raise SystemExit('Original signing key missing. Restore the original key using AARTI_SIGNING_KEY_BASE64; refusing an incompatible update.')
 cert=subprocess.check_output(['keytool','-exportcert','-keystore',str(key),'-storepass','android','-alias','androiddebugkey'])
 if hashlib.sha256(cert).hexdigest().upper()!=INSTALLED_SHA256:
  raise SystemExit('Signing key does not match the installed AartiMusic 1.2 certificate')

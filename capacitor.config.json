@@ -1,5 +1,5 @@
 {
-  "appId": "com.aartimusic.player",
+  "appId": "com.aartimusic.player.preview.v3",
   "appName": "AartiMusic",
   "webDir": "www",
   "android": {

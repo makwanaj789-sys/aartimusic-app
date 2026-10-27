@@ -17,3 +17,9 @@ The supplied APK uses `com.aartimusic.player.preview.v3`, version code 3. All 39
 Update builds retain the v3 package and explicit original signing key, increment to version code 4 / 1.3, and fail closed if the restored certificate differs from the supplied APK. This is built on the original branch so its GitHub Actions signing cache is available. No replacement key is generated.
 
 Fixes: the circular now-playing overlay is aligned exactly with its artwork; the profile avatar scrolls out with the header; bottom navigation has a solid surface and consistent geometry; duplicated Violet theme controls are removed, and new palette choices round-trip through backups. Native system-bar colours use dark surfaces with light icons. Physical Realme installation and live backend playback remain device checks.
+
+### Signing recovery blocker
+
+The original 17 October build saved the matching private keystore only in the Actions cache `aartimusic-review-signing-v3`. The 27 October build reports that cache missing. No keystore is present in repository history or the original build artifacts. APK certificates do not contain the private key.
+
+A compatible update therefore requires a backup of that original keystore. Store its base64 encoding in the repository Actions secret `AARTI_SIGNING_KEY_BASE64`; do not commit the keystore. The build imports it only if needed and validates the pinned public certificate. Both main and working-branch builds now retain the installed package and explicit signing configuration. Without the original key, an in-place Android update cannot be produced; migration to a new signing identity would require backup/restore and explicit user agreement.
