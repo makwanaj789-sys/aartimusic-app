@@ -309,14 +309,21 @@ function wav(){const size=44100*2*5,b=Buffer.alloc(44+size);b.write('RIFF');b.wr
   await page.screenshot({path:'test-results/playlist-morph-opening.png'});
   await page.evaluate(()=>testPlaylistAnimation.finish());
   await page.waitForFunction(()=>!document.querySelector('#plist').classList.contains('button-morph'));
+  // Opening a playlist redraws Home (it joins the recent lists), which
+  // can move the button by a fraction of a pixel: close aims at where
+  // the button is now.
   const closing=await page.evaluate(()=>{
+    const r=document.querySelector('.studio-play').getBoundingClientRect();
     document.getElementById('plClose').click();
     const panel=document.querySelector('#plist');
     const animation=panel.getAnimations().find(a=>a.effect.target===panel&&a.effect.getKeyframes()[0].clipPath);
     animation.pause();animation.currentTime=190;window.testPlaylistAnimation=animation;
-    return animation.effect.getKeyframes();
+    return {frames:animation.effect.getKeyframes(),rect:{x:r.x,y:r.y,width:r.width,height:r.height}};
   });
-  assert.equal(closing[closing.length-1].clipPath,opening.frames[0].clipPath,'Close returns exactly to the source button');
+  const back=closing.frames[closing.frames.length-1].clipPath.match(/[\d.]+/g).map(Number);
+  assert(Math.abs(back[0]-closing.rect.y)<1&&Math.abs(back[3]-closing.rect.x)<1&&
+    Math.abs(opening.width-back[1]-back[3]-closing.rect.width)<1&&Math.abs(opening.height-back[0]-back[2]-closing.rect.height)<1,
+    'Close returns exactly to the source button');
   await page.screenshot({path:'test-results/playlist-morph-closing.png'});
   await page.evaluate(()=>testPlaylistAnimation.finish());
   await page.waitForFunction(()=>!document.querySelector('#plist').classList.contains('open'));

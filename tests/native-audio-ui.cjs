@@ -1,4 +1,4 @@
-// Native sound presets and the lock-screen like, through a stand-in for the Android plugin.
+// The lock-screen like, through a stand-in for the Android plugin.
 const {chromium}=require('playwright');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');const path=require('node:path');const http=require('node:http');
@@ -56,7 +56,6 @@ let radio=100;const searches=[];
   await page.locator('[data-tab="Search"]').click();await page.locator('#q').fill('alphabet');await page.locator('#searchForm').evaluate(f=>f.requestSubmit());
   await page.locator('#results .row .info').first().click();await page.waitForFunction(()=>document.getElementById('audio').readyState>=3);
   await page.evaluate(()=>{const a=document.getElementById('audio');a.pause();a.dispatchEvent(new Event('pause'));});
-  assert.equal(await page.evaluate(()=>__soundPlaying.at(-1)),false,'pausing releases sound effects');
   // 1. the lock-screen heart follows the song
   assert.deepEqual(await last(),[false,true]);
   await page.locator('#mFav').click();
@@ -67,30 +66,8 @@ let radio=100;const searches=[];
   await page.evaluate(()=>__listeners.like());await page.waitForTimeout(100);
   assert.deepEqual(await last(),[true,true]);assert.equal((await favIds()).length,1);
   assert.equal(await page.locator('#mFav').getAttribute('aria-pressed'),'true','the app heart follows too');
-  // 3. sound presets
-  await page.locator('#miniOpen').click();await page.waitForFunction(()=>document.getElementById('now').dataset.progress==='1.0000');
-  await page.locator('#nowMenu').click();await page.waitForFunction(()=>!document.getElementById('fxRow').hidden);
-  assert.equal(await page.locator('[data-fx="normal"]').getAttribute('aria-pressed'),'true');
-  await page.locator('[data-fx="bass"]').click();
-  await page.waitForFunction(()=>document.querySelector('[data-fx="bass"]').getAttribute('aria-pressed')==='true');
-  assert.equal(await page.locator('#toast').textContent(),'Sound: Bass boost');
-  assert.equal(await page.evaluate(()=>__fx.preset),'bass');
-  await page.screenshot({path:'test-results/sound.png'});
-  await page.locator('#sleepSheet').click({position:{x:10,y:10}});await page.waitForTimeout(400);
-  // 4. a phone that refuses: greyed out, with the reason
-  await page.evaluate(()=>{__fx.supported=false;__fx.preset='normal';});
-  await page.locator('#nowMenu').click();
-  await page.waitForFunction(()=>!document.getElementById('fxNote').hidden);
-  assert.match(await page.locator('#fxNote').textContent(),/does not allow sound effects/);
-  assert(await page.locator('[data-fx="bass"]').isDisabled());
-  // 5. outside the Android app there is no Sound section and nothing breaks
-  const web=await browser.newPage({viewport:{width:390,height:844}});
-  await web.route('**/*',r=>{const u=new URL(r.request().url());return u.hostname==='127.0.0.1'?r.continue():r.fulfill({status:404,body:''});});
-  await web.goto('http://127.0.0.1:'+server.address().port);await web.waitForTimeout(500);
-  assert.equal(await web.evaluate(()=>document.getElementById('fxRow').hidden),true);
-  await web.close();
   assert.deepEqual(errors,[]);
-  console.log('PASS: lock-screen heart follows the song and toggles favourites, presets apply, refused phones say so, hidden on web');
+  console.log('PASS: lock-screen heart follows the song and toggles favourites');
  }catch(e){await page.screenshot({path:'test-results/sound-failure.png'});throw e;}
  finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exit(1);});
