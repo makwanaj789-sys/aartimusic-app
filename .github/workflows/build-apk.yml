@@ -66,6 +66,7 @@ jobs:
           node tests/stats-mixes-ui.cjs
           node tests/speed-ui.cjs
           node tests/native-audio-ui.cjs
+          node tests/effect-favs-ui.cjs
 
       - name: Save UI screenshots
         if: always()

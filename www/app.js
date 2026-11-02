@@ -44,11 +44,21 @@
     speed: 1,
   };
 
+  /* A version made in the bot (slowed, nightcore…) is saved as
+     "<videoId>~<effect>", and the bot builds its picture from that
+     whole id. YouTube answers such an address with a grey
+     placeholder, so the picture is taken from the original video. */
+  function fixArt(song) {
+    if (song && typeof song.thumb === "string") song.thumb = song.thumb.replace(/(\/vi\/[\w-]+)~[^/]*\//, "$1/");
+    return song;
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) Object.assign(store, JSON.parse(raw));
     } catch (e) {}
+    [store.favs, store.recents].forEach((list) => { if (Array.isArray(list)) list.forEach(fixArt); });
   }
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) {}
@@ -789,6 +799,7 @@
     const take = (side) => {
       (side.favs || []).forEach((s) => {
         if (!s || !s.id) return;
+        fixArt(s);
         const t = s.at || 1;
         if (!at[s.id] || t > at[s.id]) { at[s.id] = t; song[s.id] = s; }
       });
@@ -1276,6 +1287,7 @@
         !saved.queue[saved.index] || !Number.isFinite(saved.position) || saved.position < 0) return;
     const restored = saved.queue.slice(0,500);
     if (restored.some(song => !song || typeof song.id !== 'string' || typeof song.title !== 'string')) return;
+    restored.forEach(fixArt);
     const before = token;
     await ready;
     if (token !== before || mediaId) return;
@@ -2533,11 +2545,13 @@
 
     metadata(song) {
       if (!song) return;
+      // Only a real address goes across: the native side downloads it.
+      const art = fixArt({ thumb: song.thumb }).thumb;
       const m = {
         title: song.title || "Aarti Music",
         artist: song.artist || "Aarti Music",
         album: "Aarti Music",
-        artwork: [{ src: song.thumb, sizes: "480x360", type: "image/jpeg" }],
+        artwork: /^https?:\/\//.test(art || "") ? [{ src: art, sizes: "480x360", type: "image/jpeg" }] : [],
       };
       if (nativeMS) { try { nativeMS.setMetadata(m); } catch (e) {} return; }
       if (webMS && window.MediaMetadata) {
