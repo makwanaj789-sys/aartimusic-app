@@ -18,6 +18,9 @@
 
   const $ = (id) => document.getElementById(id);
   const audio = $("audio");
+  // Sound presets read the song through Web Audio, which hears a
+  // stream from another origin only when it was fetched with CORS.
+  audio.crossOrigin = "anonymous";
 
   /* ---------- what the app remembers ------------------------
      Kept on the phone, not the server: favourites, history and
@@ -2410,30 +2413,44 @@
     try { aartiAudio().addListener("like", () => { if (queue[index]) toggleFav(queue[index]); }); } catch (_) {}
   }
 
-  /* Sound presets — the phone's equalizer and bass boost, through the
-     native plugin. Shown only in the Android app, and greyed out with
-     the reason when the phone does not allow them. */
-  function paintFx(preset, supported, note) {
+  /* Sound presets, shaped inside the app (sound.js) so they change
+     the song live on any phone. The phone's equalizer on the output
+     mix, which this used to drive, is turned off for good: most
+     phones ignored it, and one that did not would stack on top. */
+  const sound = window.AartiSound ? AartiSound.create(audio) : null;
+  const FX = ["normal", "bass", "vocal", "treble", "party"];
+  function paintFx(note) {
+    const preset = FX.includes(store.fx) ? store.fx : "normal";
     $("fxHead").hidden = $("fxRow").hidden = false;
     document.querySelectorAll("[data-fx]").forEach((b) => {
       b.setAttribute("aria-pressed", String(b.dataset.fx === preset));
-      b.disabled = !supported;
+      b.disabled = !sound || !sound.supported;
     });
+    if (!note && (!sound || !sound.supported)) note = "Sound effects are not available here.";
     $("fxNote").hidden = !note; $("fxNote").textContent = note || "";
   }
-  function refreshFx() {
+  $("nowMenu").addEventListener("click", () => paintFx());
+  (function startSound() {
     const p = aartiAudio();
-    if (!p) return;
-    p.fxStatus().then((s) => paintFx(s.preset, s.supported, s.supported ? "" : (s.error || "Sound effects are not available on this phone.")),
-      () => paintFx("normal", false, "Sound effects are not available on this phone."));
+    if (p && typeof p.fxSet === "function") {
+      // Carry over a preset chosen with the old equalizer, then let it go.
+      const release = () => { try { p.fxSet({ preset: "normal" }).catch(() => {}); } catch (_) {} };
+      try {
+        p.fxStatus().then((s) => {
+          if (store.fx === undefined && s && FX.includes(s.preset)) { store.fx = s.preset; save(); wantSound(); }
+          release();
+        }, release);
+      } catch (_) { release(); }
+    }
+    wantSound();
+  })();
+  /* A saved preset waits for the first play: a context made before
+     anyone has touched the app may start silent. */
+  function wantSound() {
+    if (!sound || !store.fx || store.fx === "normal" || sound.active) return;
+    if (!audio.paused) { sound.set(store.fx, false); return; }
+    audio.addEventListener("play", () => sound.set(store.fx, false), { once: true });
   }
-  $("nowMenu").addEventListener("click", refreshFx);
-  function syncSoundPlayback() {
-    const p = aartiAudio();
-    if (!p || typeof p.setPlaying !== "function") return;
-    try { p.setPlaying({playing: !audio.paused && !audio.ended && !audio.error}).catch(() => {}); } catch (_) {}
-  }
-  ["playing", "pause", "ended", "emptied", "error"].forEach(e => audio.addEventListener(e, syncSoundPlayback));
 
   /* Playback speed. Set as the default rate too, because loading a
      new song puts the rate back to the default. */
@@ -2449,12 +2466,11 @@
   $("sleepSheet").addEventListener("click", (e) => {
     const fx = e.target.dataset && e.target.dataset.fx;
     if (fx !== undefined) {
-      const p = aartiAudio(); if (!p) return;
+      if (!sound) return;
       buzz();
-      p.fxSet({ preset: fx }).then((r) => {
-        paintFx(r.preset, true, "");
-        toast(r.preset === "normal" ? "Sound: normal" : "Sound: " + e.target.textContent);
-      }, (err) => { paintFx("normal", false, (err && err.message) || "Sound effects are not available on this phone."); });
+      if (!sound.set(fx)) { paintFx("Sound effects are not available here."); return; }
+      store.fx = fx; save(); paintFx();
+      toast(fx === "normal" ? "Sound: normal" : "Sound: " + e.target.textContent);
       return;
     }
     const sp = e.target.dataset && e.target.dataset.speed;
