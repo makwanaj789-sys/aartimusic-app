@@ -301,6 +301,8 @@ html, body { background:#0A0908; margin:0; }
 <section class="now" id="now" aria-hidden="true">
   <div class="now-surface" aria-hidden="true"></div>
   <div class="now-bg" id="nowBg"></div>
+  <!-- Canvas: the moving picture that stands in for the cover. -->
+  <canvas class="now-canvas" id="nowCanvas" aria-hidden="true"></canvas>
   <!-- The pool of light the artwork throws into the room. Its colour
        comes from the cover; only its opacity and scale ever move. -->
   <div class="now-lit" id="nowLit" aria-hidden="true"></div>
@@ -434,6 +436,10 @@ html, body { background:#0A0908; margin:0; }
       <button data-fx="normal">Normal</button><button data-fx="bass">Bass boost</button><button data-fx="vocal">Vocal</button><button data-fx="treble">Treble</button><button data-fx="party">Party</button>
     </div>
     <p class="fx-note" id="fxNote" hidden></p>
+    <div class="sheet-head speed-head"><h2>Canvas</h2></div>
+    <div class="fx-row" id="canvasRow" role="group" aria-label="Canvas">
+      <button data-canvas="on">On</button><button data-canvas="off">Off · show cover</button>
+    </div>
   </div>
 </section>
 
@@ -527,6 +533,7 @@ html, body { background:#0A0908; margin:0; }
 <script src="backup.js"></script>
 <script src="personal-library.js"></script>
 <script src="sound.js"></script>
+<script src="canvas.js"></script>
 <script src="app.js"></script>
 <script src="capsule.js"></script>
 </body>

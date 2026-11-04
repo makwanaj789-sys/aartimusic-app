@@ -274,3 +274,11 @@ body.locked .drawer-swipe-edge{pointer-events:none}
 .ly-body{mask-image:none;-webkit-mask-image:none}
 #now .now-extra{transition:none;will-change:transform,opacity}
 @media(prefers-reduced-motion:reduce){.lyrics,.lyrics.open{transform:none;transition:none}}
+
+/* Canvas: a moving picture from the cover's colours stands in for the cover. */
+.now-canvas{position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;opacity:0;will-change:transform,opacity}
+body.canvas-on #now .now-canvas{display:block}
+body.canvas-on #now .now-bg,body.canvas-on #now .now-lit{visibility:hidden}
+/* The cover fades out as the player opens and comes back on a tap. */
+body.canvas-on:not(.canvas-peek) #sharedArt #nArt:not(.swapping){opacity:calc(1 - clamp(0, (var(--p, 0) - .3) * 2.5, 1));transition:opacity .3s ease}
+body.canvas-on.canvas-peek #sharedArt #nArt:not(.swapping){transition:opacity .3s ease}
