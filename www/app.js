@@ -1439,6 +1439,7 @@
   function paint(song) {
     setArt($("nArt"), song.thumb);
     relight(song);
+    canvasSong(song);
     $("nowBg").style.backgroundImage = 'url("' + song.thumb + '")';
     $("mTitle").textContent = song.title;
     $("nTitle").textContent = song.title;
@@ -1858,11 +1859,13 @@
     onGesture: () => { gesture = "y"; swipedAt = Date.now(); },
     onGestureEnd: () => { if (gesture === "y") gesture = null; swipedAt = Date.now(); },
     onOpen: () => {
+      applyCanvas();
       document.body.classList.add("locked");
       try { tg.BackButton.show(); } catch (_) {}
       opened(now, () => playerMotion.close());
     },
     onClosed: () => {
+      document.body.classList.remove("canvas-peek"); applyCanvas();
       if (!$("plist").classList.contains("open")) document.body.classList.remove("locked");
       try { tg.BackButton.hide(); } catch (_) {}
       closed(now);
@@ -2452,6 +2455,36 @@
     audio.addEventListener("play", () => sound.set(store.fx, false), { once: true });
   }
 
+  /* Canvas: a moving picture from the cover's colours in place of
+     the cover (canvas.js). On unless switched off; a tap where the
+     cover was shows the cover until the player closes. */
+  let canvasView = null, canvasGeneration = 0;
+  const canvasOn = () => store.canvas !== false && !!window.AartiCanvas;
+  function theCanvas() {
+    if (!canvasView && window.AartiCanvas && $("nowCanvas")) canvasView = AartiCanvas.create($("nowCanvas"));
+    return canvasView;
+  }
+  function canvasSong(song) {
+    const cv = theCanvas();
+    if (!cv || !song) return;
+    const generation = ++canvasGeneration;
+    AartiCanvas.paletteFrom(fixArt({ thumb: song.thumb }).thumb).then((p) => { if (generation === canvasGeneration) cv.song(song.id, p); });
+  }
+  function applyCanvas() {
+    const on = canvasOn();
+    document.body.classList.toggle("canvas-on", on);
+    if (!on) document.body.classList.remove("canvas-peek");
+    const cv = theCanvas();
+    if (cv) cv.show(on && $("now").classList.contains("open"));
+    document.querySelectorAll("[data-canvas]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.canvas === "on") === on)));
+  }
+  ["playing", "pause", "ended", "emptied"].forEach((e) => audio.addEventListener(e, () => { const cv = theCanvas(); if (cv) cv.playing(!audio.paused && !audio.ended); }));
+  $("sharedArt").addEventListener("click", () => {
+    if (!canvasOn() || $("now").dataset.progress !== "1.0000" || Date.now() - swipedAt < 400) return;
+    document.body.classList.toggle("canvas-peek");
+  });
+  applyCanvas();
+
   /* Playback speed. Set as the default rate too, because loading a
      new song puts the rate back to the default. */
   const SPEEDS = [0.75, 1, 1.25, 1.5];
@@ -2471,6 +2504,12 @@
       if (!sound.set(fx)) { paintFx("Sound effects are not available here."); return; }
       store.fx = fx; save(); paintFx();
       toast(fx === "normal" ? "Sound: normal" : "Sound: " + e.target.textContent);
+      return;
+    }
+    const cvs = e.target.dataset && e.target.dataset.canvas;
+    if (cvs !== undefined) {
+      store.canvas = cvs === "on"; save(); applyCanvas(); buzz();
+      toast(store.canvas ? "Canvas on" : "Canvas off");
       return;
     }
     const sp = e.target.dataset && e.target.dataset.speed;

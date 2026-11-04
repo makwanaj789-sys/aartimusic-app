@@ -8,7 +8,7 @@
     const controls=panel.querySelector('.now-ctrls'), seek=panel.querySelector('.seek');
     const out=panel.querySelector('.out-row'), queue=panel.querySelector('.now-extra') || panel.querySelector('.queue-open');
     const surface=panel.querySelector('.now-surface');
-    const backdrop=panel.querySelector('.now-bg'), light=panel.querySelector('.now-lit');
+    const backdrop=panel.querySelector('.now-bg'), light=panel.querySelector('.now-lit'), canvas=panel.querySelector('.now-canvas');
     const smallText=mini.querySelector('.meta'), smallButtons=[...mini.querySelectorAll('button')];
     let p=0, speed=0, goal=0, frame=0, paintFrame=0, last=0, geometry=null, drag=null, shown=false, ignoreClickUntil=0;
     const clamp=n=>Math.max(0,Math.min(1,n));
@@ -33,6 +33,8 @@
       art.style.visibility=mini.hidden?'hidden':'visible';
       if(surface){surface.style.transform=`translate3d(0,${offset}px,0)`;surface.style.opacity="1";}
       backdrop.style.transform=`translate3d(0,${offset}px,0)`;backdrop.style.opacity=String(p);
+      if(canvas){canvas.style.transform=backdrop.style.transform;canvas.style.opacity=String(p);}
+      art.style.setProperty('--p',p.toFixed(4));
       light.style.transform=`translate3d(-50%,calc(-50% + ${offset}px),0)`;light.style.opacity=String(p*.65);
       title.style.transform=`translate3d(${textX*(1-p)}px,${textY*(1-p)}px,0) scale(${.66+.34*p})`;
       title.style.opacity=String(clamp(p*4));
