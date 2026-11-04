@@ -302,7 +302,12 @@ html, body { background:#0A0908; margin:0; }
   <div class="now-surface" aria-hidden="true"></div>
   <div class="now-bg" id="nowBg"></div>
   <!-- Canvas: the moving picture that stands in for the cover. -->
-  <canvas class="now-canvas" id="nowCanvas" aria-hidden="true"></canvas>
+  <div class="now-canvas" aria-hidden="true">
+    <canvas id="nowCanvas"></canvas>
+    <!-- A short silent loop from the song's own video, over the colours once it plays. -->
+    <video id="nowCanvasVideo" muted playsinline loop preload="none" disablepictureinpicture></video>
+    <div class="now-canvas-shade"></div>
+  </div>
   <!-- The pool of light the artwork throws into the room. Its colour
        comes from the cover; only its opacity and scale ever move. -->
   <div class="now-lit" id="nowLit" aria-hidden="true"></div>
@@ -438,7 +443,7 @@ html, body { background:#0A0908; margin:0; }
     <p class="fx-note" id="fxNote" hidden></p>
     <div class="sheet-head speed-head"><h2>Canvas</h2></div>
     <div class="fx-row" id="canvasRow" role="group" aria-label="Canvas">
-      <button data-canvas="on">On</button><button data-canvas="off">Off · show cover</button>
+      <button data-canvas="video">Video</button><button data-canvas="colour">Colours</button><button data-canvas="off">Off · show cover</button>
     </div>
   </div>
 </section>

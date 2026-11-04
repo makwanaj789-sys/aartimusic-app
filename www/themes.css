@@ -278,6 +278,12 @@ body.locked .drawer-swipe-edge{pointer-events:none}
 /* Canvas: a moving picture from the cover's colours stands in for the cover. */
 .now-canvas{position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;opacity:0;will-change:transform,opacity}
 body.canvas-on #now .now-canvas{display:block}
+.now-canvas canvas,.now-canvas video,.now-canvas-shade{position:absolute;inset:0;width:100%;height:100%;display:block}
+.now-canvas video{object-fit:cover;opacity:0;transition:opacity .6s ease}
+.now-canvas video.shown{opacity:1}
+/* Over a video, the words and controls need their own shade. */
+.now-canvas-shade{opacity:0;transition:opacity .6s ease;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 45%,transparent),transparent 20%,transparent 42%,color-mix(in srgb,var(--bg) 92%,transparent) 86%)}
+.now-canvas video.shown~.now-canvas-shade{opacity:1}
 body.canvas-on #now .now-bg,body.canvas-on #now .now-lit{visibility:hidden}
 /* The cover fades out as the player opens and comes back on a tap. */
 body.canvas-on:not(.canvas-peek) #sharedArt #nArt:not(.swapping){opacity:calc(1 - clamp(0, (var(--p, 0) - .3) * 2.5, 1));transition:opacity .3s ease}

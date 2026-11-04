@@ -2455,11 +2455,34 @@
     audio.addEventListener("play", () => sound.set(store.fx, false), { once: true });
   }
 
-  /* Canvas: a moving picture from the cover's colours in place of
-     the cover (canvas.js). On unless switched off; a tap where the
-     cover was shows the cover until the player closes. */
+  /* Canvas, in place of the cover: a short silent loop from the
+     song's own video (the bot cuts it from the most replayed part),
+     over a moving picture in the cover's colours (canvas.js) that
+     shows while the clip loads or when a song has none. "Video" by
+     default, or colours only, or off. A tap where the cover was
+     shows the cover until the player closes. */
   let canvasView = null, canvasGeneration = 0;
-  const canvasOn = () => store.canvas !== false && !!window.AartiCanvas;
+  const canvasMode = () => !window.AartiCanvas || store.canvas === false || store.canvas === "off" ? "off"
+    : store.canvas === "colour" ? "colour" : "video";
+  const canvasOn = () => canvasMode() !== "off";
+  const clip = $("nowCanvasVideo"), noClip = new Set();
+  let clipFor = null;
+  const clipUrl = (id) => streamUrl(id).replace("/api/stream/", "/api/canvas/");
+  function syncClip() {
+    if (!clip) return;
+    const song = queue[index];
+    const want = canvasMode() === "video" && $("now").classList.contains("open") && !document.hidden &&
+      !!song && !!SERVER && !String(song.id).includes("~") && !noClip.has(song.id);
+    if (!want || (song && clipFor !== song.id)) clip.classList.remove("shown");
+    if (!want) { clip.pause(); return; }
+    if (clipFor !== song.id) { clipFor = song.id; clip.src = clipUrl(song.id); clip.load(); }
+    if (audio.paused) clip.pause(); else clip.play().catch(() => {});
+  }
+  if (clip) {
+    clip.addEventListener("playing", () => { if (queue[index] && clipFor === queue[index].id) clip.classList.add("shown"); });
+    clip.addEventListener("error", () => { if (clipFor) noClip.add(clipFor); clip.classList.remove("shown"); });
+    document.addEventListener("visibilitychange", syncClip);
+  }
   function theCanvas() {
     if (!canvasView && window.AartiCanvas && $("nowCanvas")) canvasView = AartiCanvas.create($("nowCanvas"));
     return canvasView;
@@ -2469,6 +2492,7 @@
     if (!cv || !song) return;
     const generation = ++canvasGeneration;
     AartiCanvas.paletteFrom(fixArt({ thumb: song.thumb }).thumb).then((p) => { if (generation === canvasGeneration) cv.song(song.id, p); });
+    syncClip();
   }
   function applyCanvas() {
     const on = canvasOn();
@@ -2476,9 +2500,11 @@
     if (!on) document.body.classList.remove("canvas-peek");
     const cv = theCanvas();
     if (cv) cv.show(on && $("now").classList.contains("open"));
-    document.querySelectorAll("[data-canvas]").forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.canvas === "on") === on)));
+    const mode = canvasMode();
+    document.querySelectorAll("[data-canvas]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.canvas === mode)));
+    syncClip();
   }
-  ["playing", "pause", "ended", "emptied"].forEach((e) => audio.addEventListener(e, () => { const cv = theCanvas(); if (cv) cv.playing(!audio.paused && !audio.ended); }));
+  ["playing", "pause", "ended", "emptied"].forEach((e) => audio.addEventListener(e, () => { const cv = theCanvas(); if (cv) cv.playing(!audio.paused && !audio.ended); syncClip(); }));
   $("sharedArt").addEventListener("click", () => {
     if (!canvasOn() || $("now").dataset.progress !== "1.0000" || Date.now() - swipedAt < 400) return;
     document.body.classList.toggle("canvas-peek");
@@ -2508,8 +2534,8 @@
     }
     const cvs = e.target.dataset && e.target.dataset.canvas;
     if (cvs !== undefined) {
-      store.canvas = cvs === "on"; save(); applyCanvas(); buzz();
-      toast(store.canvas ? "Canvas on" : "Canvas off");
+      store.canvas = cvs; save(); applyCanvas(); buzz();
+      toast(cvs === "off" ? "Canvas off" : cvs === "colour" ? "Canvas: colours" : "Canvas: video");
       return;
     }
     const sp = e.target.dataset && e.target.dataset.speed;

@@ -61,6 +61,17 @@
     });
   }
 
+  /* Covers are often dull (brown, grey, letterboxed in black), and
+     their average colour looks like an empty screen. Push each colour
+     away from grey and out of the dark before painting with it. */
+  function vivid(c) {
+    const grey = (c[0] + c[1] + c[2]) / 3;
+    let v = c.map(x => grey + (x - grey) * 1.6);
+    const hi = Math.max(...v);
+    if (hi < 150) v = v.map(x => x * 150 / Math.max(1, hi));
+    return v.map(x => Math.max(0, Math.min(255, Math.round(x))));
+  }
+
   function hash(s) { let h = 2166136261; for (const ch of String(s || '')) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
   const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
   const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
@@ -161,7 +172,7 @@
       song(id, palette) {
         const nextSeed = hash(id);
         if (palette && palette.length) {
-          const full = [0, 1, 2].map(i => palette[i] || mix(palette[0], light ? [255, 255, 255] : [0, 0, 0], 0.35 * i));
+          const full = [0, 1, 2].map(i => vivid(palette[i] || mix(palette[0], light ? [255, 255, 255] : [0, 0, 0], 0.35 * i)));
           from = [0, 1, 2].map(colour); colours = full; blend = visible ? 0 : 1;
         }
         if (nextSeed !== seed) { seed = nextSeed; mood = seed % 3; t = (seed % 1000) / 10; }
@@ -175,7 +186,7 @@
     };
   }
 
-  const api = { create, paletteFrom, paletteOf };
+  const api = { create, paletteFrom, paletteOf, vivid };
   root.AartiCanvas = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
