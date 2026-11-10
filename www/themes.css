@@ -279,7 +279,12 @@ body.locked .drawer-swipe-edge{pointer-events:none}
 .now-canvas{position:absolute;inset:0;width:100%;height:100%;display:none;pointer-events:none;opacity:0;will-change:transform,opacity}
 body.canvas-on #now .now-canvas{display:block}
 .now-canvas canvas,.now-canvas video,.now-canvas-shade{position:absolute;inset:0;width:100%;height:100%;display:block}
-.now-canvas video{object-fit:cover;opacity:0;transition:opacity .6s ease}
+/* Fills the screen by its own size, not by object-fit: on the phone's
+   WebView a video kept its shape inside the box and left bands above
+   and below. Sized from its own proportions, at least as wide and as
+   tall as the screen, and centred; the rest is cut off by the box. */
+.now-canvas{overflow:hidden}
+.now-canvas video{inset:auto;top:50%;left:50%;width:auto;height:auto;min-width:100%;min-height:100%;max-width:none;transform:translate(-50%,-50%);object-fit:cover;opacity:0;transition:opacity .6s ease}
 .now-canvas video.shown{opacity:1}
 /* Over a video, the words and controls need their own shade. */
 .now-canvas-shade{opacity:0;transition:opacity .6s ease;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 45%,transparent),transparent 20%,transparent 42%,color-mix(in srgb,var(--bg) 92%,transparent) 86%)}
