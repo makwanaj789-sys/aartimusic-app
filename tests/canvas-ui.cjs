@@ -69,6 +69,11 @@ const song=(n,c)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:
   const v=await page.evaluate(()=>{const e=document.getElementById('nowCanvasVideo');return {muted:e.muted,loop:e.loop,paused:e.paused,src:e.src};});
   assert.deepEqual([v.muted,v.loop,v.paused],[true,true,false]);
   assert.match(v.src,/\/api\/canvas\/song0000001\?/);
+  // The clip covers the whole player by its own size, whatever its shape.
+  const fit=await page.evaluate(()=>{const v=document.getElementById('nowCanvasVideo').getBoundingClientRect(),b=document.querySelector('#now .now-canvas').getBoundingClientRect();
+    return {covers:v.left<=b.left+.5&&v.top<=b.top+.5&&v.right>=b.right-.5&&v.bottom>=b.bottom-.5,shape:(v.width/v.height).toFixed(2),box:[b.width,b.height]};});
+  assert(fit.covers,'the clip leaves no band: '+JSON.stringify(fit));
+  assert.equal(fit.shape,'1.78','sized from its own proportions, not stretched');
   await page.screenshot({path:'test-results/canvas.png'});
   // Pausing the song pauses the clip.
   await page.evaluate(()=>document.getElementById('audio').pause());await page.waitForTimeout(200);
