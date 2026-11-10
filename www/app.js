@@ -517,25 +517,31 @@
     $("histBlock").hidden = true;
     $("results").innerHTML = "";
     $("loading").hidden = false;
+    // A slow answer to an earlier search must not replace a newer one.
+    const mine = ++searchGen;
 
     try {
       const r = await api("/api/search?q=" + encodeURIComponent(term));
+      if (mine !== searchGen) return;
 
       if (r.status === 401) return empty("Locked", "This copy can't reach the server.");
       if (!r.ok) return empty("Hmm", "Search failed. Try again.");
 
-      results = (await r.json()).results || [];
+      const found = (await r.json()).results || [];
+      if (mine !== searchGen) return;
+      results = found;
       if (!results.length) return empty("Nothing found", "Try a different spelling.");
 
       remember(term);
       fill($("results"), results);
     } catch (err) {
-      empty("Offline", "Can't reach the server right now.");
+      if (mine === searchGen) empty("Offline", "Can't reach the server right now.");
     } finally {
-      $("loading").hidden = true;
+      if (mine === searchGen) $("loading").hidden = true;
     }
   }
 
+  let searchGen = 0;
   function empty(head, msg) {
     const box = $("searchEmpty");
     box.hidden = false;
@@ -1313,6 +1319,7 @@
     const mine = ++token;                 // anything older is now stale
     const song = queue[i];
     mediaId = song.id; resumePosition = null; restoredOnly = false;
+    lastGood = 0; restoreFailed = false; clearTimeout(stallTimer);
     index = i;
     if (radio && index >= queue.length - 10) extendRadio();
 
@@ -1465,9 +1472,34 @@
     $("nPlay").classList.toggle("wait", on);
   };
 
+  /* The same song again, from where it was: for a stream that broke
+     part-way (a network change, a tunnel that moved), and for the
+     song restored at launch when the server could not be reached
+     then. Nothing about the listening session is reset. */
+  let lastGood = 0, restoreFailed = false, stallTimer = 0, retry = { id: null, at: -1 };
+  async function reloadAt(position) {
+    const song = queue[index];
+    if (!song) return;
+    const mine = ++token;
+    clearTimeout(stallTimer);
+    waiting(true);
+    await ready;
+    if (!SERVER || restoreFailed) await findServer(true);
+    if (mine !== token) return;
+    mediaId = song.id; restoredOnly = false; restoreFailed = false;
+    resumePosition = position > 1 ? position : null;
+    audio.src = streamUrl(song.id);
+    audio.load();
+    const go = () => { if (mine === token) audio.play().catch(() => {}); };
+    audio.addEventListener("canplay", go, { once: true });
+    go();
+  }
+
   const toggle = () => {
     if (!audio.src) return;
     buzz();
+    // A player that failed to load has nothing to resume: load it again.
+    if (audio.paused && (audio.error || restoreFailed)) { reloadAt(resumePosition !== null ? resumePosition : lastGood); return; }
     audio.paused ? audio.play().catch(() => {}) : audio.pause();
   };
   $("mPlay").addEventListener("click", (e) => { e.stopPropagation(); toggle(); });
@@ -1540,14 +1572,25 @@
   audio.addEventListener("error", async () => {
     waiting(false);
     const failedToken = token, song = queue[index];
-    if (restoredOnly || !song) { toast(WHY.ok); return; }
+    if (!song) return;
+    // The song put back at launch could not be loaded (offline, or the
+    // server moved). Nobody asked for it yet: say nothing, and let the
+    // play button load it properly.
+    if (restoredOnly) { restoreFailed = true; return; }
     const why = await diagnose(song.id);
     if (token !== failedToken) return;
+    // The server has the song, so the stream broke on the way. Carry on
+    // from where it stopped, once per stretch of the song, not skip it.
+    if (why === "ok" && lastGood > 1 && (retry.id !== song.id || lastGood > retry.at + 5)) {
+      retry = { id: song.id, at: lastGood };
+      reloadAt(lastGood);
+      return;
+    }
     if (why === "unreachable") {
       const before = SERVER;
       await findServer(true);
       if (token !== failedToken) return;
-      if (SERVER && SERVER !== before) { toast("Server moved — reconnecting"); playAt(index); return; }
+      if (SERVER && SERVER !== before) { toast("Server moved — reconnecting"); if (lastGood > 1) reloadAt(lastGood); else playAt(index); return; }
     }
     failStreak++;
     toast(WHY[why]);
@@ -1588,8 +1631,43 @@
     });
   }
 
+  /* A stream can stop arriving without ever failing (the phone moved
+     from Wi-Fi to mobile data). If a song that was playing has waited
+     fifteen seconds for data, ask for it again from the same place. */
+  function watchStall() {
+    clearTimeout(stallTimer);
+    if (audio.paused || !(lastGood > 0)) return;
+    const mine = token, at = lastGood, song = queue[index];
+    stallTimer = setTimeout(() => {
+      if (mine !== token || audio.paused || audio.readyState >= 3 || !song) return;
+      if (retry.id === song.id && at <= retry.at + 5) return;     // already tried from here
+      retry = { id: song.id, at };
+      toast("Reconnecting…");
+      reloadAt(at);
+    }, 15000);
+  }
+  ["waiting", "stalled"].forEach((e) => audio.addEventListener(e, watchStall));
+  ["playing", "pause", "emptied", "ended"].forEach((e) => audio.addEventListener(e, () => clearTimeout(stallTimer)));
+
+  /* Ten seconds into a song, ask the server for the first bytes of the
+     next one. A song nobody has played is fetched from YouTube on that
+     request, so it is already there when the skip or the end comes.
+     Only one song ahead, and not for a song skipped straight away. */
+  let warmed = null;
+  function warmNext() {
+    const song = queue[index];
+    if (!song || warmed === song.id || audio.currentTime < 10 || !SERVER) return;
+    warmed = song.id;
+    const i = nextIndex(), nxt = i >= 0 && i !== index ? queue[i] : null;
+    if (!nxt) return;
+    fetch(streamUrl(nxt.id), { headers: { Range: "bytes=0-1" }, cache: "no-store" })
+      .then((r) => { try { if (r.body) r.body.cancel(); } catch (_) {} }, () => {});
+  }
+
   audio.addEventListener("timeupdate", () => {
     told.position();
+    if (queue[index] && queue[index].id === mediaId && audio.currentTime > 0 && !audio.seeking) lastGood = audio.currentTime;
+    warmNext();
     const d = audio.duration;
     if (!d || !isFinite(d)) return;
     // --p is a plain 0..1 number the stylesheet turns into a
