@@ -1,4 +1,5 @@
-# Builds the Windows installer for AartiMusic (desktop/).
+# Builds the Windows setup file for AartiMusic (desktop/), then installs,
+# runs and removes it on the runner to check it.
 #
 # Runs when the desktop shell changes, or from the "Run workflow"
 # button. It does not run on every change to the app's pages (www/):
@@ -36,31 +37,76 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       # Not signed: there is no certificate. Windows shows its
-      # "unknown publisher" notice the first time the installer runs.
-      - name: Build the installer
+      # "unknown publisher" notice the first time the setup file runs.
+      - name: Build the setup file
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
         run: npm run dist
 
-      - name: Hand back the installer
+      - name: Hand back the setup file
         uses: actions/upload-artifact@v4
         with:
           name: aartimusic-windows
           path: desktop/dist/AartiMusic-Setup-*.exe
           if-no-files-found: error
 
-      # The built app itself is started and driven: window, keyboard,
-      # tray and taskbar controls, mini player, close-to-tray.
-      - name: Try the built app
+      - name: Test tools
+        run: npm install --no-save --no-audit --no-fund playwright@1.62.1
+
+      # The setup window itself, driven with a stand-in for the app's files.
+      - name: Try the setup window
         shell: bash
+        run: AARTI_EXE="$PWD/dist/win-unpacked/AartiMusic.exe" node test/setup.cjs
+
+      # The real setup file, without its window: it must put the app in
+      # place, make the Start menu shortcut and register its removal.
+      - name: Install with the setup file
+        shell: pwsh
         run: |
-          npm install --no-save --no-audit --no-fund playwright@1.62.1
-          AARTI_EXE="$PWD/dist/win-unpacked/AartiMusic.exe" node test/smoke.cjs
+          $env:AARTI_SETUP_AUTO = '1'
+          $env:AARTI_SETUP_DIR = Join-Path $env:RUNNER_TEMP 'AartiMusic'
+          $env:AARTI_SETUP_RESULT = Join-Path $env:RUNNER_TEMP 'install.json'
+          $setup = (Get-Item dist\AartiMusic-Setup-*.exe).FullName
+          Start-Process -FilePath $setup -Wait
+          if (!(Test-Path $env:AARTI_SETUP_RESULT)) { throw 'setup wrote no result' }
+          Get-Content $env:AARTI_SETUP_RESULT
+          $r = Get-Content $env:AARTI_SETUP_RESULT | ConvertFrom-Json
+          if (-not $r.ok) { throw "setup failed: $($r.error)" }
+          foreach ($f in 'AartiMusic.exe', 'resources\app.asar') {
+            if (!(Test-Path (Join-Path $env:AARTI_SETUP_DIR $f))) { throw "missing after install: $f" }
+          }
+          if (!(Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\AartiMusic.lnk")) { throw 'no Start menu shortcut' }
+          $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AartiMusic'
+          $u = (Get-ItemProperty $key).UninstallString
+          if ($u -notlike '*AartiMusic.exe" --uninstall') { throw "bad UninstallString: $u" }
+          "installed to $env:AARTI_SETUP_DIR, uninstall: $u"
+
+      # The installed app is started and driven: window, keyboard,
+      # tray and taskbar controls, mini player, close-to-tray.
+      - name: Try the installed app
+        shell: bash
+        run: AARTI_EXE="$RUNNER_TEMP/AartiMusic/AartiMusic.exe" node test/smoke.cjs
+
+      - name: Remove it again
+        shell: pwsh
+        run: |
+          $env:AARTI_SETUP_AUTO = '1'
+          $env:AARTI_SETUP_RESULT = Join-Path $env:RUNNER_TEMP 'remove.json'
+          $dir = Join-Path $env:RUNNER_TEMP 'AartiMusic'
+          Start-Process -FilePath (Join-Path $dir 'AartiMusic.exe') -ArgumentList '--uninstall' -Wait
+          Get-Content $env:AARTI_SETUP_RESULT
+          Start-Sleep -Seconds 12
+          if (Test-Path (Join-Path $dir 'AartiMusic.exe')) { throw 'the app is still there after removal' }
+          if (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\AartiMusic') { throw 'still listed in Windows' }
+          if (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\AartiMusic.lnk") { throw 'shortcut left behind' }
+          'removed cleanly'
 
       - name: Save screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: aartimusic-windows-screens
-          path: test-results/desktop-*.png
+          path: |
+            test-results/desktop-*.png
+            test-results/setup-*.png
           if-no-files-found: ignore

@@ -1,7 +1,7 @@
 {
   "name": "aartimusic-desktop",
   "productName": "AartiMusic",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "AartiMusic for Windows",
   "author": "AartiMusic",
@@ -10,7 +10,7 @@
     "sync": "node tools/sync-www.cjs",
     "start": "npm run sync && electron .",
     "pack": "npm run sync && electron-builder --dir --publish never",
-    "dist": "npm run sync && electron-builder --win nsis --x64 --publish never"
+    "dist": "npm run sync && electron-builder --win portable --x64 --publish never"
   },
   "devDependencies": {
     "electron": "33.4.11",
@@ -27,6 +27,8 @@
     "files": [
       "main.js",
       "preload.js",
+      "setup.js",
+      "setup/**",
       "shell/**",
       "www/**",
       "assets/*.png"
@@ -34,7 +36,7 @@
     "win": {
       "target": [
         {
-          "target": "nsis",
+          "target": "portable",
           "arch": [
             "x64"
           ]
@@ -48,22 +50,10 @@
       "icon": "assets/icon.png",
       "category": "Audio"
     },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "AartiMusic",
-      "runAfterFinish": true,
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
-      "installerHeaderIcon": "assets/icon.ico",
-      "installerSidebar": "assets/installer-sidebar.bmp",
-      "uninstallerSidebar": "assets/installer-sidebar.bmp",
-      "installerHeader": "assets/installer-header.bmp",
-      "uninstallDisplayName": "AartiMusic",
-      "deleteAppDataOnUninstall": false
+    "portable": {
+      "artifactName": "AartiMusic-Setup-${version}.${ext}",
+      "requestExecutionLevel": "user",
+      "splashImage": "assets/setup-splash.bmp"
     }
   }
 }

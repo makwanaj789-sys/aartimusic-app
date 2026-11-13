@@ -28,6 +28,11 @@ protocol.registerSchemesAsPrivileged([
   { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true } },
 ]);
 
+// The setup file and "--uninstall" are this same program, showing
+// the setup window instead of the player.
+const setup = require('./setup');
+if (setup.mode()) { setup.start(setup.mode()); return; }
+
 if (!app.requestSingleInstanceLock()) { app.quit(); return; }
 app.setAppUserModelId('com.aartimusic.desktop');
 
@@ -145,7 +150,7 @@ function thumbar() {
 }
 
 function trayMenu() {
-  const login = app.getLoginItemSettings();
+  const login = app.getLoginItemSettings({ args: ['--hidden'] });
   return Menu.buildFromTemplate([
     { label: now.has ? (now.title || 'AartiMusic').slice(0, 60) : 'Nothing playing', enabled: false },
     ...(now.has && now.artist ? [{ label: now.artist.slice(0, 60), enabled: false }] : []),
@@ -221,7 +226,11 @@ ipcMain.on('aarti:mini', (_e, on) => setMini(!!on));
 ipcMain.handle('aarti:state', () => ({ mini: settings.mini, version: app.getVersion() }));
 
 /* ---------- start ------------------------------------------- */
-app.on('second-instance', show);
+app.on('second-instance', (_e, _argv, _cwd, data) => {
+  // Setup asks the running app to close before it replaces or removes it.
+  if (data && data.quit) { quitting = true; app.quit(); return; }
+  show();
+});
 app.on('before-quit', () => { quitting = true; });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 
