@@ -136,12 +136,17 @@ async function uninstall(opts, progress) {
 }
 
 /* The folder cannot be removed by a program still running from it:
-   a small command waits for this one to end, then removes it. */
+   a small command waits for this one to end, then removes it, trying
+   again for a few seconds while Windows lets go of the files.
+   The command line is passed exactly as written: left to itself, Node
+   escapes the quotes around the folder in a way cmd does not read. */
 function removeFolderAfterExit(dir) {
   if (!WIN || !app.isPackaged) return;
+  const d = `"${dir}"`;
+  const line = `ping -n 3 127.0.0.1 >nul & for /l %i in (1,1,10) do (if exist ${d} (rmdir /s /q ${d} 2>nul & ping -n 2 127.0.0.1 >nul))`;
   try {
-    spawn('cmd.exe', ['/d', '/s', '/c', `ping -n 4 127.0.0.1 >nul & rmdir /s /q "${dir}"`],
-      { detached: true, stdio: 'ignore', windowsHide: true, cwd: os.tmpdir() }).unref();
+    spawn('cmd.exe', ['/d', '/s', '/c', `"${line}"`],
+      { detached: true, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true, cwd: os.tmpdir() }).unref();
   } catch (_) {}
 }
 
