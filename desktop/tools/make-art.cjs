@@ -1,5 +1,5 @@
 /* Draws the Windows icon, the tray and taskbar glyphs and the
-   installer's pictures from the app's own logo (../assets/icon.png).
+   setup file's unpacking picture from the app's own logo (../assets/icon.png).
    Run from the repo root:  node desktop/tools/make-art.cjs
    Needs playwright (as the UI tests do) and ImageMagick's `convert`.
    The results are committed, so a build never has to run this. */
@@ -47,27 +47,20 @@ const tile = (s) => `<style>${base}
   for (const [name, d] of Object.entries(glyph)) for (const [s, suffix] of [[16, ''], [32, '@2x']])
     await shot(`<svg width="${s}" height="${s}" viewBox="0 0 24 24"><path d="${d}" fill="#fff"/></svg>`, s, s, `${name}${suffix}.png`);
 
-  // The installer: a tall picture for the welcome and finish pages, a small one for the header.
-  const side = `<style>${base}.s{width:164px;height:314px;position:relative;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;
-     background:radial-gradient(140% 70% at 50% 100%,#6b3207 0%,#2b1404 38%,#0c0704 70%,#050302 100%)}
-   .s:before{content:"";position:absolute;inset:0;background:repeating-radial-gradient(circle at 50% 38%,transparent 0 13px,rgba(255,190,90,.06) 13px 14px)}
-   .s .i{position:absolute;left:32px;top:54px;width:100px;height:100px}
-   .s b{position:absolute;left:0;right:0;top:176px;text-align:center;color:#ffd58a;font-size:19px;font-weight:600;letter-spacing:.02em}
-   .s span{position:absolute;left:0;right:0;top:204px;text-align:center;color:#c9a678;font-size:10.5px;letter-spacing:.14em}
-   .s i{position:absolute;left:18px;right:18px;bottom:22px;height:26px;display:flex;align-items:flex-end;gap:3px;justify-content:center}
-   .s i u{width:4px;border-radius:2px;background:linear-gradient(#ffd27a,#c96a0c);opacity:.85}</style>
-   <div class="s"><div class="i">${tile(100)}</div><b>AartiMusic</b><span>YOUR MUSIC · YOUR PC</span>
-   <i>${[8, 14, 22, 12, 18, 26, 16, 10, 20, 24, 13, 7, 17, 23, 11, 15, 9].map(h => `<u style="height:${h}px"></u>`).join('')}</i></div>`;
-  await shot(side, 164, 314, '_side.png', false);
-  const head = `<style>${base}.h{width:150px;height:57px;position:relative;background:linear-gradient(100deg,#0b0604,#3a1b05);font-family:"Segoe UI",system-ui,sans-serif}
-     .h .i{position:absolute;left:10px;top:9px;width:39px;height:39px}.h b{position:absolute;left:58px;top:19px;color:#ffd58a;font-size:14px;font-weight:600}</style>
-     <div class="h"><div class="i">${tile(39)}</div><b>AartiMusic</b></div>`;
-  await shot(head, 150, 57, '_head.png', false);
+  // Shown for the few seconds the setup file takes to unpack itself,
+  // before the setup window (setup/setup.html) can open.
+  const splash = `<style>${base}.s{width:480px;height:270px;position:relative;overflow:hidden;font-family:"Segoe UI",system-ui,sans-serif;
+     background:radial-gradient(90% 80% at 20% 115%,#7a3a08 0%,#2b1404 42%,#0c0704 72%,#060402 100%)}
+   .s:before{content:"";position:absolute;inset:0;background:repeating-radial-gradient(circle at 26% 50%,transparent 0 17px,rgba(255,190,90,.06) 17px 18px)}
+   .s .i{position:absolute;left:62px;top:79px;width:112px;height:112px}
+   .s b{position:absolute;left:206px;top:98px;color:#fff3dc;font-size:30px;font-weight:700;letter-spacing:-.01em}
+   .s span{position:absolute;left:207px;top:142px;color:#d9b17c;font-size:12px;letter-spacing:.2em}
+   .s em{position:absolute;left:207px;top:172px;width:150px;height:4px;border-radius:4px;background:linear-gradient(90deg,#b45f08,#f5a623,#ffd98a)}</style>
+   <div class="s"><div class="i">${tile(112)}</div><b>AartiMusic</b><span>PREPARING SETUP</span><em></em></div>`;
+  await shot(splash, 480, 270, '_splash.png', false);
   await browser.close();
-  // NSIS reads 24-bit BMP only.
-  execFileSync('convert', [path.join(out, '_side.png'), '-alpha', 'off', 'BMP3:' + path.join(out, 'installer-sidebar.bmp')]);
-  execFileSync('convert', [path.join(out, '_head.png'), '-alpha', 'off', 'BMP3:' + path.join(out, 'installer-header.bmp')]);
-  fs.copyFileSync(path.join(out, '_side.png'), path.join(out, 'installer-sidebar-preview.png'));
+  // The unpacker reads 24-bit BMP only.
+  execFileSync('convert', [path.join(out, '_splash.png'), '-alpha', 'off', 'BMP3:' + path.join(out, 'setup-splash.bmp')]);
   for (const f of fs.readdirSync(out)) if (f.startsWith('_')) fs.unlinkSync(path.join(out, f));
   console.log(fs.readdirSync(out).join(' '));
 })();
