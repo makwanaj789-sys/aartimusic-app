@@ -2545,19 +2545,32 @@
   const canvasOn = () => canvasMode() !== "off";
   const clip = $("nowCanvasVideo"), noClip = new Set();
   let clipFor = null;
-  const clipUrl = (id) => streamUrl(id).replace("/api/stream/", "/api/canvas/");
+  /* A window wider than it is tall (the PC app, a phone on its side)
+     gets the clip as the whole 16:9 frame; an upright one gets the
+     middle of it cut tall. Filling a wide window with the tall clip
+     showed a zoomed-in sliver of the picture. */
+  const clipShape = () => (innerWidth > innerHeight * 1.1 ? "wide" : "tall");
+  const clipUrl = (id, shape) => {
+    const url = streamUrl(id).replace("/api/stream/", "/api/canvas/");
+    return shape === "wide" ? url + (url.includes("?") ? "&" : "?") + "shape=wide" : url;
+  };
   function syncClip() {
     if (!clip) return;
     const song = queue[index];
     const want = canvasMode() === "video" && $("now").classList.contains("open") && !document.hidden &&
-      !!song && !!SERVER && !String(song.id).includes("~") && !noClip.has(song.id);
-    if (!want || (song && clipFor !== song.id)) clip.classList.remove("shown");
-    if (!want) { clip.pause(); return; }
-    if (clipFor !== song.id) { clipFor = song.id; clip.src = clipUrl(song.id); clip.load(); }
+      !!song && !!SERVER && !String(song.id).includes("~");
+    const shape = clipShape(), key = song ? song.id + ":" + shape : null;
+    const wanted = want && !noClip.has(key);
+    if (!wanted || clipFor !== key) clip.classList.remove("shown");
+    if (!wanted) { clip.pause(); return; }
+    if (clipFor !== key) { clipFor = key; clip.src = clipUrl(song.id, shape); clip.load(); }
     if (audio.paused) clip.pause(); else clip.play().catch(() => {});
   }
   if (clip) {
-    clip.addEventListener("playing", () => { if (queue[index] && clipFor === queue[index].id) clip.classList.add("shown"); });
+    clip.addEventListener("playing", () => { if (queue[index] && clipFor === queue[index].id + ":" + clipShape()) clip.classList.add("shown"); });
+    // The window changed shape (the mini player, a resize): the other clip fits now.
+    let shapeTimer = 0;
+    addEventListener("resize", () => { clearTimeout(shapeTimer); shapeTimer = setTimeout(syncClip, 400); });
     clip.addEventListener("error", () => { if (clipFor) noClip.add(clipFor); clip.classList.remove("shown"); });
     document.addEventListener("visibilitychange", syncClip);
   }

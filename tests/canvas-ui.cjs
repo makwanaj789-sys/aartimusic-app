@@ -13,7 +13,7 @@ const server=http.createServer((req,res)=>{
 });
 const cover=c=>`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="${c}"/><circle cx="80" cy="40" r="30" fill="#f0a020"/></svg>`;
 function wav(){const n=8000*30,b=Buffer.alloc(44+n);b.write('RIFF');b.writeUInt32LE(36+n,4);b.write('WAVEfmt ',8);b.writeUInt32LE(16,16);b.writeUInt16LE(1,20);b.writeUInt16LE(1,22);b.writeUInt32LE(8000,24);b.writeUInt32LE(8000,28);b.writeUInt16LE(1,32);b.writeUInt16LE(8,34);b.write('data',36);b.writeUInt32LE(n,40);b.fill(128,44);return b;}
-const clipBytes=fs.readFileSync(path.join(__dirname,'fixtures/canvas-clip.webm'));const clipAsked=[];
+const clipBytes=fs.readFileSync(path.join(__dirname,'fixtures/canvas-clip.webm'));const clipAsked=[],shapes=[];
 const song=(n,c)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:'Artist '+n,duration:200,thumb:'https://img.aarti.test/'+c.slice(1)+'.svg'});
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -32,7 +32,7 @@ const song=(n,c)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:
   if(route.request().method()==='OPTIONS')return route.fulfill({status:204,headers});
   if(url.pathname==='/api/search'||url.pathname==='/api/playlists')return route.fulfill({json:{results:[song(1,'#7a1fa8'),song(2,'#127a5c'),song(3,'#a81f3c')]},headers});
   if(url.pathname.startsWith('/api/canvas/')){
-   const id=url.pathname.split('/').pop();clipAsked.push(id);
+   const id=url.pathname.split('/').pop();clipAsked.push(id);shapes.push(url.searchParams.get('shape')||'tall');
    // Only the first song has a clip; the second has none.
    if(id!=='song0000001')return route.fulfill({status:404,json:{error:'no canvas'},headers});
    return route.fulfill({body:clipBytes,contentType:'video/webm',headers});
@@ -75,6 +75,18 @@ const song=(n,c)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:
   assert(fit.covers,'the clip leaves no band: '+JSON.stringify(fit));
   assert.equal(fit.shape,'1.78','sized from its own proportions, not stretched');
   await page.screenshot({path:'test-results/canvas.png'});
+  // An upright window asks for the tall clip; made wide, it asks for the wide one, and back.
+  assert.deepEqual(shapes,['tall']);
+  await page.setViewportSize({width:1180,height:700});
+  await page.waitForFunction(()=>/shape=wide/.test(document.getElementById('nowCanvasVideo').src),null,{timeout:5000});
+  await page.waitForFunction(()=>document.getElementById('nowCanvasVideo').classList.contains('shown'),null,{timeout:10000});
+  const wide=await page.evaluate(()=>{const v=document.getElementById('nowCanvasVideo').getBoundingClientRect();return v.left<=.5&&v.top<=.5&&v.right>=innerWidth-.5&&v.bottom>=innerHeight-.5;});
+  assert(wide,'the wide clip covers the wide window');
+  await page.screenshot({path:'test-results/canvas-wide.png'});
+  await page.setViewportSize({width:390,height:844});
+  await page.waitForFunction(()=>!/shape=wide/.test(document.getElementById('nowCanvasVideo').src),null,{timeout:5000});
+  await page.waitForFunction(()=>document.getElementById('nowCanvasVideo').classList.contains('shown'),null,{timeout:10000});
+  assert.deepEqual(shapes,['tall','wide','tall']);
   // Pausing the song pauses the clip.
   await page.evaluate(()=>document.getElementById('audio').pause());await page.waitForTimeout(200);
   assert.equal(await page.evaluate(()=>document.getElementById('nowCanvasVideo').paused),true);
