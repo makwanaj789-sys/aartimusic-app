@@ -6,6 +6,7 @@ The same app as on the phone (`../www`), wrapped with Electron.
 - **Taskbar:** previous / play / next buttons on the window's preview.
 - **Media keys:** the keyboard's play, next and previous keys, and Windows' own media pop-up.
 - **Mini player:** a small window that stays on top (Ctrl+M, or the button in the top bar).
+- **Rows that scroll sideways:** the mouse wheel moves the row under the pointer, and an arrow appears at whichever end has more.
 - **Keyboard:** Space play/pause, Ctrl+→ / Ctrl+← next/previous, ← / → seek 5 s, Ctrl+F search, Esc close.
 - **Start with Windows:** an option in the tray menu.
 

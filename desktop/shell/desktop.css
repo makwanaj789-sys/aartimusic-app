@@ -41,3 +41,21 @@
   .desktop .sheet .sheet-in{max-width:560px;margin-inline:auto;border-radius:26px 26px 0 0}
   .desktop #toast{max-width:420px}
 }
+
+/* Arrows at the ends of a row that scrolls sideways: there only while
+   the pointer is on the row and that end has more to show. */
+/* The app gives every pressed button a "pressable" class that sets
+   position:relative; an arrow that left its place mid-click would
+   never receive the click. */
+.desk-arrow,.desk-arrow.pressable{position:fixed !important}
+.desk-arrow{z-index:60;border-radius:50%;display:grid;place-items:center;padding:0;
+  color:var(--ink);background:color-mix(in srgb,var(--bg-3) 88%,transparent);border:1px solid color-mix(in srgb,var(--ink) 14%,transparent);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 8px 26px rgba(0,0,0,.35);
+  opacity:0;pointer-events:none;transform:scale(.8);transition:opacity .18s ease,transform .22s cubic-bezier(.2,.8,.2,1),background .15s}
+.desk-arrow-prev{transform:translateX(8px) scale(.8)}
+.desk-arrow-next{transform:translateX(-8px) scale(.8)}
+.desk-arrow.on{opacity:1;pointer-events:auto;transform:none}
+.desk-arrow.on:hover{background:var(--flame);color:var(--on-accent,#100b17);transform:scale(1.08)}
+.desk-arrow.on:active{transform:scale(.96)}
+.desk-arrow svg{width:55%;height:55%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-reduced-motion:reduce){.desk-arrow{transition:opacity .1s}}
