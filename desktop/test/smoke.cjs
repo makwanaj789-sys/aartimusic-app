@@ -26,6 +26,7 @@ const song = (n) => ({ id: 'song' + String(n).padStart(7, '0'), title: 'Kesariya
       if (url.pathname.endsWith('/server.json')) return route.fulfill({ json: { server: 'https://api.aarti.test' }, headers });
       if (url.hostname === 'img.aarti.test') return route.fulfill({ body: svg('#' + url.pathname.slice(1, 7)), contentType: 'image/svg+xml', headers });
       if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      if (url.pathname === '/api/playlists') return route.fulfill({ json: { results: Array.from({ length: 16 }, (_, i) => ({ id: 'PLtest' + String(i).padStart(12, '0'), title: 'Shreya Ghoshal Hits ' + (i + 1), name: 'Shreya Ghoshal Hits ' + (i + 1), by: 'Indian Media', count: 20, thumb: 'https://img.aarti.test/' + ['7a1fa8', '127a5c', 'a81f3c'][i % 3] + '.svg' })) }, headers });
       if (url.pathname === '/api/search') return route.fulfill({ json: { results: Array.from({ length: 8 }, (_, i) => song(i + 1)) }, headers });
       if (url.pathname.startsWith('/api/stream/')) {
         const bytes = wav(), range = route.request().headers()['range'], m = range && /^bytes=(\d+)-(\d*)$/.exec(range);
@@ -71,6 +72,37 @@ const song = (n) => ({ id: 'song' + String(n).padStart(7, '0'), title: 'Kesariya
     assert(col.top >= 36, 'the player starts under the bar');
     await page.screenshot({ path: path.join(shots, 'desktop-now.png') });
     await page.keyboard.press('Escape'); await page.waitForFunction(() => document.getElementById('now').dataset.progress === '0.0000');
+    // 5b. A row that scrolls sideways: the wheel moves it, and an arrow shows only at an end with more.
+    await page.locator('[data-tab="Lists"]').click();
+    await page.waitForFunction(() => [...document.querySelectorAll('#pLists *')].some(e => e.scrollWidth > e.clientWidth + 40 && /auto|scroll/.test(getComputedStyle(e).overflowX) && e.getBoundingClientRect().height > 120), null, { timeout: 15000 });
+    await page.evaluate(() => { const e = [...document.querySelectorAll('#pLists *')].find(e => e.scrollWidth > e.clientWidth + 40 && /auto|scroll/.test(getComputedStyle(e).overflowX) && e.getBoundingClientRect().height > 120); e.dataset.testRow = '1'; e.scrollIntoView({ block: 'center' }); });
+    const rowEl = page.locator('[data-test-row]');
+    // The lists above it are still arriving: wait for the page to settle.
+    await page.waitForTimeout(1500);
+    await rowEl.evaluate(e => e.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(300);
+    const box = await rowEl.boundingBox();
+    assert(box.y > 36 && box.y + box.height < 780, 'the row is on screen: ' + JSON.stringify(box));
+    const arrowsOn = () => page.evaluate(() => [...document.querySelectorAll('.desk-arrow')].map(b => b.classList.contains('on')));
+    const left = () => rowEl.evaluate(e => Math.round(e.scrollLeft));
+    assert.deepEqual(await arrowsOn(), [false, false], 'no arrows until the pointer is on the row');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForFunction(() => document.querySelector('.desk-arrow-next').classList.contains('on'));
+    assert.deepEqual(await arrowsOn(), [false, true], 'at the start only the forward arrow shows');
+    await page.screenshot({ path: path.join(shots, 'desktop-row-arrows.png') });
+    await page.mouse.wheel(0, 300);
+    await page.waitForFunction(() => document.querySelector('[data-test-row]').scrollLeft > 200);
+    await page.waitForFunction(() => document.querySelector('.desk-arrow-prev').classList.contains('on'));
+    const before = await left();
+    await page.locator('.desk-arrow-next').click();
+    await page.waitForFunction((b) => document.querySelector('[data-test-row]').scrollLeft > b + 100, before);
+    await rowEl.evaluate(e => { e.scrollLeft = e.scrollWidth; });
+    await page.waitForFunction(() => !document.querySelector('.desk-arrow-next').classList.contains('on'));
+    assert.deepEqual(await arrowsOn(), [true, false], 'at the end only the back arrow shows');
+    await page.locator('.desk-arrow-prev').click();
+    await page.waitForFunction(() => document.querySelector('.desk-arrow-next').classList.contains('on'));
+    await page.mouse.move(box.x + box.width / 2, 20);
+    await page.waitForFunction(() => ![...document.querySelectorAll('.desk-arrow')].some(b => b.classList.contains('on')));
     // 6. Mini player: small, on top, and back again.
     await page.keyboard.press('Control+m');
     await page.waitForFunction(() => document.documentElement.classList.contains('desk-mini'));
@@ -91,6 +123,6 @@ const song = (n) => ({ id: 'song' + String(n).padStart(7, '0'), title: 'Kesariya
     assert.deepEqual(after, { count: 1, visible: false });
     assert.equal(await page.evaluate(() => document.getElementById('audio').paused), false);
     assert.deepEqual(errors, []);
-    console.log('PASS: desktop app starts on app://, desktop layout, keyboard, tray/taskbar controls, mini player, close-to-tray');
+    console.log('PASS: desktop app starts on app://, desktop layout, keyboard, tray/taskbar controls, sideways rows (wheel + arrows), mini player, close-to-tray');
   } finally { await app.evaluate(({ app }) => app.exit(0)).catch(() => {}); }
 })().catch(e => { console.error(e); process.exit(1); });
