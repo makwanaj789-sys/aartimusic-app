@@ -47,7 +47,14 @@ const song=(n)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:'A
    window.Capacitor={isNativePlatform:()=>true,isPluginAvailable:n=>n==='AartiAudio',Plugins:{AartiAudio:plugin}};
    // Listen to what leaves the limiter, as the speaker would hear it.
    const make=AudioContext.prototype.createDynamicsCompressor;
-   AudioContext.prototype.createDynamicsCompressor=function(){const c=make.call(this);const an=this.createAnalyser();an.fftSize=2048;c.connect(an);window.__out=an;return c;};
+   AudioContext.prototype.createDynamicsCompressor=function(){const c=make.call(this);const an=this.createAnalyser();an.fftSize=2048;c.connect(an);window.__out=an;window.__ctx=this;
+    // Every sample that leaves, as the peak of each 256-sample block (6 ms).
+    window.__blocks=[];const rec=this.createScriptProcessor(4096,1,1);
+    rec.onaudioprocess=e=>{const d=e.inputBuffer.getChannelData(0);for(let i=0;i<d.length;i+=256){let m=0;for(let j=i;j<i+256;j++)m=Math.max(m,Math.abs(d[j]));__blocks.push(m);}if(__blocks.length>20000)__blocks.splice(0,10000);};
+    c.connect(rec);rec.connect(this.destination);window.__rec=rec;return c;};
+   // The lowest and highest block over the next `ms` of sound.
+   window.__watch=(ms)=>new Promise(r=>{const from=__blocks.length,n=Math.ceil(ms/1000*__ctx.sampleRate/256);
+     const t=setInterval(()=>{if(__blocks.length-from<n)return;clearInterval(t);const b=__blocks.slice(from,from+n);r([Math.min(...b),Math.max(...b)]);},20);});
    window.__level=()=>{const d=new Float32Array(__out.fftSize);__out.getFloatTimeDomainData(d);let s=0;for(const v of d)s+=v*v;return Math.sqrt(s/d.length);};};
  const level=async()=>{const v=[];for(let i=0;i<8;i++){v.push(await page.evaluate(()=>__level()));await page.waitForTimeout(60);}v.sort((a,b)=>a-b);return v[4];};
  try{
@@ -66,6 +73,8 @@ const song=(n)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:'A
   await page.waitForTimeout(400);
   const bass=await level();
   assert(bass>0.05,'sound comes out of the preset chain: '+bass);
+  const latency=await page.evaluate(()=>__ctx.baseLatency);
+  assert(latency>0.1,'a large output buffer, so a busy moment does not crackle: '+latency);
 
   // 3. Live: switching while it plays changes what is heard.
   await page.locator('#miniOpen').click();await page.waitForFunction(()=>document.getElementById('now').dataset.progress==='1.0000');
@@ -81,6 +90,16 @@ const song=(n)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:'A
   const vocal=await level();
   assert(vocal<flat*0.8,`vocal takes the low end down: ${vocal.toFixed(3)} vs ${flat.toFixed(3)}`);
   assert.equal(await page.locator('[data-fx="vocal"]').getAttribute('aria-pressed'),'true');
+  // A switch is a short dip to near silence and back, never a sweep
+  // through the settings in between while it is heard.
+  for(const [to,back] of [['party','vocal'],['bass','vocal']]){
+   const before=(await page.evaluate(()=>__watch(300)))[1];
+   const during=page.evaluate(()=>__watch(700));await page.locator(`[data-fx="${to}"]`).click();const [low,high]=await during;
+   await page.waitForTimeout(300);const settled=(await page.evaluate(()=>__watch(300)))[1];
+   assert(low<0.25*Math.min(before,settled),`switching to ${to} dips first: ${low.toFixed(3)} against ${before.toFixed(3)} / ${settled.toFixed(3)}`);
+   assert(high<=Math.max(before,settled)*1.1,`switching to ${to} is never louder than either end: ${high.toFixed(3)}`);
+   await page.locator(`[data-fx="${back}"]`).click();await page.waitForTimeout(500);
+  }
   assert.equal(await page.evaluate(()=>document.getElementById('audio').paused),false,'the song never stopped');
   await page.screenshot({path:'test-results/sound.png'});
 

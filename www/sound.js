@@ -40,6 +40,30 @@
     return Math.pow(10, -boost / 2 / 20);
   }
 
+  /* The biggest output buffer the WebView will give. The default
+     ("interactive") is the smallest it can, for games: about 10 ms.
+     "playback" was only about 23 ms in Chromium. Asked for in
+     seconds, it gives up to about 186 ms. A song with a preset runs
+     through this graph, so when the phone is busy for a moment (this
+     app minimised or brought back) a small buffer runs dry and the
+     song crackles. A preset is heard a fifth of a second later for
+     it, which nobody notices on a song. */
+  const LATENCY = 0.2;
+  function makeContext() {
+    const Ctx = root.AudioContext || root.webkitAudioContext;
+    for (const hint of [LATENCY, 'playback']) {
+      try { return new Ctx({ latencyHint: hint }); } catch (_) {}
+    }
+    return new Ctx();
+  }
+
+  /* A preset change is a short dip: down to silence, the bands moved
+     while nothing is heard, and back up. Moving the bands while the
+     song is heard swept it through settings in between, some of them
+     louder than either end (the bass still up, the level already
+     raised), and the limiter clamping that is what crackled. */
+  const DIP = 0.05, BACK = 0.12;
+
   function create(audio) {
     let ctx = null, filters = {}, gain = null, current = 'normal';
     const Ctx = root.AudioContext || root.webkitAudioContext;
@@ -48,13 +72,7 @@
       if (ctx) return true;
       if (!Ctx || !audio) return false;
       try {
-        // "playback": the phone may buffer more ahead. The default
-        // ("interactive") keeps the buffer as small as it can, for
-        // games and instruments, and a song then crackles whenever
-        // the phone is busy for a moment — opening or closing
-        // another app is enough. A preset is heard a blink later
-        // for it, which nobody notices on a song.
-        try { ctx = new Ctx({ latencyHint: 'playback' }); } catch (_) { ctx = new Ctx(); }
+        ctx = makeContext();
         const source = ctx.createMediaElementSource(audio);
         let node = source;
         BANDS.forEach(([band, type, hz, q]) => {
@@ -85,12 +103,26 @@
 
     function set(name, glide) {
       if (!PRESETS[name]) name = 'normal';
+      const fresh = !ctx;
       if (name !== 'normal' && !build()) return false;
       current = name;
       if (!ctx) return true;               // Normal and never built: nothing to do
-      const p = PRESETS[name], t = ctx.currentTime, tc = glide === false ? 0.001 : 0.08;
-      BANDS.forEach(([band]) => filters[band].gain.setTargetAtTime(p[band], t, tc));
-      gain.gain.setTargetAtTime(preamp(name), t, tc);
+      const p = PRESETS[name], t = ctx.currentTime, level = gain.gain;
+      level.cancelScheduledValues(t);
+      BANDS.forEach(([band]) => filters[band].gain.cancelScheduledValues(t));
+      // Just built: the song moved onto this path mid-note. Start
+      // silent and come up, rather than jump in.
+      const from = fresh ? 0 : level.value;
+      const at = fresh || glide === false ? t : t + DIP;
+      level.setValueAtTime(from, t);
+      if (at > t) level.linearRampToValueAtTime(0, at);
+      BANDS.forEach(([band]) => filters[band].gain.setValueAtTime(p[band], at));
+      if (fresh || glide !== false) {
+        level.setValueAtTime(0, at);
+        level.linearRampToValueAtTime(preamp(name), at + BACK);
+      } else {
+        level.setValueAtTime(preamp(name), at);
+      }
       wake();
       return true;
     }
@@ -100,11 +132,12 @@
       get preset() { return current; },
       get active() { return !!ctx; },
       get state() { return ctx ? ctx.state : 'none'; },
+      get latency() { return ctx ? ctx.baseLatency : 0; },
       supported: !!Ctx,
     };
   }
 
-  const api = { PRESETS, BANDS, preamp, create };
+  const api = { PRESETS, BANDS, preamp, create, LATENCY };
   root.AartiSound = api;
   if (typeof module !== 'undefined') module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
