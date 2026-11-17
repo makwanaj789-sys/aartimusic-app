@@ -61,14 +61,20 @@ const state={published:'a',a:'ok',b:'ok',missing:new Set()};const asked=[];let s
   slowSearch();await page.waitForTimeout(400);
   assert.equal(await page.locator('#results .row .title').first().textContent(),'seed result');
 
-  // 2. The next song is asked for once this one is ten seconds in.
+  // 2. The next song is fetched once this one is ten seconds in.
   await page.locator('#results .row .info').first().click();await playing();
   const ids=await page.evaluate(()=>JSON.parse(localStorage.getItem('aarti.playback.v1')).queue.map(s=>s.id));
   assert(!asked.some(a=>a.id===ids[1]),'not asked for straight away');
   await page.evaluate(()=>{document.getElementById('audio').currentTime=11;});
   await page.waitForFunction(()=>document.getElementById('audio').currentTime>11.2);
   await page.waitForTimeout(300);
-  assert.deepEqual(asked.filter(a=>a.id===ids[1]).map(a=>a.range),['bytes=0-1'],'the next song is warmed once, two bytes only');
+  // Downloaded whole, once, to play from the phone (song-cache.js).
+  await page.waitForFunction(id=>window.AartiSongs.has(id),ids[1],{timeout:15000});
+  assert.deepEqual(asked.filter(a=>a.id===ids[1]).map(a=>a.range),[''],'the next song is downloaded once, whole');
+  // What follows is about a song that is not on the phone: let the
+  // downloads under way finish, then drop every copy.
+  await page.waitForFunction(()=>Object.keys(JSON.parse(localStorage.getItem('aarti.songs.v1')||'{}')).length>=3,null,{timeout:15000});
+  await page.evaluate(()=>window.AartiSongs.clear());
 
   // 3. The stream breaks part-way: the same song carries on from there.
   const id=()=>page.evaluate(()=>decodeURIComponent(new URL(document.getElementById('audio').src).pathname.split('/').pop()));
