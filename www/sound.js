@@ -48,7 +48,13 @@
       if (ctx) return true;
       if (!Ctx || !audio) return false;
       try {
-        ctx = new Ctx();
+        // "playback": the phone may buffer more ahead. The default
+        // ("interactive") keeps the buffer as small as it can, for
+        // games and instruments, and a song then crackles whenever
+        // the phone is busy for a moment — opening or closing
+        // another app is enough. A preset is heard a blink later
+        // for it, which nobody notices on a song.
+        try { ctx = new Ctx({ latencyHint: 'playback' }); } catch (_) { ctx = new Ctx(); }
         const source = ctx.createMediaElementSource(audio);
         let node = source;
         BANDS.forEach(([band, type, hz, q]) => {

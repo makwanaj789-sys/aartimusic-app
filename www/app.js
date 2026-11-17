@@ -1125,6 +1125,18 @@
     return out;
   }
 
+  /* Where a song is played from: the copy kept on the phone when
+     there is one (song-cache.js), the server otherwise. */
+  let fromPhone = false;
+  async function phoneCopy(id) {
+    try { return window.AartiSongs ? await window.AartiSongs.local(id) : null; } catch (_) { return null; }
+  }
+  function setSource(id, local) {
+    fromPhone = !!local;
+    if (!local && window.AartiSongs) window.AartiSongs.release();
+    audio.src = local || streamUrl(id);
+  }
+
   function streamUrl(id) {
     let url = SERVER + "/api/stream/" + encodeURIComponent(id);
     const auth = [];
@@ -1305,7 +1317,9 @@
     $('mini').hidden = false; document.body.classList.add('with-mini');
     paint(queue[index]); icons(false); waiting(false); loadLyrics(queue[index]);
     $('nCur').textContent = time(resumePosition);
-    audio.preload = 'metadata'; audio.src = streamUrl(mediaId); audio.load();
+    const local = await phoneCopy(mediaId);
+    if (token !== before || !restoredOnly) return;
+    audio.preload = 'metadata'; setSource(mediaId, local); audio.load();
     markRows(); playerMotion.refresh();
   }
 
@@ -1337,7 +1351,9 @@
     addRecent(song);
 
     setProgress(0);
-    audio.src = streamUrl(song.id);
+    const local = await phoneCopy(song.id);
+    if (mine !== token) return;
+    setSource(song.id, local);
     audio.load();
     checkpoint();
 
@@ -1488,7 +1504,9 @@
     if (mine !== token) return;
     mediaId = song.id; restoredOnly = false; restoreFailed = false;
     resumePosition = position > 1 ? position : null;
-    audio.src = streamUrl(song.id);
+    const local = await phoneCopy(song.id);
+    if (mine !== token) return;
+    setSource(song.id, local);
     audio.load();
     const go = () => { if (mine === token) audio.play().catch(() => {}); };
     audio.addEventListener("canplay", go, { once: true });
@@ -1576,7 +1594,17 @@
     // The song put back at launch could not be loaded (offline, or the
     // server moved). Nobody asked for it yet: say nothing, and let the
     // play button load it properly.
-    if (restoredOnly) { restoreFailed = true; return; }
+    if (restoredOnly && !fromPhone) { restoreFailed = true; return; }
+    // The copy on the phone would not play: throw it away and play
+    // the song from the server, from the same place.
+    if (fromPhone) {
+      fromPhone = false;
+      if (window.AartiSongs) window.AartiSongs.forget(song.id);
+      // Put back at launch and not asked for yet: load it, don't play it.
+      if (restoredOnly) { setSource(song.id, null); audio.load(); return; }
+      reloadAt(lastGood > 1 ? lastGood : (resumePosition || 0));
+      return;
+    }
     const why = await diagnose(song.id);
     if (token !== failedToken) return;
     // The server has the song, so the stream broke on the way. Carry on
@@ -1649,16 +1677,29 @@
   ["waiting", "stalled"].forEach((e) => audio.addEventListener(e, watchStall));
   ["playing", "pause", "emptied", "ended"].forEach((e) => audio.addEventListener(e, () => clearTimeout(stallTimer)));
 
-  /* Ten seconds into a song, ask the server for the first bytes of the
-     next one. A song nobody has played is fetched from YouTube on that
-     request, so it is already there when the skip or the end comes.
-     Only one song ahead, and not for a song skipped straight away. */
+  /* Ten seconds into a song (not for one skipped straight away), get
+     the songs ahead ready. Where the phone can keep songs, the next
+     two are downloaded whole in the background, and the one playing
+     too if it is still streaming, so they play from the phone with
+     nothing to wait for (song-cache.js). Otherwise, or on Data Saver,
+     only the first bytes of the next one are asked for: a song nobody
+     has played is fetched from YouTube on that request, so it is
+     already on the server when the skip or the end comes. */
   let warmed = null;
+  const saveData = () => { try { return !!(navigator.connection && navigator.connection.saveData); } catch (_) { return false; } };
   function warmNext() {
     const song = queue[index];
     if (!song || warmed === song.id || audio.currentTime < 10 || !SERVER) return;
     warmed = song.id;
     const i = nextIndex(), nxt = i >= 0 && i !== index ? queue[i] : null;
+    const keeper = window.AartiSongs;
+    if (keeper && keeper.supported && !saveData()) {
+      if (nxt) keeper.keep(nxt.id, streamUrl(nxt.id));
+      if (!fromPhone && song.id === mediaId) keeper.keep(song.id, streamUrl(song.id));
+      const after = i >= 0 && i + 1 < queue.length && i + 1 !== index ? queue[i + 1] : null;
+      if (after) keeper.keep(after.id, streamUrl(after.id));
+      return;
+    }
     if (!nxt) return;
     fetch(streamUrl(nxt.id), { headers: { Range: "bytes=0-1" }, cache: "no-store" })
       .then((r) => { try { if (r.body) r.body.cancel(); } catch (_) {} }, () => {});
