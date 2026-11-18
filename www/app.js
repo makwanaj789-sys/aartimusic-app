@@ -74,6 +74,10 @@
   let index = -1;
   let results = [];      // last search, shown on the Search tab
   let token = 0;         // guards against two plays racing
+  // The moment the app comes back is the busiest the phone gets, and a
+  // song with a sound preset is played by this page itself: whatever
+  // can wait (sync, asking which speaker is on) waits this long.
+  const SETTLE = 1500;
   let sleepAt = 0;       // timestamp, or -1 for "end of this track"
   let actionSong = null;
   let lightGeneration = 0;
@@ -2902,7 +2906,7 @@
   if (audioOut) {
     audio.addEventListener("playing", readOut);
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") readOut();
+      if (document.visibilityState === "visible") setTimeout(readOut, SETTLE);
     });
     watchOut();
     readOut();
@@ -3327,7 +3331,7 @@
     if (document.visibilityState !== "visible") return;
     if (Date.now() - lastPull < 4000) return;
     lastPull = Date.now();
-    pull().catch(() => {});
+    setTimeout(() => { if (document.visibilityState === "visible") pull().catch(() => {}); }, SETTLE);
   });
   tab("Home");
   AartiProfile.start();
