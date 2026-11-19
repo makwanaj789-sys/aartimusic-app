@@ -285,7 +285,32 @@ body.canvas-on #now .now-canvas{display:block}
    tall as the screen, and centred; the rest is cut off by the box. */
 .now-canvas{overflow:hidden}
 .now-canvas video{inset:auto;top:50%;left:50%;width:auto;height:auto;min-width:100%;min-height:100%;max-width:none;transform:translate(-50%,-50%);object-fit:cover;opacity:0;transition:opacity .6s ease}
-.now-canvas video.shown{opacity:1}
+.now-canvas video.shown{opacity:1;animation:canvas-portal 2.2s cubic-bezier(.6,0,.3,1) both}
+/* The clip arrives through a portal, the way another world opens in a
+   film: a ring of light in the cover's colour opens from the middle,
+   and inside it the clip comes into focus from a blurred, over-lit
+   glow. The opening and the ring are both measured on the screen
+   (vmax), the ring's edge riding the opening's: 12vmax x 5.1667 is
+   its 62vmax, past every corner. Only on arrival; leaving is the plain fade. */
+@keyframes canvas-portal{
+  0%{clip-path:circle(0 at 50% 50%);filter:blur(14px) brightness(1.9) saturate(1.5)}
+  55%{filter:blur(5px) brightness(1.3) saturate(1.2)}
+  100%{clip-path:circle(62vmax at 50% 50%);filter:none}
+}
+.now-canvas-portal{position:absolute;left:50%;top:50%;width:24vmax;height:24vmax;margin:-12vmax 0 0 -12vmax;border-radius:50%;opacity:0;pointer-events:none;
+  box-shadow:0 0 0 2px rgba(var(--lit,var(--glow)),.95),0 0 28px 8px rgba(var(--lit,var(--glow)),.75),inset 0 0 36px 10px rgba(var(--lit,var(--glow)),.6);
+  background:radial-gradient(circle,transparent 58%,rgba(var(--lit,var(--glow)),.35) 70%,transparent 72%)}
+.now-canvas video.shown~.now-canvas-portal{animation:canvas-portal-rim 2.2s cubic-bezier(.6,0,.3,1) both}
+@keyframes canvas-portal-rim{
+  0%{opacity:0;transform:scale(0) rotate(0)}
+  8%{opacity:1}
+  75%{opacity:.9}
+  100%{opacity:0;transform:scale(5.1667) rotate(120deg)}
+}
+@media(prefers-reduced-motion:reduce){
+  .now-canvas video.shown{animation:none}
+  .now-canvas video.shown~.now-canvas-portal{animation:none}
+}
 /* Over a video, the words and controls need their own shade. */
 .now-canvas-shade{opacity:0;transition:opacity .6s ease;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 45%,transparent),transparent 20%,transparent 42%,color-mix(in srgb,var(--bg) 92%,transparent) 86%)}
 .now-canvas video.shown~.now-canvas-shade{opacity:1}

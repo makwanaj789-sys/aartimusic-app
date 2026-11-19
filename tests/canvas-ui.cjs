@@ -68,6 +68,9 @@ const song=(n,c)=>({id:'song'+String(n).padStart(7,'0'),title:'Track '+n,artist:
   await page.waitForFunction(()=>document.getElementById('nowCanvasVideo').classList.contains('shown'),null,{timeout:10000});
   const v=await page.evaluate(()=>{const e=document.getElementById('nowCanvasVideo');return {muted:e.muted,loop:e.loop,paused:e.paused,src:e.src};});
   assert.deepEqual([v.muted,v.loop,v.paused],[true,true,false]);
+  // It arrives through the portal: the opening and the ring of light.
+  const portal=await page.evaluate(()=>{const s=getComputedStyle(document.getElementById('nowCanvasVideo')),r=getComputedStyle(document.querySelector('.now-canvas-portal'));return [s.animationName,r.animationName];});
+  assert.deepEqual(portal,['canvas-portal','canvas-portal-rim']);
   assert.match(v.src,/\/api\/canvas\/song0000001\?/);
   // The clip covers the whole player by its own size, whatever its shape.
   const fit=await page.evaluate(()=>{const v=document.getElementById('nowCanvasVideo').getBoundingClientRect(),b=document.querySelector('#now .now-canvas').getBoundingClientRect();
